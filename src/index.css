@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-star-50 text-slate-900 antialiased;
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+/* 触控目标最小尺寸 */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-star-300 rounded-full;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+/* 数字等宽，金币显示用 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

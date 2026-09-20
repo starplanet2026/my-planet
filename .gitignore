@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+.env.local
+.env.*.local
+*.local
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.swp
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,266 @@
+import { supabase } from './client';
+import type {
+  ChallengeSet, Question, Word, WordProgress,
+  WrongQuestion, AnswerQuestionResult, AnswerWordResult, ReviewWrongResult,
+  ChallengeSetType, QuestionType, Difficulty,
+} from './types';
+
+// ====== ChallengeSet 题集 ======
+
+export async function fetchChallengeSets(familyId: string, type?: ChallengeSetType): Promise<ChallengeSet[]> {
+  let q = supabase.from('challenge_sets').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
+  if (type) q = q.eq('type', type);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as ChallengeSet[];
+}
+
+export async function createChallengeSet(data: {
+  family_id: string;
+  title: string;
+  description?: string;
+  type: ChallengeSetType;
+  reward_easy: number;
+  reward_medium: number;
+  reward_hard: number;
+  knowledge_points?: string;
+}): Promise<ChallengeSet> {
+  const { data: result, error } = await supabase
+    .from('challenge_sets')
+    .insert({ ...data, status: 'draft' })
+    .select()
+    .single();
+  if (error) throw error;
+  return result as ChallengeSet;
+}
+
+export async function updateChallengeSet(id: string, patch: Partial<ChallengeSet>): Promise<ChallengeSet> {
+  const { data, error } = await supabase
+    .from('challenge_sets')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ChallengeSet;
+}
+
+export async function deleteChallengeSet(id: string): Promise<void> {
+  const { error } = await supabase.from('challenge_sets').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function publishChallengeSet(id: string): Promise<void> {
+  const { error } = await supabase.from('challenge_sets').update({ status: 'active' }).eq('id', id);
+  if (error) throw error;
+}
+
+// ====== Question 题目（选择题/数学） ======
+
+export async function fetchQuestions(setId: string): Promise<Question[]> {
+  const { data, error } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('challenge_set_id', setId)
+    .order('created_at');
+  if (error) throw error;
+  // 前端按 display_order 排序（迁移未执行时字段为 undefined，不影响）
+  return ((data ?? []) as Question[]).sort((a, b) => (a.display_order ?? 999) - (b.display_order ?? 999));
+}
+
+export async function createQuestion(data: {
+  challenge_set_id: string;
+  type: QuestionType;
+  question_text: string;
+  options?: string[];
+  correct_answer: string;
+  explanation?: string;
+  difficulty?: Difficulty;
+}): Promise<Question> {
+  const { data: result, error } = await supabase
+    .from('questions')
+    .insert(data)
+    .select()
+    .single();
+  if (error) throw error;
+  return result as Question;
+}
+
+export async function deleteQuestion(id: string): Promise<void> {
+  const { error } = await supabase.from('questions').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// 批量删除题目
+export async function deleteQuestionsBatch(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('questions').delete().in('id', ids);
+  if (error) throw error;
+}
+
+// 批量更新题目排序
+export async function updateQuestionOrder(updates: { id: string; display_order: number }[]): Promise<void> {
+  if (updates.length === 0) return;
+  const { error } = await supabase
+    .from('questions')
+    .upsert(updates, { onConflict: 'id' });
+  // 列不存在时静默失败（迁移未执行）
+  if (error && !error.message.includes('display_order')) throw error;
+}
+
+export async function updateQuestion(id: string, patch: Partial<Omit<Question, 'id' | 'challenge_set_id' | 'created_at'>>): Promise<Question> {
+  const { data, error } = await supabase
+    .from('questions')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Question;
+}
+
+// 批量创建题目（用于 Excel 导入）
+export async function createQuestionsBatch(
+  questions: Array<{
+    challenge_set_id: string;
+    type: QuestionType;
+    question_text: string;
+    options?: string[];
+    correct_answer: string;
+    explanation?: string;
+    difficulty?: Difficulty;
+  }>
+): Promise<void> {
+  if (questions.length === 0) return;
+  const { error } = await supabase.from('questions').insert(questions);
+  if (error) throw error;
+}
+
+// ====== Word 单词 ======
+
+export async function fetchWords(setId: string): Promise<Word[]> {
+  const { data, error } = await supabase
+    .from('words')
+    .select('*')
+    .eq('challenge_set_id', setId)
+    .order('created_at');
+  if (error) throw error;
+  return (data ?? []) as Word[];
+}
+
+export async function createWord(data: {
+  challenge_set_id: string;
+  word_en: string;
+  word_cn: string;
+  phonetic?: string;
+  example_sentence?: string;
+}): Promise<Word> {
+  const { data: result, error } = await supabase
+    .from('words')
+    .insert(data)
+    .select()
+    .single();
+  if (error) throw error;
+  return result as Word;
+}
+
+export async function deleteWord(id: string): Promise<void> {
+  const { error } = await supabase.from('words').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// 批量创建单词
+export async function createWordsBatch(words: Array<{
+  challenge_set_id: string;
+  word_en: string;
+  word_cn: string;
+  phonetic?: string;
+  example_sentence?: string;
+}>): Promise<void> {
+  const { error } = await supabase.from('words').insert(words);
+  if (error) throw error;
+}
+
+// ====== WordProgress 单词进度 ======
+
+export async function fetchWordProgress(memberId: string, setId: string): Promise<(Word & { progress?: WordProgress })[]> {
+  const { data: words, error: wErr } = await supabase
+    .from('words')
+    .select('*')
+    .eq('challenge_set_id', setId);
+  if (wErr) throw wErr;
+
+  const { data: progresses, error: pErr } = await supabase
+    .from('word_progress')
+    .select('*')
+    .eq('member_id', memberId);
+  if (pErr) throw pErr;
+
+  const progMap = new Map((progresses ?? []).map(p => [p.word_id, p]));
+  return (words ?? []).map(w => ({ ...w, progress: progMap.get(w.id) }));
+}
+
+// ====== 答题 RPC ======
+
+export async function answerQuestion(
+  memberId: string,
+  questionId: string,
+  answer: string
+): Promise<AnswerQuestionResult> {
+  const { data, error } = await supabase.rpc('answer_question', {
+    p_member_id: memberId,
+    p_question_id: questionId,
+    p_answer: answer,
+  });
+  if (error) throw error;
+  // answer_question 是 returns table 的集合函数，rpc 返回数组，取首行
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as AnswerQuestionResult;
+}
+
+export async function answerWord(
+  memberId: string,
+  wordId: string,
+  questionType: string,
+  answer: string,
+  isFamiliar = false
+): Promise<AnswerWordResult> {
+  const { data, error } = await supabase.rpc('answer_word', {
+    p_member_id: memberId,
+    p_word_id: wordId,
+    p_question_type: questionType,
+    p_answer: answer,
+    p_is_familiar: isFamiliar,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as AnswerWordResult;
+}
+
+export async function reviewWrongQuestion(
+  wrongId: string,
+  memberId: string,
+  isCorrect: boolean
+): Promise<ReviewWrongResult> {
+  const { data, error } = await supabase.rpc('review_wrong_question', {
+    p_wrong_id: wrongId,
+    p_member_id: memberId,
+    p_is_correct: isCorrect,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as ReviewWrongResult;
+}
+
+// ====== 错题本 ======
+
+export async function fetchWrongQuestions(memberId: string): Promise<WrongQuestion[]> {
+  const { data, error } = await supabase
+    .from('wrong_questions')
+    .select('*, question:questions(*), word:words(*)')
+    .eq('member_id', memberId)
+    .eq('status', 'active')
+    .order('last_wrong_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as WrongQuestion[];
+}
