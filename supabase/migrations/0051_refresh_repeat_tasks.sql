@@ -7,7 +7,7 @@
 
 -- 1) 确保字段存在（兼容历史数据）
 ALTER TABLE public.tasks
-  ADD COLUMN IF NOT EXISTS repeat_days integer[] USING COALESCE(repeat_days, ARRAY[]::integer[]);
+  ADD COLUMN IF NOT EXISTS repeat_days integer[];
 
 -- 2) 自动刷新重复任务（按周几 + 12点上线）
 CREATE OR REPLACE FUNCTION public.refresh_repeat_tasks(p_family_id uuid)

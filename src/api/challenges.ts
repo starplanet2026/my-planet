@@ -107,6 +107,7 @@ export async function createQuestion(data: {
   correct_answer: string;
   explanation?: string;
   difficulty?: Difficulty;
+  display_order?: number;
 }): Promise<Question> {
   const { data: result, error } = await supabase
     .from('questions')
@@ -160,6 +161,7 @@ export async function createQuestionsBatch(
     correct_answer: string;
     explanation?: string;
     difficulty?: Difficulty;
+    display_order?: number;
   }>
 ): Promise<void> {
   if (questions.length === 0) return;

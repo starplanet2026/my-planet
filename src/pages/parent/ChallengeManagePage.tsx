@@ -353,6 +353,38 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
     }
   };
 
+  // 批量移到顶部：选中的题按原顺序移到最前，其余顺延
+  const handleMoveSelectedToTop = async () => {
+    if (selectedIds.size === 0) return;
+    const selected = questions.filter(q => selectedIds.has(q.id));
+    const others = questions.filter(q => !selectedIds.has(q.id));
+    const reordered = [...selected, ...others];
+    setQuestions(reordered);
+    try {
+      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
+      toast.success('已移到顶部');
+    } catch (e: any) {
+      toast.error(e?.message ?? '移动失败');
+      load();
+    }
+  };
+
+  // 批量移到底部：选中的题按原顺序移到最后，其余前移
+  const handleMoveSelectedToBottom = async () => {
+    if (selectedIds.size === 0) return;
+    const selected = questions.filter(q => selectedIds.has(q.id));
+    const others = questions.filter(q => !selectedIds.has(q.id));
+    const reordered = [...others, ...selected];
+    setQuestions(reordered);
+    try {
+      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
+      toast.success('已移到底部');
+    } catch (e: any) {
+      toast.error(e?.message ?? '移动失败');
+      load();
+    }
+  };
+
   const handleDeleteWord = async (id: string) => {
     try { await deleteWord(id); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
   };
@@ -451,9 +483,19 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
                   {selectedIds.size === questions.length ? '取消全选' : '全选'}
                 </button>
                 {selectedIds.size > 0 && (
-                  <Button variant="ghost" size="sm" danger onClick={handleBatchDelete}>
-                    <Trash2 className="w-4 h-4" /> 删除选中({selectedIds.size})
-                  </Button>
+                  <>
+                    <Button variant="ghost" size="sm" onClick={handleMoveSelectedToTop}
+                      title="将选中的题目移到列表顶部">
+                      <ChevronUp className="w-4 h-4" /> 置顶
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleMoveSelectedToBottom}
+                      title="将选中的题目移到列表底部">
+                      <ChevronDown className="w-4 h-4" /> 置底
+                    </Button>
+                    <Button variant="ghost" size="sm" danger onClick={handleBatchDelete}>
+                      <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
+                    </Button>
+                  </>
                 )}
               </>
             )}
@@ -568,6 +610,7 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
       {showBatchImport && (
         <BatchImportQuestionsModal
           setId={set.id}
+          existingCount={questions.length}
           onClose={() => setShowBatchImport(false)}
           onImported={load}
         />
@@ -875,6 +918,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
   const isChoiceSet = type === 'choice';
   // 对于 choice 题集，允许单选/多选切换；math 题集固定 math
   const [questionType, setQuestionType] = useState<QuestionType>(type);
+  const [questionNumber, setQuestionNumber] = useState(''); // 题号（选填），映射到 display_order
   const [questionText, setQuestionText] = useState('');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
   const [correctLetters, setCorrectLetters] = useState<string[]>([]); // 选项字母 ['A','C']
@@ -925,6 +969,12 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
 
   const handleSave = async () => {
     if (!questionText.trim()) { toast.error('请输入题干'); return; }
+    // 题号选填：映射到 display_order，空则不传
+    const displayOrder = questionNumber.trim() ? parseInt(questionNumber, 10) : undefined;
+    if (displayOrder !== undefined && (isNaN(displayOrder) || displayOrder < 1)) {
+      toast.error('题号需为正整数');
+      return;
+    }
     if (isChoiceSet) {
       const opts = options.map(o => o.trim()).filter(Boolean);
       if (opts.length < 2) { toast.error('至少 2 个选项'); return; }
@@ -939,6 +989,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
           correct_answer: correctLetters.slice().sort().join(''),
           explanation: explanation.trim() || undefined,
           difficulty,
+          display_order: displayOrder,
         });
         toast.success('已添加');
         onAdded();
@@ -960,6 +1011,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
           correct_answer: correctAnswer.trim(),
           explanation: explanation.trim() || undefined,
           difficulty,
+          display_order: displayOrder,
         });
         toast.success('已添加');
         onAdded();
@@ -990,9 +1042,16 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
             </div>
           </div>
         )}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">题干</label>
-          <Textarea value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="如：He ___ to school every day." rows={2} />
+        <div className="flex gap-3">
+          <div className="w-28 flex-shrink-0">
+            <label className="block text-sm font-medium text-slate-700 mb-1">题号</label>
+            <Input value={questionNumber} onChange={e => setQuestionNumber(e.target.value)} placeholder="选填" type="number" min={1} />
+            <p className="text-xs text-slate-400 mt-0.5">控制题目顺序</p>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-slate-700 mb-1">题干</label>
+            <Textarea value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="如：He ___ to school every day." rows={2} />
+          </div>
         </div>
         {isChoiceSet && (
           <div>
@@ -1069,8 +1128,8 @@ interface ParsedQuestion {
   error?: string;
 }
 
-function BatchImportQuestionsModal({ setId, onClose, onImported }: {
-  setId: string; onClose: () => void; onImported: () => void;
+function BatchImportQuestionsModal({ setId, existingCount, onClose, onImported }: {
+  setId: string; existingCount: number; onClose: () => void; onImported: () => void;
 }) {
   const toast = useToastStore();
   const [parsed, setParsed] = useState<ParsedQuestion[]>([]);
@@ -1148,7 +1207,7 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
     if (validItems.length === 0) { toast.error('没有可导入的有效题目'); return; }
     setImporting(true);
     try {
-      await createQuestionsBatch(validItems.map(p => ({
+      await createQuestionsBatch(validItems.map((p, i) => ({
         challenge_set_id: setId,
         type: p.type,
         question_text: p.question_text,
@@ -1158,6 +1217,7 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
           : p.correct_answer.toUpperCase().replace(/[^A-Z]/g, ''),
         explanation: p.explanation || undefined,
         difficulty: p.difficulty,
+        display_order: existingCount + i + 1,
       })));
       toast.success(`已导入 ${validItems.length} 题`);
       onImported();
