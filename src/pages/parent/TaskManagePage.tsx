@@ -190,6 +190,17 @@ export function TaskManagePage() {
     }
   };
 
+  // 快速修改奖励星光值（不打开详情页）
+  const handleRewardChange = async (id: string, val: number) => {
+    try {
+      await updateTask(id, { reward_coins: val });
+      await refresh();
+      toast.success('奖励已更新');
+    } catch (e: any) {
+      toast.error(e?.message ?? '更新失败');
+    }
+  };
+
   // 任务分类筛选
   const [categoryFilter, setCategoryFilter] = useState<'all' | TaskCategory>('all');
   const CATEGORY_OPTIONS: { id: 'all' | TaskCategory; label: string; emoji: string }[] = [
@@ -426,6 +437,7 @@ export function TaskManagePage() {
                     onEdit={() => openEdit(task)}
                     onDelete={() => setDeleteTarget(task)}
                     onOffline={() => handleOffline(task.id)}
+                    onRewardChange={(val) => handleRewardChange(task.id, val)}
                     dragHandle
                     selected={selectedIds.has(task.id)}
                     onToggleSelect={() => toggleSelect(task.id)}
@@ -474,6 +486,7 @@ export function TaskManagePage() {
                     onEdit={() => openEdit(task)}
                     onDelete={() => setDeleteTarget(task)}
                     onPublish={() => handlePublish(task.id)}
+                    onRewardChange={(val) => handleRewardChange(task.id, val)}
                     dragHandle
                     selected={selectedIds.has(task.id)}
                     onToggleSelect={() => toggleSelect(task.id)}
@@ -674,6 +687,7 @@ function TaskRow({
   onDelete,
   onPublish,
   onOffline,
+  onRewardChange,
   dragHandle,
   selected,
   onToggleSelect,
@@ -685,6 +699,7 @@ function TaskRow({
   onDelete: () => void;
   onPublish?: () => void;
   onOffline?: () => void;
+  onRewardChange?: (val: number) => void;
   dragHandle?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -745,12 +760,32 @@ function TaskRow({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={cn(
-            'font-bold tabular-nums',
-            task.reward_coins >= 0 ? 'text-emerald-500' : 'text-red-500'
-          )}>
-            {formatSignedCoins(task.reward_coins)}
-          </span>
+          {onRewardChange ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                defaultValue={task.reward_coins}
+                key={task.id}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v !== task.reward_coins) onRewardChange(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                }}
+                className="w-14 text-right font-bold tabular-nums border border-slate-200 rounded-lg px-1 py-0.5 focus:border-star-400 focus:outline-none focus:ring-1 focus:ring-star-200"
+                title="奖励星光值，回车保存"
+              />
+              <span className="text-xs text-slate-400">⭐</span>
+            </div>
+          ) : (
+            <span className={cn(
+              'font-bold tabular-nums',
+              task.reward_coins >= 0 ? 'text-emerald-500' : 'text-red-500'
+            )}>
+              {formatSignedCoins(task.reward_coins)}
+            </span>
+          )}
           {/* 发布按钮：待发布状态显示（草稿/过期/已完成） */}
           {(isDraft || isExpired || isCompleted) && onPublish && (
             <button
