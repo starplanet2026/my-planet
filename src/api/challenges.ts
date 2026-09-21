@@ -130,6 +130,13 @@ export async function deleteQuestionsBatch(ids: string[]): Promise<void> {
   if (error) throw error;
 }
 
+// 批量上线/下线题目（is_active: true=上线, false=下线）
+export async function setQuestionsActiveBatch(ids: string[], isActive: boolean): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('questions').update({ is_active: isActive }).in('id', ids);
+  if (error && !error.message.includes('is_active')) throw error;
+}
+
 // 批量更新题目排序
 export async function updateQuestionOrder(updates: { id: string; display_order: number }[]): Promise<void> {
   if (updates.length === 0) return;

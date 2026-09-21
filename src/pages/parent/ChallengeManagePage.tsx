@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils';
 import { Plus, Trash2, ArrowLeft, BookOpen, Calculator, ListChecks, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square } from 'lucide-react';
 import {
   fetchChallengeSets, createChallengeSet, deleteChallengeSet, publishChallengeSet, updateChallengeSet,
-  fetchQuestions, createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, updateQuestionOrder,
+  fetchQuestions, createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, setQuestionsActiveBatch, updateQuestionOrder,
   fetchWords, createWord, deleteWord, createWordsBatch,
 } from '../../api/challenges';
 import type { ChallengeSet, ChallengeSetType, Question, Word, QuestionType, Difficulty } from '../../api/types';
@@ -322,6 +322,18 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
     }
   };
 
+  // 批量上线/下线
+  const handleBatchSetActive = async (isActive: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      await setQuestionsActiveBatch([...selectedIds], isActive);
+      toast.success(`已${isActive ? '上线' : '下线'} ${selectedIds.size} 题`);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? '批量操作失败');
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -484,6 +496,14 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
                 </button>
                 {selectedIds.size > 0 && (
                   <>
+                    <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(true)}
+                      title="将选中的题目上线（孩子端可见）">
+                      <Eye className="w-4 h-4" /> 上线({selectedIds.size})
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(false)}
+                      title="将选中的题目下线（孩子端不可见）">
+                      <EyeOff className="w-4 h-4" /> 下线({selectedIds.size})
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={handleMoveSelectedToTop}
                       title="将选中的题目移到列表顶部">
                       <ChevronUp className="w-4 h-4" /> 置顶

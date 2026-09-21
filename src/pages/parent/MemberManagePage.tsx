@@ -20,6 +20,7 @@ export function MemberManagePage() {
   const navigate = useNavigate();
   const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
+  const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const parentMember = members.find(m => m.role === 'parent');
   const childMembers = members.filter(m => m.role === 'child');
   const { adjustCoins } = useCoinRecords();
@@ -105,6 +106,8 @@ export function MemberManagePage() {
     try {
       await deleteMember(deleteTarget.id);
       toast.success('成员已删除');
+      await refreshMembers();
+      setDeleteTarget(null);
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
     }

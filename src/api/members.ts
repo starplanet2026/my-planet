@@ -25,9 +25,9 @@ export async function updateMember(id: string, patch: Partial<Member>): Promise<
   return data as Member;
 }
 
-// 删除成员
+// 删除成员（走 RPC 级联清理 tasks.completed_by/coin_records.created_by/items.created_by/purchases.redeemed_by 等无 cascade 的外键）
 export async function deleteMember(id: string): Promise<void> {
-  const { error } = await supabase.from('members').delete().eq('id', id);
+  const { error } = await supabase.rpc('delete_member', { p_member_id: id });
   if (error) throw error;
 }
 

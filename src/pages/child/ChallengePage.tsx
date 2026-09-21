@@ -76,9 +76,7 @@ export function ChallengePage() {
     })();
   }, [family?.id, child?.id]);
 
-  if (loading) return <Loading />;
-
-  // 有保存的活动题集 → 直接恢复答题界面，不重新展示列表
+  // 有保存的活动题集 → 优先恢复答题界面，跳过列表加载（切 Tab 回来时直接进入）
   if (activeSet) {
     return (
       <ChallengePlayer
@@ -91,6 +89,8 @@ export function ChallengePage() {
       />
     );
   }
+
+  if (loading) return <Loading />;
 
   return (
     <div className="max-w-4xl mx-auto -mt-6">
