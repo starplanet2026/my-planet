@@ -44,7 +44,7 @@ begin
   -- 随机选一只可抽的宠物商品
   select * into v_pet_row from public.pet_shop_items
     where family_id = v_member.family_id
-      and subcategory = 'pet'
+      and type = 'pet'
       and stock > 0
     order by random()
     limit 1;
