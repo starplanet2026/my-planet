@@ -153,14 +153,12 @@ export function PetShopModal({
   };
 
   // 加载商品列表 + 已领养宠物
-  // 用品 tab 时加载全部用品（不按子分类筛选），宠物 tab 按子分类筛选
   const loadItems = async () => {
     if (!familyId) return;
     setLoading(true);
     try {
-      const fetchSub = activeMain === 'supply' ? undefined : activeSub;
       const [data, myPets] = await Promise.all([
-        fetchPetShopItems(familyId, activeMain, fetchSub),
+        fetchPetShopItems(familyId, activeMain, activeSub),
         fetchPets(childId),
       ]);
       setItems(data);
@@ -175,7 +173,7 @@ export function PetShopModal({
   useEffect(() => {
     loadItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [familyId, activeMain, childId]);
+  }, [familyId, activeMain, activeSub, childId]);
 
   // 是否已领养某宠物商品
   const isOwned = (itemId: string) =>
@@ -309,20 +307,12 @@ export function PetShopModal({
         ))}
       </div>
 
-      {/* 子分类 tab：宠物=筛选，用品=快速定位 */}
+      {/* 子分类 tab：筛选 */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {(activeMain === 'pet' ? PET_SUBS : SUPPLY_SUBS).map(s => (
           <button
             key={s.id}
-            onClick={() => {
-              if (activeMain === 'pet') {
-                setActiveSub(s.id);
-              } else {
-                // 用品 tab：滚动到对应分类区域
-                const el = document.getElementById(`supply-section-${s.id}`);
-                el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }
-            }}
+            onClick={() => setActiveSub(s.id)}
             className={cn(
               'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
               activeSub === s.id
@@ -345,129 +335,108 @@ export function PetShopModal({
           description="家长还未上架此分类商品"
         />
       ) : activeMain === 'supply' ? (
-        /* 用品 tab：按子分类分组展示，支持子分类按钮快速定位 */
-        (() => {
-          // 按子分类分组
-          const grouped = SUPPLY_SUBS.map(sub => ({
-            sub,
-            list: items.filter(i => i.subcategory === sub.id),
-          })).filter(g => g.list.length > 0);
-
-          return (
-            <div className="space-y-4">
-              {grouped.map(({ sub, list }) => (
-                <div key={sub.id} id={`supply-section-${sub.id}`} className="scroll-mt-32">
-                  {/* 分类标题 */}
-                  <div className="flex items-center gap-1.5 mb-2 px-1">
-                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold', SUPPLY_EFFECT[sub.id]?.badgeCls ?? 'bg-slate-100 text-slate-500')}>
-                      {sub.label}
+        /* 用品 tab：全部用品一行三个排列，不分组 */
+        <div className="grid grid-cols-3 gap-3">
+          {items.map(item => {
+            const soldOut = item.stock !== null && item.stock <= 0;
+            const inlineBuy = item.subcategory !== 'doghouse';
+            const qty = qtyMap[item.id] ?? 1;
+            const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
+            const recovery = item.recovery_value ?? 0;
+            const cardCls = cn(
+              'flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all text-center relative',
+              soldOut
+                ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
+            );
+            // 用品内联卡片（非狗屋）
+            if (inlineBuy) {
+              return (
+                <div key={item.id} className={cardCls}>
+                  {/* 左上角分类标签 */}
+                  {effect && (
+                    <span className={cn('absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold', effect.badgeCls)}>
+                      {effect.label}
                     </span>
-                    <span className="text-[10px] text-slate-400">{list.length}件</span>
+                  )}
+                  <div className="mt-3">
+                    <ItemIcon item={item} size="sm" />
                   </div>
-                  {/* 分类下的商品网格 */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {list.map(item => {
-                      const soldOut = item.stock !== null && item.stock <= 0;
-                      const inlineBuy = item.subcategory !== 'doghouse';
-                      const qty = qtyMap[item.id] ?? 1;
-                      const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
-                      const recovery = item.recovery_value ?? 0;
-                      const cardCls = cn(
-                        'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
-                        soldOut
-                          ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
-                          : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
-                      );
-                      // 用品内联卡片（非狗屋）
-                      if (inlineBuy) {
-                        return (
-                          <div key={item.id} className={cardCls}>
-                            {/* 左上角分类标签 */}
-                            {effect && (
-                              <span className={cn('absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold', effect.badgeCls)}>
-                                {sub.label}
-                              </span>
-                            )}
-                            <div className="mt-4">
-                              <ItemIcon item={item} size="sm" />
-                            </div>
-                            <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
-                              {item.name || '未命名'}
-                            </div>
-                            <PriceBadge item={item} />
-                            {/* 效果数值显示 */}
-                            {effect && recovery > 0 && (
-                              <div className={`text-[11px] font-bold ${effect.color}`}>
-                                {effect.icon} +{recovery} {effect.label}
-                              </div>
-                            )}
-                            {soldOut ? (
-                              <span className="text-[10px] text-slate-400">已售罄</span>
-                            ) : (
-                              <div className="w-full flex items-center gap-1 mt-0.5">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={qty}
-                                  onChange={e => {
-                                    const v = parseInt(e.target.value, 10);
-                                    setQtyMap(prev => ({ ...prev, [item.id]: Number.isNaN(v) || v < 1 ? 1 : v }));
-                                  }}
-                                  disabled={buyingItem === item.id}
-                                  className="w-12 text-center text-sm font-bold rounded-md border border-star-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-star-300"
-                                />
-                                <button
-                                  onClick={() => handleInlineBuy(item, qty)}
-                                  disabled={buyingItem === item.id}
-                                  className="flex-1 py-1 rounded-md bg-star-400 text-white text-xs font-bold hover:bg-star-500 active:scale-95 transition-colors disabled:opacity-50"
-                                >
-                                  {buyingItem === item.id ? '购买中…' : '购买'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-                      // 狗屋：点击进详情
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => setDetail(item)}
-                          disabled={soldOut}
-                          className={cardCls}
-                        >
-                          {/* 左上角分类标签 */}
-                          {effect && (
-                            <span className={cn('absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold', effect.badgeCls)}>
-                              {sub.label}
-                            </span>
-                          )}
-                          <div className="mt-4">
-                            <ItemIcon item={item} size="sm" />
-                          </div>
-                          <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
-                            {item.name || '未命名'}
-                          </div>
-                          <div className="w-full space-y-0.5">
-                            {effect && recovery > 0 && (
-                              <div className={`text-[10px] font-bold ${effect.color}`}>
-                                {effect.icon} +{recovery} {effect.label}
-                              </div>
-                            )}
-                            <PriceBadge item={item} />
-                          </div>
-                          {soldOut && (
-                            <span className="text-[10px] text-slate-400">已售罄</span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
+                    {item.name || '未命名'}
                   </div>
+                  {/* 价格 + 恢复值放一行 */}
+                  <div className="w-full flex items-center justify-center gap-2 text-[10px]">
+                    <PriceBadge item={item} />
+                    {effect && recovery > 0 && (
+                      <span className={`font-bold ${effect.color}`}>
+                        +{recovery}{effect.label}
+                      </span>
+                    )}
+                  </div>
+                  {soldOut ? (
+                    <span className="text-[10px] text-slate-400">已售罄</span>
+                  ) : (
+                    <div className="w-full flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        value={qty}
+                        onChange={e => {
+                          const v = parseInt(e.target.value, 10);
+                          setQtyMap(prev => ({ ...prev, [item.id]: Number.isNaN(v) || v < 1 ? 1 : v }));
+                        }}
+                        disabled={buyingItem === item.id}
+                        className="w-12 text-center text-sm font-bold rounded-md border border-star-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-star-300"
+                      />
+                      <button
+                        onClick={() => handleInlineBuy(item, qty)}
+                        disabled={buyingItem === item.id}
+                        className="flex-1 py-1 rounded-md bg-star-400 text-white text-xs font-bold hover:bg-star-500 active:scale-95 transition-colors disabled:opacity-50"
+                      >
+                        {buyingItem === item.id ? '购买中…' : '购买'}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          );
-        })()
+              );
+            }
+            // 狗屋：点击进详情
+            return (
+              <button
+                key={item.id}
+                onClick={() => setDetail(item)}
+                disabled={soldOut}
+                className={cardCls}
+              >
+                {/* 左上角分类标签 */}
+                {effect && (
+                  <span className={cn('absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold', effect.badgeCls)}>
+                    {effect.label}
+                  </span>
+                )}
+                <div className="mt-3">
+                  <ItemIcon item={item} size="sm" />
+                </div>
+                <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
+                  {item.name || '未命名'}
+                </div>
+                {/* 价格 + 恢复值放一行 */}
+                <div className="w-full flex items-center justify-center gap-2 text-[10px]">
+                  <PriceBadge item={item} />
+                  {effect && recovery > 0 && (
+                    <span className={`font-bold ${effect.color}`}>
+                      +{recovery}{effect.label}
+                    </span>
+                  )}
+                </div>
+                {soldOut && (
+                  <span className="text-[10px] text-slate-400">已售罄</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       ) : (
         /* 宠物 tab：按子分类筛选展示 */
         <div className="grid grid-cols-3 gap-3">
