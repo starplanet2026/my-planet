@@ -58,14 +58,14 @@ begin
 
   -- 创建宠物记录
   insert into public.pets (
-    family_id, member_id, item_id, name, species, image_url,
-    hunger, cleanliness, happiness, health,
+    family_id, member_id, shop_item_id, name, image_url,
+    hunger, clean, happiness, health,
     max_level, current_max_blood, daily_decay_base,
     upgrade_percent, upgrade_coin_reward, rarity, evolved_bonus,
     exp, last_check_at
   ) values (
     v_member.family_id, p_member_id, v_pet_row.id,
-    v_pet_row.name, v_pet_row.species, v_pet_row.image_url,
+    v_pet_row.name, v_pet_row.image_url,
     0, 0, 0, 0,
     v_pet_row.max_level, v_pet_row.max_blood_bar, v_pet_row.daily_decay_base,
     v_pet_row.upgrade_percent, v_pet_row.upgrade_coin_reward, v_pet_row.rarity, 1.0,
@@ -87,7 +87,7 @@ begin
     where id = v_pet_row.id;
 
   return query select true, '抽卡成功', v_new_pet.id, v_pet_row.name,
-    v_pet_row.image_url, v_pet_row.species, v_star, v_pet_row.price_star;
+    v_pet_row.image_url, v_pet_row.subcategory, v_star, v_pet_row.price_star;
 end;
 $$;
 
