@@ -12,9 +12,10 @@ import { cn } from '../../lib/utils';
 import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, BookX, Lightbulb } from 'lucide-react';
 import {
   fetchChallengeSets, fetchQuestions, fetchWords, fetchWordProgress,
+  fetchActiveQuestions, getChallengeAnalysis, awardPerfectChallengeBonus,
   answerQuestion, answerWord, fetchWrongQuestions, reviewWrongQuestion,
 } from '../../api/challenges';
-import type { ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, WrongQuestion, Difficulty } from '../../api/types';
+import type { ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, WrongQuestion, Difficulty, ChallengeAnalysisItem } from '../../api/types';
 
 const TYPE_CONFIG: Record<ChallengeSetType, { label: string; icon: React.ReactNode; color: string }> = {
   word_vocab: { label: '单词背诵', icon: <BookOpen className="w-6 h-6" />, color: 'from-blue-400 to-blue-500' },
@@ -73,51 +74,57 @@ export function ChallengePage() {
 
   return (
     <div className="max-w-4xl mx-auto -mt-6">
-      {/* 错题本常驻入口 */}
-      <Card
-        className="p-4 mb-4 cursor-pointer hover:shadow-lg transition-shadow bg-gradient-to-r from-red-50 to-orange-50 border-red-100"
-        onClick={() => setShowWrongBook(true)}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center text-white">
+      {/* 错题本常驻入口 - 与题集卡片设计一致 */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
+        <div
+          onClick={() => setShowWrongBook(true)}
+          className={cn(
+            'relative aspect-square rounded-2xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50',
+            'cursor-pointer hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all',
+            'flex flex-col items-center justify-center p-3 text-center'
+          )}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center text-white mb-2">
             <BookX className="w-6 h-6" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-slate-800">错题本</h3>
-            <p className="text-sm text-slate-400">复习错题，答对2次即可移除</p>
-          </div>
+          <h3 className="font-bold text-slate-800 text-sm">错题本</h3>
+          <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">复习错题</p>
           {wrongCount > 0 && (
-            <span className="min-w-6 h-6 px-2 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full">
+            <span className="absolute top-1.5 right-1.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
               {wrongCount}
             </span>
           )}
         </div>
-      </Card>
+      </div>
 
       {sets.length === 0 ? (
         <EmptyState icon="📚" title="暂无挑战赛" description="家长还没发布题集哦" />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           {sets.map(set => {
             const cfg = TYPE_CONFIG[set.type];
             return (
-              <Card key={set.id} className="p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setActiveSet(set)}>
-                <div className="flex items-start gap-3">
-                  <div className={cn('w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white', cfg.color)}>
-                    {cfg.icon}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-800 text-lg">{set.title}</h3>
-                    {set.description && <p className="text-sm text-slate-400 mt-0.5">{set.description}</p>}
-                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">简+{set.reward_easy}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">中+{set.reward_medium}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">困+{set.reward_hard}</span>
-                      <span className="text-xs text-slate-400">{cfg.label}</span>
-                    </div>
-                  </div>
+              <div
+                key={set.id}
+                onClick={() => setActiveSet(set)}
+                className={cn(
+                  'relative aspect-square rounded-2xl border-2 border-emerald-400 bg-white',
+                  'cursor-pointer hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all',
+                  'flex flex-col items-center justify-center p-3 text-center'
+                )}
+              >
+                <div className={cn('w-12 h-12 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white mb-2', cfg.color)}>
+                  {cfg.icon}
                 </div>
-              </Card>
+                <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{set.title}</h3>
+                {set.description && (
+                  <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{set.description}</p>
+                )}
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">+{set.reward_easy}⭐</span>
+                  <span className="text-[10px] text-slate-400">{cfg.label}</span>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -134,8 +141,8 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
   const [words, setWords] = useState<(Word & { progress?: any })[]>([]);
   const [loading, setLoading] = useState(true);
   const [started, setStarted] = useState(false);
-  // null = 未选择难度；'all' = 全选；'easy'/'medium'/'hard' = 单一难度
-  const [difficulty, setDifficulty] = useState<'all' | Difficulty | null>(null);
+  // 重做时刷新题目列表（fetchActiveQuestions 会过滤掉已掌握）
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -145,13 +152,21 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
           const data = await fetchWordProgress(childId, set.id);
           setWords(data);
         } else {
-          setQuestions(await fetchQuestions(set.id));
+          // 使用 fetchActiveQuestions：只取未掌握的题，做对自动下线
+          try {
+            const active = await fetchActiveQuestions(set.id, childId);
+            setQuestions(active);
+          } catch (e: any) {
+            // 迁移未执行时回退到 fetchQuestions
+            const all = await fetchQuestions(set.id);
+            setQuestions(all.filter(q => q.is_active !== false));
+          }
         }
       } finally {
         setLoading(false);
       }
     })();
-  }, [set.id, childId]);
+  }, [set.id, childId, reloadKey]);
 
   if (loading) return <Loading />;
 
@@ -168,34 +183,34 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
     );
   }
 
-  // 单词背诵无难度分级，直接答题
+  // 单词背诵保持原流程
   if (set.type === 'word_vocab') {
     return <WordPlayer set={set} words={words} childId={childId} onBack={onBack} onDone={onDone} />;
   }
 
-  // 选择题/数学题：选择难度
-  if (difficulty === null) {
+  // 选择题/数学题：直接顺序做题，不再选难度
+  if (questions.length === 0) {
+    // 所有题都已掌握 → 挑战完成
     return (
-      <DifficultySelection
+      <ChallengeAllMastered
         set={set}
-        questions={questions}
-        onSelect={(d) => setDifficulty(d)}
+        childId={childId}
         onBack={onBack}
+        onRedo={() => { setStarted(true); setReloadKey(k => k + 1); }}
       />
     );
   }
 
-  // 按难度过滤题目；全选时按简单→中等→困难顺序排列，循序渐进
-  const diffRank: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
-  const filtered = difficulty === 'all'
-    ? [...questions].sort((a, b) => (diffRank[a.difficulty] ?? 3) - (diffRank[b.difficulty] ?? 3))
-    : questions.filter(q => q.difficulty === difficulty);
-
-  if (filtered.length === 0) {
-    return <EmptyState icon="📭" title="该难度暂无题目" description="请选择其他难度" />;
-  }
-
-  return <QuestionPlayer set={set} questions={filtered} childId={childId} onBack={onBack} onDone={onDone} />;
+  return (
+    <QuestionPlayer
+      set={set}
+      questions={questions}
+      childId={childId}
+      onBack={onBack}
+      onDone={onDone}
+      onChallengeEnd={() => setReloadKey(k => k + 1)}
+    />
+  );
 }
 
 // ====== 知识点按钮（答题中右上角灯泡） ======
@@ -257,98 +272,24 @@ function KnowledgePreview({ set, onStart, onBack }: {
   );
 }
 
-// ====== 难度选择 ======
-function DifficultySelection({ set, questions, onSelect, onBack }: {
-  set: ChallengeSet;
-  questions: Question[];
-  onSelect: (d: 'all' | Difficulty) => void;
-  onBack: () => void;
-}) {
-  const easyCount = questions.filter(q => q.difficulty === 'easy').length;
-  const mediumCount = questions.filter(q => q.difficulty === 'medium').length;
-  const hardCount = questions.filter(q => q.difficulty === 'hard').length;
-  const totalCount = questions.length;
+// ====== 难度选择已移除：新流程直接顺序做题，做完一轮显示正确率 ======
 
-  const options: Array<{
-    key: 'all' | Difficulty;
-    label: string;
-    reward: number;
-    count: number;
-    color: string;
-    icon: string;
-    desc: string;
-  }> = [
-    { key: 'easy', label: '简单', reward: set.reward_easy, count: easyCount, color: 'from-emerald-400 to-green-400', icon: '🌱', desc: '基础题，轻松拿分' },
-    { key: 'medium', label: '中等', reward: set.reward_medium, count: mediumCount, color: 'from-amber-400 to-orange-400', icon: '⭐', desc: '进阶题，稳步提升' },
-    { key: 'hard', label: '困难', reward: set.reward_hard, count: hardCount, color: 'from-red-400 to-rose-400', icon: '🔥', desc: '挑战题，高额奖励' },
-    { key: 'all', label: '全选', reward: 0, count: totalCount, color: 'from-purple-400 to-indigo-400', icon: '🎯', desc: '所有难度混合挑战' },
-  ];
-
-  return (
-    <div className="max-w-2xl mx-auto -mt-6">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-xl font-bold text-slate-800">{set.title}</h2>
-      </div>
-
-      <Card className="p-6 mb-4 bg-gradient-to-br from-slate-50 to-slate-100">
-        <h3 className="text-lg font-bold text-slate-800 text-center">选择答题难度</h3>
-        <p className="text-sm text-slate-400 text-center mt-1">不同难度奖励不同星光值</p>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3">
-        {options.map(opt => {
-          const disabled = opt.count === 0;
-          return (
-            <button
-              key={opt.key}
-              onClick={() => !disabled && onSelect(opt.key)}
-              disabled={disabled}
-              className={cn(
-                'relative p-4 rounded-2xl border-2 text-left transition-all',
-                disabled ? 'border-slate-200 opacity-50 cursor-not-allowed' : 'border-slate-200 hover:border-star-300 hover:shadow-lg'
-              )}
-            >
-              <div className={cn('w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center text-2xl mb-2', opt.color)}>
-                {opt.icon}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800">{opt.label}</span>
-                {opt.key !== 'all' && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-star-100 text-star-600 font-medium">
-                    +{opt.reward}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
-              <div className="flex items-center gap-1 mt-2">
-                <span className="text-xs text-slate-500">{opt.count} 题</span>
-                {opt.key === 'all' && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">混合奖励</span>
-                )}
-              </div>
-              {disabled && (
-                <span className="absolute top-2 right-2 text-xs text-slate-400">暂无</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ====== 选择题/数学题 答题 ======
-function QuestionPlayer({ set, questions, childId, onBack, onDone }: {
-  set: ChallengeSet; questions: Question[]; childId: string; onBack: () => void; onDone: () => void;
+// ====== 选择题/数学题 答题（新流程：顺序做题→挑战结束页→重做错题） ======
+function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEnd }: {
+  set: ChallengeSet; questions: Question[]; childId: string;
+  onBack: () => void; onDone: () => void; onChallengeEnd: () => void;
 }) {
   const [idx, setIdx] = useState(0);
   const [answer, setAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // 本轮挑战每题结果（true=对，false=错）
+  const [results, setResults] = useState<boolean[]>([]);
+  // 本轮累计奖励
+  const [totalReward, setTotalReward] = useState(0);
+  const [totalBonus, setTotalBonus] = useState(0);
+  const [showChallengeResult, setShowChallengeResult] = useState(false);
   const toast = useToastStore();
 
   const q = questions[idx];
@@ -361,8 +302,13 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone }: {
       setIsCorrect(result.is_correct);
       setShowResult(true);
       onDone();
+      // 累计结果
+      setResults(prev => [...prev, result.is_correct]);
+      setTotalReward(r => r + (result.reward ?? 0));
+      setTotalBonus(b => b + (result.bonus_reward ?? 0));
       if (result.is_correct) {
-        toast.success(`答对了！+${result.reward} 星光值`);
+        const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
+        toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
       } else {
         toast.error('答错了，已加入错题本');
       }
@@ -374,10 +320,42 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone }: {
   };
 
   const handleNext = () => {
-    setAnswer('');
-    setShowResult(false);
-    setIdx(i => (i + 1) % questions.length);
+    if (idx < questions.length - 1) {
+      setAnswer('');
+      setShowResult(false);
+      setIdx(i => i + 1);
+    } else {
+      // 本轮所有题做完，进入挑战结束页
+      setShowChallengeResult(true);
+      onChallengeEnd();
+    }
   };
+
+  // 挑战结束页
+  if (showChallengeResult) {
+    return (
+      <ChallengeResult
+        set={set}
+        childId={childId}
+        correctCount={results.filter(Boolean).length}
+        totalCount={questions.length}
+        totalReward={totalReward}
+        totalBonus={totalBonus}
+        onBack={onBack}
+        onRedo={() => {
+          // 重置本轮状态，触发父组件 reload（自动过滤已掌握）
+          setIdx(0);
+          setAnswer('');
+          setShowResult(false);
+          setResults([]);
+          setTotalReward(0);
+          setTotalBonus(0);
+          setShowChallengeResult(false);
+        }}
+        onDone={onDone}
+      />
+    );
+  }
 
   if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
 
@@ -433,7 +411,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone }: {
                     isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
                     {isMulti && isSelected ? '✓' : letter}
                   </span>
-                  <span className="flex-1">{opt.replace(/^[A-D][.、\s]*/, '')}</span>
+                  <span className="flex-1">{opt.replace(/^[A-H][.、\s]*/, '')}</span>
                 </button>
               );
             })}
@@ -465,9 +443,182 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone }: {
             </Button>
           ) : (
             <Button onClick={handleNext} fullWidth>
-              {idx < questions.length - 1 ? '下一题' : '再做一遍'}
+              {idx < questions.length - 1 ? '下一题' : '查看挑战结果'}
             </Button>
           )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ====== 挑战结束页：正确率 + 重做错题 + 挑战分析 ======
+function ChallengeResult({ set, childId, correctCount, totalCount, totalReward, totalBonus, onBack, onRedo, onDone }: {
+  set: ChallengeSet;
+  childId: string;
+  correctCount: number;
+  totalCount: number;
+  totalReward: number;
+  totalBonus: number;
+  onBack: () => void;
+  onRedo: () => void;
+  onDone: () => void;
+}) {
+  const toast = useToastStore();
+  const [analysis, setAnalysis] = useState<ChallengeAnalysisItem[] | null>(null);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [bonusAwarded, setBonusAwarded] = useState(false);
+
+  const correctRate = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+  const allCorrect = correctCount === totalCount && totalCount > 0;
+  const wrongCount = totalCount - correctCount;
+
+  // 拉取挑战分析（每题挑战次数）
+  useEffect(() => {
+    (async () => {
+      setLoadingAnalysis(true);
+      try {
+        const data = await getChallengeAnalysis(childId, set.id);
+        setAnalysis(data);
+      } catch (e: any) {
+        // 迁移未执行时静默
+      } finally {
+        setLoadingAnalysis(false);
+      }
+    })();
+  }, [childId, set.id]);
+
+  // 100% 正确率时一次性发放10星光奖励
+  useEffect(() => {
+    if (!allCorrect || bonusAwarded) return;
+    (async () => {
+      try {
+        const r = await awardPerfectChallengeBonus(childId, set.id);
+        if (r.awarded) {
+          setBonusAwarded(true);
+          toast.success(`🏆 100% 正确率！额外 +${r.bonus} 星光值`);
+          onDone();
+        }
+      } catch (e: any) {
+        // 迁移未执行时静默
+      }
+    })();
+  }, [allCorrect, bonusAwarded, childId, set.id]);
+
+  return (
+    <div className="max-w-2xl mx-auto -mt-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-bold text-slate-800">{set.title} - 挑战结束</h2>
+      </div>
+
+      <Card className="p-6 mb-4 text-center bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100">
+        <div className="text-6xl mb-3">{allCorrect ? '🎉' : correctRate >= 60 ? '🌟' : '💪'}</div>
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">
+          {allCorrect ? '全部答对！' : '挑战完成'}
+        </h3>
+        <div className="text-5xl font-bold text-emerald-500 mb-1">{correctRate}%</div>
+        <p className="text-sm text-slate-500">
+          答对 {correctCount} / {totalCount} 题
+          {wrongCount > 0 && `（错 ${wrongCount} 题）`}
+        </p>
+        <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
+          {totalReward > 0 && (
+            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium">
+              ⭐ +{totalReward} 星光值
+            </span>
+          )}
+          {totalBonus > 0 && (
+            <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">
+              🎁 首次掌握奖励 +{totalBonus}
+            </span>
+          )}
+          {allCorrect && (
+            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium">
+              🏆 100% 正确率额外 +10 星光
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* 重新挑战按钮 */}
+      <div className="flex gap-2 mb-6">
+        <Button variant="ghost" onClick={onBack} className="flex-1">返回题集</Button>
+        {wrongCount > 0 ? (
+          <Button onClick={onRedo} className="flex-1">
+            重新挑战（只做错题）
+          </Button>
+        ) : (
+          <Button onClick={onBack} className="flex-1">完成挑战</Button>
+        )}
+      </div>
+
+      {/* 挑战分析：每题挑战次数 */}
+      <Card className="p-4">
+        <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+          📊 挑战分析
+        </h4>
+        {loadingAnalysis ? (
+          <p className="text-sm text-slate-400 text-center py-4">加载中...</p>
+        ) : analysis && analysis.length > 0 ? (
+          <div className="space-y-2">
+            {analysis.map((item, i) => (
+              <div
+                key={item.question_id}
+                className={cn(
+                  'p-3 rounded-xl border flex items-start gap-3',
+                  item.is_mastered ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                )}
+              >
+                <div className={cn(
+                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
+                  item.is_mastered ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'
+                )}>
+                  {item.is_mastered ? '✓' : '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-800 line-clamp-2">{item.question_text}</p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
+                    <span>挑战 {item.attempt_count} 次</span>
+                    <span>答对 {item.correct_count} 次</span>
+                    {!item.is_active && <span className="text-red-500">已下线</span>}
+                    {item.is_mastered && <span className="text-emerald-600">已掌握</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 text-center py-4">暂无挑战分析数据（需执行 0052 迁移）</p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ====== 全部掌握状态：所有题已答对至少一次 ======
+function ChallengeAllMastered({ set, childId, onBack, onRedo }: {
+  set: ChallengeSet; childId: string; onBack: () => void; onRedo: () => void;
+}) {
+  return (
+    <div className="max-w-2xl mx-auto -mt-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-bold text-slate-800">{set.title}</h2>
+      </div>
+      <Card className="p-8 text-center bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100">
+        <div className="text-6xl mb-3">🏆</div>
+        <h3 className="text-2xl font-bold text-slate-800 mb-2">全部掌握！</h3>
+        <p className="text-sm text-slate-500 mb-6">
+          所有题目都已答对至少一次，正确率 100%
+        </p>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onBack} className="flex-1">返回</Button>
+          <Button onClick={onRedo} className="flex-1">从头挑战</Button>
         </div>
       </Card>
     </div>

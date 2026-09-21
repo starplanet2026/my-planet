@@ -299,6 +299,18 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
     try { await deleteQuestion(id); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
   };
 
+  // 切换题目的上线/下线状态（孩子端是否展示）
+  const toggleQuestionActive = async (q: Question) => {
+    const newActive = q.is_active === false ? true : false;
+    try {
+      await updateQuestion(q.id, { is_active: newActive });
+      toast.success(newActive ? '已上线' : '已下线');
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? '切换失败（需执行 0052 迁移）');
+    }
+  };
+
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
     try {
@@ -472,6 +484,18 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
                           {q.type === 'multi_choice' && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">多选</span>
                           )}
+                          <button
+                            onClick={() => toggleQuestionActive(q)}
+                            title="下线后孩子端不再出现该题；做对的题会自动下线，可在此手动上线"
+                            className={cn(
+                              'text-xs px-1.5 py-0.5 rounded ml-auto',
+                              q.is_active === false
+                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                            )}
+                          >
+                            {q.is_active === false ? '已下线' : '在线'}
+                          </button>
                         </div>
                         {q.options && (
                           <div className="mt-1 text-sm text-slate-500">
@@ -1066,17 +1090,30 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
         const rawDiff = String(row['难度'] ?? '中等').trim();
         const qText = String(row['题目'] ?? row['题干'] ?? '').trim();
         const opts: string[] = [];
-        // 支持 选项A/选项B... 或 A/B... 或 选项1/选项2...
+        // 动态识别选项数量：支持 选项A~选项H 或 A~H 列名
+        // 收集所有匹配的列，按字母顺序排序
+        const optEntries: { letter: string; val: string }[] = [];
         for (const key of Object.keys(row)) {
-          const m = key.match(/^选项?\s*([A-D])$/i) || key.match(/^选项\s*(\d+)$/i);
+          // 选项A / 选项B ... 选项H，或 A / B ... H
+          const m = key.match(/^选项?\s*([A-H])$/i) || key.match(/^选项\s*(\d+)$/i);
           if (m) {
             const val = String(row[key] ?? '').trim();
-            if (val) opts.push(val);
+            if (val) {
+              // 如果是数字序号，转为字母
+              const letter = /^\d+$/.test(m[1])
+                ? String.fromCharCode(64 + parseInt(m[1], 10)) // 1->A, 2->B...
+                : m[1].toUpperCase();
+              optEntries.push({ letter, val });
+            }
           }
         }
-        // 若没匹配到列名，尝试按固定列顺序 选项A/B/C/D
+        // 按字母排序
+        optEntries.sort((a, b) => a.letter.localeCompare(b.letter));
+        opts.push(...optEntries.map(e => e.val));
+
+        // 若没匹配到列名，尝试按固定列顺序 选项A~H 扫描看哪个有值
         if (opts.length === 0) {
-          for (const k of ['选项A', '选项B', '选项C', '选项D']) {
+          for (const k of ['选项A', '选项B', '选项C', '选项D', '选项E', '选项F', '选项G', '选项H']) {
             const v = String(row[k] ?? '').trim();
             if (v) opts.push(v);
           }
@@ -1135,6 +1172,7 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
     const tpl = [
       { 序号: 1, 难度: '简单', 题型: '单选', 题目: '在……里面', 选项A: 'in', 选项B: 'on', 选项C: 'at', 选项D: 'of', 正确答案: 'A', 解析: '在空间内部用 in' },
       { 序号: 2, 难度: '简单', 题型: '多选', 题目: '下列哪些用法正确？', 选项A: 'in the bag', 选项B: 'in 2025', 选项C: 'in Monday', 选项D: 'in the morning', 正确答案: 'ABD', 解析: '具体某一天用 on，故 in Monday 错误' },
+      { 序号: 3, 难度: '中等', 题型: '单选', 题目: '介词填空：The cat is ___ the box.', 选项A: 'in', 选项B: 'on', 选项C: 'at', 选项D: 'to', 选项E: 'with', 选项F: 'of', 正确答案: 'A', 解析: '介词挑战赛可支持 6 个选项（A~F）' },
     ];
     const { default: XLSX } = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(tpl);
@@ -1149,9 +1187,9 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
     <Modal open onClose={onClose} title="批量导入题目（Excel）" size="lg">
       <div className="space-y-4">
         <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-600">
-          <p>表格列：序号 | 难度（简单/中等/困难） | 题型（单选/多选） | 题目 | 选项A | 选项B | 选项C | 选项D | 正确答案（如 A 或 ABD） | 解析</p>
+          <p>表格列：序号 | 难度 | 题型 | 题目 | 选项A~H（按需填写，最多 8 个，介词挑战赛可填 6 个选项A~F） | 正确答案（如 A 或 ABD） | 解析</p>
           <button onClick={downloadTemplate} className="mt-2 text-star-600 hover:text-star-700 flex items-center gap-1">
-            <Upload className="w-4 h-4" /> 下载模板
+            <Upload className="w-4 h-4" /> 下载模板（含 6 选项示例）
           </button>
         </div>
 

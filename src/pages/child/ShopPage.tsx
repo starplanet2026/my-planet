@@ -10,7 +10,6 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { formatCoins, formatDate, isExpired } from '../../lib/utils';
-import { Minus, Plus } from 'lucide-react';
 import { COIN_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { Item } from '../../api/types';
@@ -253,26 +252,20 @@ export function ShopPage() {
               <p className="text-sm text-slate-500 text-center">{selectedItem.description}</p>
             )}
 
-            {/* 数量选择 */}
+            {/* 数量选择（手动输入） */}
             <div className="flex items-center justify-between bg-star-50 rounded-xl px-4 py-3">
               <span className="text-slate-600 font-medium">兑换数量</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  disabled={quantity <= 1 || purchasing}
-                  className="w-8 h-8 rounded-full bg-white border border-star-200 flex items-center justify-center text-star-600 hover:bg-star-100 disabled:opacity-40 transition-colors"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="text-lg font-bold tabular-nums w-6 text-center">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(q => q + 1)}
-                  disabled={purchasing}
-                  className="w-8 h-8 rounded-full bg-white border border-star-200 flex items-center justify-center text-star-600 hover:bg-star-100 disabled:opacity-40 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
+              <input
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10);
+                  setQuantity(Number.isNaN(v) || v < 1 ? 1 : v);
+                }}
+                disabled={purchasing}
+                className="w-20 text-center text-lg font-bold tabular-nums rounded-lg border border-star-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-star-300"
+              />
             </div>
 
             {/* 总价 */}

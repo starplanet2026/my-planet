@@ -179,6 +179,7 @@ export interface Question {
   explanation: string | null;
   difficulty: Difficulty;
   display_order: number;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -241,7 +242,22 @@ export interface WrongQuestion {
 export interface AnswerQuestionResult {
   is_correct: boolean;
   reward: number;
+  is_mastered: boolean;
+  bonus_reward: number;
   new_star: number;
+}
+
+// 挑战分析 RPC 返回类型
+export interface ChallengeAnalysisItem {
+  question_id: string;
+  question_text: string;
+  options: string[] | null;
+  correct_answer: string;
+  type: string;
+  is_active: boolean;
+  attempt_count: number;
+  correct_count: number;
+  is_mastered: boolean;
 }
 
 export interface AnswerWordResult {

@@ -2,7 +2,7 @@ import { supabase } from './client';
 import type {
   ChallengeSet, Question, Word, WordProgress,
   WrongQuestion, AnswerQuestionResult, AnswerWordResult, ReviewWrongResult,
-  ChallengeSetType, QuestionType, Difficulty,
+  ChallengeSetType, QuestionType, Difficulty, ChallengeAnalysisItem,
 } from './types';
 
 // ====== ChallengeSet 题集 ======
@@ -66,6 +66,37 @@ export async function fetchQuestions(setId: string): Promise<Question[]> {
   if (error) throw error;
   // 前端按 display_order 排序（迁移未执行时字段为 undefined，不影响）
   return ((data ?? []) as Question[]).sort((a, b) => (a.display_order ?? 999) - (b.display_order ?? 999));
+}
+
+// 获取该题集中未掌握的题目（is_mastered=false 或 question_progress 不存在）
+// 用于"做对自动下线，重做时只出现错题"逻辑
+export async function fetchActiveQuestions(setId: string, memberId: string): Promise<Question[]> {
+  // 先取所有题目
+  const { data: questions, error: qErr } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('challenge_set_id', setId)
+    .order('created_at');
+  if (qErr) throw qErr;
+  const sorted = ((questions ?? []) as Question[]).sort((a, b) =>
+    (a.display_order ?? 999) - (b.display_order ?? 999));
+
+  // 强制下线（is_active=false）的题不出现
+  const active = sorted.filter(q => q.is_active !== false);
+
+  // 再取已掌握题目
+  const { data: progresses, error: pErr } = await supabase
+    .from('question_progress')
+    .select('question_id, is_mastered')
+    .eq('member_id', memberId);
+  if (pErr && !pErr.message.includes('question_progress')) throw pErr;
+
+  const masteredIds = new Set(
+    (progresses ?? []).filter(p => p.is_mastered).map(p => p.question_id)
+  );
+
+  // 过滤掉已掌握的题（首次挑战时这批题为空，会全部展示）
+  return active.filter(q => !masteredIds.has(q.id));
 }
 
 export async function createQuestion(data: {
@@ -216,6 +247,28 @@ export async function answerQuestion(
   // answer_question 是 returns table 的集合函数，rpc 返回数组，取首行
   const row = Array.isArray(data) ? data[0] : data;
   return row as AnswerQuestionResult;
+}
+
+// 获取用户对该题集所有题目的挑战分析（尝试次数/答对次数/是否掌握）
+export async function getChallengeAnalysis(memberId: string, setId: string): Promise<ChallengeAnalysisItem[]> {
+  const { data, error } = await supabase.rpc('get_challenge_analysis', {
+    p_member_id: memberId,
+    p_set_id: setId,
+  });
+  if (error) throw error;
+  return (data ?? []) as ChallengeAnalysisItem[];
+}
+
+// 挑战结束页正确率100%时调用，一次性奖励10星光
+// 返回 { awarded, bonus, new_star }；awarded=false 表示未达到条件或已发过
+export async function awardPerfectChallengeBonus(memberId: string, challengeSetId: string): Promise<{ awarded: boolean; bonus: number; new_star: number }> {
+  const { data, error } = await supabase.rpc('award_perfect_challenge_bonus', {
+    p_member_id: memberId,
+    p_challenge_set_id: challengeSetId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as { awarded: boolean; bonus: number; new_star: number };
 }
 
 export async function answerWord(

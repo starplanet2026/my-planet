@@ -125,6 +125,10 @@ export function PetShopModal({
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<PetShopItem | null>(null);
   const [buying, setBuying] = useState(false);
+  // 各用品卡片内联数量输入框：itemId -> 数量
+  const [qtyMap, setQtyMap] = useState<Record<string, number>>({});
+  // 各用品卡片单独购买中状态
+  const [buyingItem, setBuyingItem] = useState<string | null>(null);
   // 命名弹窗：购买宠物成功后弹出（只起名，不选性别）
   const [naming, setNaming] = useState<{
     petId: string;
@@ -215,6 +219,41 @@ export function PetShopModal({
     }
   };
 
+  // 内联购买用品（卡片外层直接购买，支持数量）
+  const handleInlineBuy = async (item: PetShopItem, qty: number) => {
+    if (buyingItem || qty < 1) return;
+    setBuyingItem(item.id);
+    try {
+      let lastErr: any = null;
+      let successCount = 0;
+      let lastMsg: string | undefined;
+      for (let i = 0; i < qty; i++) {
+        const r = await buyPetItem(childId, item.id);
+        if (r.success) {
+          successCount++;
+        } else {
+          lastMsg = r.message;
+          lastErr = new Error(r.message || '购买失败');
+          break;
+        }
+      }
+      if (successCount > 0) {
+        await refreshMembers();
+        loadItems();
+        toast.success(`已购买 ${successCount} 件，存入背包`);
+        setQtyMap(prev => ({ ...prev, [item.id]: 1 }));
+        onBought();
+      }
+      if (lastErr) {
+        toast.error(lastMsg ?? '部分购买失败');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '购买失败');
+    } finally {
+      setBuyingItem(null);
+    }
+  };
+
   // 提交命名与性别
   const handleNamingSubmit = async () => {
     if (!naming) return;
@@ -292,19 +331,60 @@ export function PetShopModal({
             const owned = item.type === 'pet' && isOwned(item.id);
             // 已领养宠物仍可点击查看详情，仅售罄禁用
             const disabled = soldOut;
+            // 用品（非狗屋）：卡片内联购买
+            const inlineBuy = item.type === 'supply' && item.subcategory !== 'doghouse';
+            const qty = qtyMap[item.id] ?? 1;
+            const cardCls = cn(
+              'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
+              disabled
+                ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                : owned
+                ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:shadow-md active:scale-[0.98]'
+                : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
+            );
+            // 用品内联卡片：外层 div，不跳详情
+            if (inlineBuy) {
+              return (
+                <div key={item.id} className={cardCls}>
+                  <ItemIcon item={item} size="sm" />
+                  <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
+                    {item.name || '未命名'}
+                  </div>
+                  <PriceBadge item={item} />
+                  {soldOut ? (
+                    <span className="text-[10px] text-slate-400">已售罄</span>
+                  ) : (
+                    <div className="w-full flex items-center gap-1 mt-0.5">
+                      <input
+                        type="number"
+                        min={1}
+                        value={qty}
+                        onChange={e => {
+                          const v = parseInt(e.target.value, 10);
+                          setQtyMap(prev => ({ ...prev, [item.id]: Number.isNaN(v) || v < 1 ? 1 : v }));
+                        }}
+                        disabled={buyingItem === item.id}
+                        className="w-12 text-center text-sm font-bold rounded-md border border-star-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-star-300"
+                      />
+                      <button
+                        onClick={() => handleInlineBuy(item, qty)}
+                        disabled={buyingItem === item.id}
+                        className="flex-1 py-1 rounded-md bg-star-400 text-white text-xs font-bold hover:bg-star-500 active:scale-95 transition-colors disabled:opacity-50"
+                      >
+                        {buyingItem === item.id ? '购买中…' : '购买'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            // 宠物 / 狗屋：保持原点击进详情流程
             return (
               <button
                 key={item.id}
                 onClick={() => setDetail(item)}
                 disabled={disabled}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
-                  disabled
-                    ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
-                    : owned
-                    ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:shadow-md active:scale-[0.98]'
-                    : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
-                )}
+                className={cardCls}
               >
                 {/* 宠物稀有度徽章 - 左上角 */}
                 {item.type === 'pet' && (
