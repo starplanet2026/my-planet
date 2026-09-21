@@ -21,22 +21,6 @@ const GameLevelMap = ({
     []
   );
 
-  const renderStars = (count: number) => (
-    <div className="flex justify-center gap-0.5">
-      {[1, 2, 3].map((i) => (
-        <span
-          key={i}
-          className={cn(
-            'text-[10px] leading-none',
-            i <= count ? 'text-amber-400' : 'text-slate-300'
-          )}
-        >
-          ⭐
-        </span>
-      ))}
-    </div>
-  );
-
   return (
     <div className="w-full">
       <div className="mx-auto grid max-h-[70vh] grid-cols-5 gap-3 overflow-y-auto p-2">
@@ -44,7 +28,7 @@ const GameLevelMap = ({
           const config = getLevelConfig(level);
           const rewardStar = config?.baseReward ?? 0;
           const result = levelResults.get(level);
-          const isCompleted = !!result && result.stars > 0;
+          const isCompleted = !!result;
           const isLocked = level > unlockedLevel;
 
           const handleClick = () => {
@@ -68,9 +52,11 @@ const GameLevelMap = ({
                   'cursor-pointer bg-green-50 border-green-300 hover:scale-105 hover:border-green-400 hover:shadow-md'
               )}
             >
-              {/* Top: stars for completed levels */}
+              {/* Top: 通关打勾，不再显示星级 */}
               <div className="flex h-4 w-full items-center justify-center">
-                {isCompleted ? renderStars(result!.stars) : null}
+                {isCompleted ? (
+                  <span className="text-[12px] leading-none text-green-500">✓</span>
+                ) : null}
               </div>
 
               {/* Center: lock icon for locked, level number otherwise */}

@@ -519,11 +519,11 @@ export interface LevelRewardConfig {
   baseReward: number;
 }
 
-// 根据关卡号获取单词数和基础奖励
+// 根据关卡号获取单词数和基础奖励（奖励=词数）
 export function getLevelConfig(level: number): LevelRewardConfig {
-  if (level >= 1 && level <= 20) return { wordCount: 4, baseReward: 9 };
-  if (level >= 21 && level <= 40) return { wordCount: 6, baseReward: 15 };
-  if (level >= 41 && level <= 60) return { wordCount: 8, baseReward: 21 };
-  if (level >= 61 && level <= 80) return { wordCount: 10, baseReward: 30 };
-  return { wordCount: 10, baseReward: 36 }; // 81-100
+  if (level >= 1 && level <= 20) return { wordCount: 5, baseReward: 5 };
+  if (level >= 21 && level <= 40) return { wordCount: 8, baseReward: 8 };
+  if (level >= 41 && level <= 60) return { wordCount: 10, baseReward: 10 };
+  if (level >= 61 && level <= 80) return { wordCount: 12, baseReward: 12 };
+  return { wordCount: 15, baseReward: 15 }; // 81-100
 }

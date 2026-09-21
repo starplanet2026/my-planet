@@ -4,7 +4,7 @@ import { useToastStore } from '../../../../store/toastStore';
 import { usePetUiStore } from '../../../../store/petUiStore';
 import { STAR_ICON_SM } from '../../../../lib/constants';
 import {
-  fetchPetWords, fetchGameLevelResults, fetchGameLevelResult, finishGameLevel,
+  fetchPetWords, fetchGameLevelResults, finishGameLevel,
 } from '../../../../api/pets';
 import { getLevelConfig, type PetWord, type GameLevelResult } from '../../../../api/types';
 import GameLevelMap from './GameLevelMap';
@@ -72,7 +72,8 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
     syncToStore(currentLevel, currentWords);
   }, [currentLevel, currentWords, syncToStore]);
 
-  // 选择关卡：准备单词并进入游戏
+  // 选择关卡：按 display_order 升序取前 N 个词
+  // （错词 + 最后1个消除词已被 finish_game_level 推到队尾，等待后续重复复习）
   const handleSelectLevel = useCallback(async (level: number) => {
     if (words.length === 0) {
       toast.warning('词库暂无单词，请联系家长导入');
@@ -81,68 +82,18 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
     const config = getLevelConfig(level);
     const wordCount = config.wordCount;
 
-    // 收集已用过的 wordId（之前关卡用过的）
-    const usedWordIds = new Set<string>();
-    for (const [lv] of levelResults) {
-      if (lv < level) {
-        const prevResult = await fetchGameLevelResult(memberId, lv);
-        if (prevResult) {
-          prevResult.word_ids.forEach(id => usedWordIds.add(id));
-        }
-      }
-    }
+    // 按 display_order 升序取前 N 个
+    const sorted = [...words].sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+    const picked = sorted.slice(0, wordCount);
 
-    // 新词：词库中还没用过的
-    const newWords = words.filter(w => !usedWordIds.has(w.id)).slice(0, wordCount);
-
-    // 复习词：第 N-2 关的错词 + 最后选的 2 个词
-    let reviewWords: PetWord[] = [];
-    if (level >= 3) {
-      try {
-        const prevResult = await fetchGameLevelResult(memberId, level - 2);
-        if (prevResult) {
-          const reviewIds = new Set<string>([
-            ...prevResult.wrong_word_ids,
-            ...prevResult.last_selected_word_ids,
-          ]);
-          reviewWords = words.filter(w => reviewIds.has(w.id));
-        }
-      } catch { /* 静默 */ }
-    }
-
-    // 合并：复习词优先，新词补齐
-    const merged: PetWord[] = [];
-    const mergedIds = new Set<string>();
-    for (const w of reviewWords) {
-      if (merged.length >= wordCount) break;
-      merged.push(w);
-      mergedIds.add(w.id);
-    }
-    for (const w of newWords) {
-      if (merged.length >= wordCount) break;
-      if (mergedIds.has(w.id)) continue;
-      merged.push(w);
-      mergedIds.add(w.id);
-    }
-
-    // 不够则用词库前面未用的补
-    if (merged.length < wordCount) {
-      for (const w of words) {
-        if (merged.length >= wordCount) break;
-        if (mergedIds.has(w.id)) continue;
-        merged.push(w);
-        mergedIds.add(w.id);
-      }
-    }
-
-    if (merged.length === 0) {
+    if (picked.length === 0) {
       toast.warning('没有足够的单词，请联系家长导入更多');
       return;
     }
 
-    setCurrentWords(merged);
+    setCurrentWords(picked);
     setCurrentLevel(level);
-  }, [words, levelResults, memberId, toast]);
+  }, [words, toast]);
 
   // 闯关结束：保存结果并返回给 GamePlayBoard 显示完成画面
   const handleFinish = useCallback(async (result: {
@@ -159,13 +110,15 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
         result.stars, result.wordIds, result.wrongWordIds, result.lastSelectedWordIds,
       );
       onReward();
-      // 刷新关卡结果
+      // 重新加载词库：错词+最后1个消除词已被 RPC 推到队尾，下一关要按新顺序取词
+      try {
+        const freshWords = await fetchPetWords(familyId);
+        setWords(freshWords);
+      } catch { /* 静默：词库刷新失败不阻塞结算 */ }
+      // 刷新关卡结果（stars 固定为 3，仅用于UI兼容显示）
       setLevelResults(prev => {
         const next = new Map(prev);
-        const existing = next.get(currentLevel);
-        if (!existing || existing.stars < result.stars) {
-          next.set(currentLevel, { stars: result.stars, rewardStar: res.reward_star });
-        }
+        next.set(currentLevel, { stars: 3, rewardStar: res.reward_star });
         return next;
       });
       setUnlockedLevel(prev => Math.max(prev, res.new_unlocked_level));
