@@ -213,7 +213,7 @@ export function AdoptPetModal({
     navigate(path);
   };
 
-  // 抽卡：开始（扣 500 星光值）
+  // 抽卡：开始（扣 150 星光值）
   const handleGachaStart = async () => {
     if (!childId) return;
     setDrawing(true);
@@ -223,19 +223,19 @@ export function AdoptPetModal({
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
-          setInsufficientInfo({ current: starValue, needed: 500 });
+          setInsufficientInfo({ current: starValue, needed: 150 });
         } else {
           toast.error(result?.message || '抽卡失败');
         }
         return;
       }
-      toast.success('已扣除 500 星光值，开始抽卡！');
+      toast.success('已扣除 150 星光值，开始抽卡！');
       setGachaPaid(true);
       refreshMembers();
       await handleGachaDraw();
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
-        setInsufficientInfo({ current: starValue, needed: 500 });
+        setInsufficientInfo({ current: starValue, needed: 150 });
       } else {
         toast.error(e?.message ?? '抽卡失败');
       }
@@ -313,7 +313,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：放弃（退回 30% = 150 星光值）
+  // 抽卡：放弃（退回 30% = 45 星光值）
   const handleGachaCancel = async () => {
     if (!childId) return;
     try {
@@ -321,7 +321,7 @@ export function AdoptPetModal({
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
       if (result?.success) {
-        toast.info('已放弃，退回 150 星光值');
+        toast.info('已放弃，退回 45 星光值');
         refreshMembers();
       }
     } catch (e: any) {
@@ -376,7 +376,7 @@ export function AdoptPetModal({
     const options = [
       { id: 'shop' as const, icon: <ShoppingBag className="w-6 h-6" />, label: '商城选购', desc: '直接去商城挑选喜欢的宠物', color: 'from-blue-400 to-cyan-500' },
       { id: 'quiz' as const, icon: <Heart className="w-6 h-6" />, label: '性格测试', desc: '答题测出最适合你的宠物', color: 'from-pink-400 to-rose-500' },
-      { id: 'gacha' as const, icon: <Dices className="w-6 h-6" />, label: '抽卡', desc: '花500星光值，最多可抽取三次', color: 'from-amber-400 to-orange-500' },
+      { id: 'gacha' as const, icon: <Dices className="w-6 h-6" />, label: '抽卡', desc: '花150星光值，最多可抽取三次', color: 'from-amber-400 to-orange-500' },
       { id: 'story' as const, icon: <Sparkles className="w-6 h-6" />, label: '萌宠奇遇记', desc: '在故事中与宠物相遇', color: 'from-purple-400 to-indigo-500' },
     ];
     return (
@@ -518,23 +518,23 @@ export function AdoptPetModal({
               <div>
                 <p className="text-lg font-bold text-slate-700">宠物抽卡</p>
                 <p className="text-sm text-slate-500 mt-1">
-                  花500星光值，最多可抽取三次
+                  花150星光值，最多可抽取三次
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  放弃可退回 30%（150 星光值）
+                  放弃可退回 30%（45 星光值）
                 </p>
               </div>
-              {(insufficientInfo || starValue < 500) && (
+              {(insufficientInfo || starValue < 150) && (
                 <InsufficientGuide
                   current={insufficientInfo?.current ?? starValue}
-                  needed={insufficientInfo?.needed ?? 500}
+                  needed={insufficientInfo?.needed ?? 150}
                   onGoTasks={() => goEarnStars('/tasks')}
                   onGoChallenge={() => goEarnStars('/challenge')}
                   onGoPetGame={onGoGame}
                 />
               )}
               <Button onClick={handleGachaStart} disabled={drawing} className="w-full">
-                {drawing ? '抽取中...' : '开始抽卡（500 星光值）'}
+                {drawing ? '抽取中...' : '开始抽卡（150 星光值）'}
               </Button>
               <button onClick={() => setMode('menu')} className="text-xs text-slate-400">
                 返回菜单
