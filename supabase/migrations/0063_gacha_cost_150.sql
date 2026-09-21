@@ -45,7 +45,7 @@ begin
   select * into v_pet_row from public.pet_shop_items
     where family_id = v_member.family_id
       and subcategory = 'pet'
-      and inventory > 0
+      and stock > 0
     order by random()
     limit 1;
 
@@ -80,7 +80,7 @@ begin
   end if;
 
   -- 减库存
-  update public.pet_shop_items set inventory = inventory - 1
+  update public.pet_shop_items set stock = stock - 1
     where id = v_pet_row.id;
 
   return query select true, '抽卡成功', v_new_pet.id, v_pet_row.name,
