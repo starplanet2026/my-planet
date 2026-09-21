@@ -332,7 +332,8 @@ export function PetManagePage() {
     if (!file || !family) return;
     setExcelImporting(true);
     try {
-      const { default: XLSX } = await import('xlsx');
+      const mod = await import('xlsx');
+      const XLSX = (mod as any).default ?? mod;
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];

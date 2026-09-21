@@ -1080,7 +1080,8 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
   const handleFile = async (file: File) => {
     setFileName(file.name);
     try {
-      const { default: XLSX } = await import('xlsx');
+      const mod = await import('xlsx');
+      const XLSX = (mod as any).default ?? mod;
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -1174,7 +1175,8 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
       { 序号: 2, 难度: '简单', 题型: '多选', 题目: '下列哪些用法正确？', 选项A: 'in the bag', 选项B: 'in 2025', 选项C: 'in Monday', 选项D: 'in the morning', 正确答案: 'ABD', 解析: '具体某一天用 on，故 in Monday 错误' },
       { 序号: 3, 难度: '中等', 题型: '单选', 题目: '介词填空：The cat is ___ the box.', 选项A: 'in', 选项B: 'on', 选项C: 'at', 选项D: 'to', 选项E: 'with', 选项F: 'of', 正确答案: 'A', 解析: '介词挑战赛可支持 6 个选项（A~F）' },
     ];
-    const { default: XLSX } = await import('xlsx');
+    const mod = await import('xlsx');
+    const XLSX = (mod as any).default ?? mod;
     const ws = XLSX.utils.json_to_sheet(tpl);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '题目');
