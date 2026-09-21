@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -333,6 +332,7 @@ export function PetManagePage() {
     if (!file || !family) return;
     setExcelImporting(true);
     try {
+      const { default: XLSX } = await import('xlsx');
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];

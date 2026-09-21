@@ -11,7 +11,6 @@ import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import { Plus, Trash2, ArrowLeft, BookOpen, Calculator, ListChecks, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import {
   fetchChallengeSets, createChallengeSet, deleteChallengeSet, publishChallengeSet, updateChallengeSet,
   fetchQuestions, createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, updateQuestionOrder,
@@ -1057,6 +1056,7 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
   const handleFile = async (file: File) => {
     setFileName(file.name);
     try {
+      const { default: XLSX } = await import('xlsx');
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -1131,11 +1131,12 @@ function BatchImportQuestionsModal({ setId, onClose, onImported }: {
     }
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
     const tpl = [
       { 序号: 1, 难度: '简单', 题型: '单选', 题目: '在……里面', 选项A: 'in', 选项B: 'on', 选项C: 'at', 选项D: 'of', 正确答案: 'A', 解析: '在空间内部用 in' },
       { 序号: 2, 难度: '简单', 题型: '多选', 题目: '下列哪些用法正确？', 选项A: 'in the bag', 选项B: 'in 2025', 选项C: 'in Monday', 选项D: 'in the morning', 正确答案: 'ABD', 解析: '具体某一天用 on，故 in Monday 错误' },
     ];
+    const { default: XLSX } = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(tpl);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '题目');
