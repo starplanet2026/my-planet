@@ -52,6 +52,15 @@ const RARITY_META: Record<PetRarity, { label: string; cls: string }> = {
   epic: { label: '史诗', cls: 'bg-purple-100 text-purple-600' },
 };
 
+// 用品子分类 → 影响属性映射
+const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string }> = {
+  food: { icon: '🍖', label: '体力', color: 'text-orange-600' },
+  clean: { icon: '🧴', label: '清洁度', color: 'text-blue-600' },
+  toy: { icon: '🎾', label: '心情', color: 'text-green-600' },
+  medicine: { icon: '💊', label: '健康', color: 'text-red-600' },
+  foster: { icon: '🏠', label: '综合', color: 'text-purple-600' },
+};
+
 // 商品图标：优先 image_url，否则 emoji，再否则占位
 function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
   // 统一 3:4 竖版比例
@@ -344,6 +353,8 @@ export function PetShopModal({
             );
             // 用品内联卡片：外层 div，不跳详情
             if (inlineBuy) {
+              const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
+              const recovery = item.recovery_value ?? 0;
               return (
                 <div key={item.id} className={cardCls}>
                   <ItemIcon item={item} size="sm" />
@@ -351,6 +362,12 @@ export function PetShopModal({
                     {item.name || '未命名'}
                   </div>
                   <PriceBadge item={item} />
+                  {/* 效果数值显示 */}
+                  {effect && recovery > 0 && (
+                    <div className={`text-[11px] font-bold ${effect.color}`}>
+                      {effect.icon} +{recovery} {effect.label}
+                    </div>
+                  )}
                   {soldOut ? (
                     <span className="text-[10px] text-slate-400">已售罄</span>
                   ) : (
@@ -406,7 +423,7 @@ export function PetShopModal({
                 <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
                   {item.name || '未命名'}
                 </div>
-                {/* 宠物：显示星光值 + 日产金；用品：沿用价格徽章 */}
+                {/* 宠物：显示星光值 + 日产金；用品：显示效果数值 + 价格 */}
                 {item.type === 'pet' ? (
                   <div className="w-full space-y-0.5">
                     <div className="text-[10px] text-amber-500 font-medium">
@@ -417,7 +434,14 @@ export function PetShopModal({
                     </div>
                   </div>
                 ) : (
-                  <PriceBadge item={item} />
+                  <div className="w-full space-y-0.5">
+                    {item.subcategory && SUPPLY_EFFECT[item.subcategory] && (item.recovery_value ?? 0) > 0 && (
+                      <div className={`text-[10px] font-bold ${SUPPLY_EFFECT[item.subcategory].color}`}>
+                        {SUPPLY_EFFECT[item.subcategory].icon} +{item.recovery_value} {SUPPLY_EFFECT[item.subcategory].label}
+                      </div>
+                    )}
+                    <PriceBadge item={item} />
+                  </div>
                 )}
                 {soldOut && !owned && (
                   <span className="text-[10px] text-slate-400">已售罄</span>
