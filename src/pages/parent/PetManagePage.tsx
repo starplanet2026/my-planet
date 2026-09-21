@@ -637,6 +637,31 @@ function ItemCard({
   onToggleSelect?: () => void;
 }) {
   const cfg = TYPE_CONFIG[item.type];
+  const toast = useToastStore();
+  const [starPrice, setStarPrice] = useState(item.price_star);
+  const [recovery, setRecovery] = useState(item.recovery_value ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  // 用品外层直接修改价格和恢复值
+  const handleQuickSave = async () => {
+    setSaving(true);
+    try {
+      await updatePetShopItem(item.id, {
+        price_star: starPrice,
+        recovery_value: recovery,
+        price_coin: 0, // 用品只用星光值
+      });
+      toast.success('已保存');
+    } catch (e: any) {
+      toast.error(e?.message ?? '保存失败');
+      // 回退
+      setStarPrice(item.price_star);
+      setRecovery(item.recovery_value ?? 0);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card className={cn('p-4', selected && 'border-star-300 bg-star-50')}>
       <div className="flex items-start gap-3">
@@ -677,23 +702,73 @@ function ItemCard({
           {item.description && (
             <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{item.description}</p>
           )}
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {/* 星光值价格（所有购买用星光值） */}
-            {item.price_star > 0 ? (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 inline-flex items-center gap-0.5">
-                <Star className="w-3 h-3" />{item.price_star}
-              </span>
-            ) : (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600">免费</span>
-            )}
-            {/* 宠物显示产金（基础产金/天，非价格） */}
-            {item.type === 'pet' && (
+          {/* 宠物显示价格和产金 */}
+          {item.type === 'pet' && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {item.price_star > 0 ? (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 inline-flex items-center gap-0.5">
+                  <Star className="w-3 h-3" />{item.price_star}
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600">免费</span>
+              )}
               <span className="text-xs text-slate-400">产金{item.base_coin_per_day}/天</span>
-            )}
-            {item.status === 'inactive' && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">已下架</span>
-            )}
-          </div>
+            </div>
+          )}
+          {/* 用品外层直接编辑星光值和恢复值 */}
+          {item.type === 'supply' && item.subcategory !== 'doghouse' && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <label className="flex items-center gap-1 text-xs text-slate-500">
+                <Star className="w-3 h-3 text-purple-500" />
+                <input
+                  type="number"
+                  min={0}
+                  value={starPrice}
+                  onChange={e => setStarPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                  disabled={saving}
+                  className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-300"
+                />
+              </label>
+              <label className="flex items-center gap-1 text-xs text-slate-500">
+                <span className="text-slate-400">恢复</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={10}
+                  value={recovery}
+                  onChange={e => setRecovery(Math.max(0, parseInt(e.target.value) || 0))}
+                  disabled={saving}
+                  className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-300"
+                />
+              </label>
+              <button
+                onClick={handleQuickSave}
+                disabled={saving || (starPrice === item.price_star && recovery === item.recovery_value)}
+                className="px-2 py-0.5 rounded text-xs font-bold bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? '保存中' : '保存'}
+              </button>
+              {item.status === 'inactive' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">已下架</span>
+              )}
+            </div>
+          )}
+          {/* 狗屋只显示容量 */}
+          {item.type === 'supply' && item.subcategory === 'doghouse' && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="text-xs text-slate-400">
+                容纳{item.recovery_value === 1 ? 1 : item.recovery_value === 5 ? 5 : 10}只小狗
+              </span>
+              {item.price_star > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 inline-flex items-center gap-0.5">
+                  <Star className="w-3 h-3" />{item.price_star}
+                </span>
+              )}
+              {item.status === 'inactive' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">已下架</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex gap-2 mt-3">
