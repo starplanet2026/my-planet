@@ -14,16 +14,6 @@ function expNeeded(level: number): number {
   return Math.max(level, 1) * 100;
 }
 
-// 心情文字描述（点击后展示）
-function moodText(pet: Pet): string {
-  if (pet.is_sick) return '我不舒服...快带我去看医生！';
-  const avg = (pet.hunger + pet.clean + pet.happiness + pet.health) / 4;
-  if (avg > 80) return '主人我好开心呀！💕';
-  if (avg > 60) return '今天也是元气满满的一天~';
-  if (avg > 30) return '还行，但还可以更好~';
-  return '需要照顾啦...';
-}
-
 // 稀有度文字
 function rarityLabel(rarity: string | undefined | null): string {
   if (rarity === 'rare') return '稀有';
@@ -31,32 +21,28 @@ function rarityLabel(rarity: string | undefined | null): string {
   return '普通';
 }
 
+// 心情状态：统一 emoji 和文案的对应关系
+// 与 moodEmoji / petMessage 共用同一套阈值，确保表情和会话内容一致
+function moodState(pet: Pet): { emoji: string; text: string } {
+  if (pet.is_sick) {
+    return { emoji: '😢', text: '我不舒服...快带我去看医生！' };
+  }
+  const avg = (pet.hunger + pet.clean + pet.happiness + pet.health) / 4;
+  if (avg > 80) return { emoji: '🤩', text: '主人我好开心呀！💕' };
+  if (avg > 60) return { emoji: '😊', text: '今天也是元气满满的一天~' };
+  if (avg > 30) return { emoji: '😐', text: '还行，但还可以更好~' };
+  if (avg > 10) return { emoji: '😟', text: '需要照顾啦...' };
+  return { emoji: '😫', text: '我快不行了...快来救我！' };
+}
+
 // 心情表情
 function moodEmoji(pet: Pet): string {
-  if (pet.is_sick) return '😢';
-  const avg = (pet.hunger + pet.clean + pet.happiness + pet.health) / 4;
-  if (avg > 80) return '🤩';
-  if (avg > 60) return '😊';
-  if (avg > 30) return '😐';
-  if (avg > 10) return '😟';
-  return '😫';
+  return moodState(pet).emoji;
 }
 
 // 对话框文案
 function petMessage(pet: Pet): string | null {
-  if (pet.is_sick) return '我不舒服...快带我去看医生！';
-  const stats = [
-    { val: pet.hunger, msg: '我饿啦！快给我点吃的吧~' },
-    { val: pet.clean, msg: '我身上脏脏的...帮我洗洗好吗？' },
-    { val: pet.happiness, msg: '快来陪我玩玩吧！我好无聊~' },
-    { val: pet.health, msg: '我感觉不太精神...' },
-  ];
-  const lowest = stats.reduce((a, b) => a.val < b.val ? a : b);
-  if (lowest.val < 30) return lowest.msg;
-  const avg = (pet.hunger + pet.clean + pet.happiness + pet.health) / 4;
-  if (avg > 80) return '主人我好开心呀！💕';
-  if (avg > 60) return '今天也是元气满满的一天~';
-  return null;
+  return moodState(pet).text;
 }
 
 // 互动按钮配置
