@@ -13,6 +13,7 @@ import { cn } from '../../lib/utils';
 import {
   Plus, Trash2, ArrowLeft, Dog, ShoppingBag, Star, Upload,
   Image as ImageIcon, Pencil, BookOpen, Package, CheckSquare, Square, Send, Power,
+  ChevronUp, ChevronDown,
 } from 'lucide-react';
 import {
   fetchPetShopItems, createPetShopItem, deletePetShopItem, updatePetShopItem,
@@ -1038,7 +1039,7 @@ function WordManageTab({
             </label>
           </div>
           {selectedIds.size > 0 && (
-            <div className="flex items-center gap-2 flex-wrap" disabled={batchLoading}>
+            <div className={`flex items-center gap-2 flex-wrap ${batchLoading ? 'opacity-50 pointer-events-none' : ''}`}>
               <Button variant="ghost" size="sm" onClick={handleBatchMoveTop} disabled={batchLoading}
                 title="把选中的单词移到列表最前（游戏最先出现）">
                 <ChevronUp className="w-4 h-4" /> 置顶({selectedIds.size})
