@@ -41,11 +41,11 @@ begin
     set star_value = v_star, updated_at = now()
     where public.members.id = p_member_id;
 
-  -- 随机选一只可抽的宠物商品
+  -- 随机选一只可抽的宠物商品（stock 为 NULL 视为有库存）
   select * into v_pet_row from public.pet_shop_items
     where family_id = v_member.family_id
       and type = 'pet'
-      and stock > 0
+      and (stock is null or stock > 0)
     order by random()
     limit 1;
 
@@ -79,8 +79,11 @@ begin
     return;
   end if;
 
-  -- 减库存
-  update public.pet_shop_items set stock = stock - 1
+  -- 减库存（stock 为 NULL 不减，避免报错）
+  update public.pet_shop_items set stock = case
+    when stock is null then null
+    else stock - 1
+  end
     where id = v_pet_row.id;
 
   return query select true, '抽卡成功', v_new_pet.id, v_pet_row.name,
