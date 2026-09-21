@@ -1,7 +1,7 @@
 import { supabase } from './client';
 import type {
   ChallengeSet, Question, Word, WordProgress,
-  WrongQuestion, AnswerQuestionResult, AnswerWordResult, ReviewWrongResult,
+  AnswerQuestionResult, AnswerWordResult, ReviewWrongResult,
   ChallengeSetType, QuestionType, Difficulty, ChallengeAnalysisItem,
 } from './types';
 
@@ -307,15 +307,56 @@ export async function reviewWrongQuestion(
   return row as ReviewWrongResult;
 }
 
-// ====== 错题本 ======
+// ====== 挑战进度汇总（题集外层显示 已掌握/总数） ======
 
-export async function fetchWrongQuestions(memberId: string): Promise<WrongQuestion[]> {
-  const { data, error } = await supabase
-    .from('wrong_questions')
-    .select('*, question:questions(*), word:words(*)')
+// 批量获取多个题集的挑战进度：setId → { total, mastered }
+// - total: 该题集中「未强制下线」的题数（is_active !== false）
+// - mastered: 其中已掌握的题数（question_progress.is_mastered = true）
+// 仅 2 次查询，与题集数量无关
+export async function fetchChallengeProgress(
+  setIds: string[],
+  memberId: string,
+): Promise<Record<string, { total: number; mastered: number }>> {
+  const result: Record<string, { total: number; mastered: number }> = {};
+  if (setIds.length === 0) return result;
+
+  // 1) 取这些题集下所有题目（id + 所属 set + 是否下线）
+  const { data: questions, error: qErr } = await supabase
+    .from('questions')
+    .select('id, challenge_set_id, is_active')
+    .in('challenge_set_id', setIds);
+  if (qErr) throw qErr;
+
+  // 初始化每个 set 的计数
+  for (const sid of setIds) result[sid] = { total: 0, mastered: 0 };
+  // 题目 id → 所属 set（用于把掌握进度归集到 set）
+  const qidToSet: Record<string, string> = {};
+  for (const q of (questions ?? []) as { id: string; challenge_set_id: string; is_active?: boolean }[]) {
+    qidToSet[q.id] = q.challenge_set_id;
+    if (q.is_active !== false) {
+      result[q.challenge_set_id].total += 1;
+    }
+  }
+
+  // 2) 取该成员已掌握的题
+  const { data: progresses, error: pErr } = await supabase
+    .from('question_progress')
+    .select('question_id, is_mastered')
     .eq('member_id', memberId)
-    .eq('status', 'active')
-    .order('last_wrong_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as WrongQuestion[];
+    .eq('is_mastered', true);
+  if (pErr && !pErr.message.includes('question_progress')) throw pErr;
+
+  const masteredSet = new Set(
+    (progresses ?? []).map((p: { question_id: string }) => p.question_id)
+  );
+  // 把掌握的题归集到对应 set（注意必须是该 set 中存在的题）
+  for (const q of (questions ?? []) as { id: string; is_active?: boolean }[]) {
+    if (masteredSet.has(q.id) && q.is_active !== false) {
+      const sid = qidToSet[q.id];
+      if (sid) result[sid].mastered += 1;
+    }
+  }
+
+  return result;
 }
+

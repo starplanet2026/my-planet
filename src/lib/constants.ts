@@ -55,7 +55,6 @@ export const ROUTES = {
   SHOP: '/shop',
   PROFILE: '/profile',
   CHALLENGE: '/challenge',
-  WRONG_BOOK: '/wrong-book',
   SETUP: '/setup',
   PARENT: '/parent',
   PARENT_DASHBOARD: '/parent/dashboard',

@@ -7,18 +7,16 @@ import { useFamilyStore } from '../../../../store/familyStore';
 import { cn } from '../../../../lib/utils';
 import { supabase } from '../../../../api/client';
 import { completePetLevelup } from '../../../../api/pets';
-import { fetchWrongQuestions } from '../../../../api/challenges';
-import type { Pet, WrongQuestion } from '../../../../api/types';
+import type { Pet } from '../../../../api/types';
 
 // 升级挑战所需题目数
 const QUIZ_QUESTION_COUNT = 5;
 // 通过分数线
 const PASS_THRESHOLD = 0.8;
 
-// 统一题面结构（错题 + 题库随机题）
+// 统一题面结构（题库随机题）
 interface QuizItem {
   id: string;
-  source: 'wrong' | 'random';
   type: string;
   question_text: string;
   options: string[] | null;
@@ -60,32 +58,10 @@ export function PetLevelUpQuiz({
   const loadQuestions = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. 拉错题本（含关联的 question/word）
-      const wrongs: WrongQuestion[] = await fetchWrongQuestions(memberId);
+      const picked: QuizItem[] = [];
 
-      // 仅保留有选择题题面的错题
-      const wrongItems: QuizItem[] = wrongs
-        .map(w => {
-          const q = w.question;
-          if (!q) return null;
-          return {
-            id: q.id,
-            source: 'wrong' as const,
-            type: q.type,
-            question_text: q.question_text,
-            options: q.options,
-            correct_answer: q.correct_answer,
-            explanation: q.explanation,
-          };
-        })
-        .filter((x): x is QuizItem => x !== null);
-
-      const picked = shuffle(wrongItems).slice(0, QUIZ_QUESTION_COUNT);
-      const need = QUIZ_QUESTION_COUNT - picked.length;
-
-      // 2. 题量不足，从 questions 表随机补足
-      if (need > 0 && family) {
-        // 先取本家庭所有题集 id，再按题集查题目（避免嵌套过滤的兼容性问题）
+      // 从本家庭所有题集中随机抽题（错题本已下线，升级挑战只用随机题库）
+      if (family) {
         const { data: sets, error: setsErr } = await supabase
           .from('challenge_sets')
           .select('id')
@@ -107,7 +83,6 @@ export function PetLevelUpQuiz({
             .filter((r: any) => r && r.question_text)
             .map((q: any) => ({
               id: q.id as string,
-              source: 'random' as const,
               type: q.type as string,
               question_text: q.question_text as string,
               options: q.options as string[] | null,
@@ -115,12 +90,11 @@ export function PetLevelUpQuiz({
               explanation: (q.explanation ?? null) as string | null,
             }));
 
-          const supplement = shuffle(randomQs).slice(0, need);
-          picked.push(...supplement);
+          picked.push(...shuffle(randomQs).slice(0, QUIZ_QUESTION_COUNT));
         }
       }
 
-      // 兜底：错题和随机题都不足 5 道，就把已有的全部展示
+      // 兜底：题库不足 5 道，就把已有的全部展示
       setQuestions(picked.length > 0 ? picked : []);
       setCurrentIndex(0);
       setAnswers({});
@@ -245,7 +219,7 @@ export function PetLevelUpQuiz({
           {/* 进度 */}
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>第 {currentIndex + 1} / {questions.length} 题</span>
-            <span>{current.source === 'wrong' ? '错题本' : '随机题'}</span>
+            <span>随机题</span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div

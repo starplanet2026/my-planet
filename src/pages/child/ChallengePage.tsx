@@ -10,13 +10,13 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, BookX, Lightbulb } from 'lucide-react';
+import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, Lightbulb } from 'lucide-react';
 import {
   fetchChallengeSets, fetchQuestions, fetchWords, fetchWordProgress,
   fetchActiveQuestions, getChallengeAnalysis, awardPerfectChallengeBonus,
-  answerQuestion, answerWord, fetchWrongQuestions, reviewWrongQuestion,
+  answerQuestion, answerWord, fetchChallengeProgress,
 } from '../../api/challenges';
-import type { ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, WrongQuestion, Difficulty, ChallengeAnalysisItem } from '../../api/types';
+import type { ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem } from '../../api/types';
 
 const TYPE_CONFIG: Record<ChallengeSetType, { label: string; icon: React.ReactNode; color: string }> = {
   word_vocab: { label: '单词背诵', icon: <BookOpen className="w-6 h-6" />, color: 'from-blue-400 to-blue-500' },
@@ -50,9 +50,9 @@ export function ChallengePage() {
   const clearChallenge = useChallengeUiStore(s => s.clear);
 
   const [sets, setSets] = useState<ChallengeSet[]>([]);
+  // 每个题集的挑战进度：setId → { total, mastered }
+  const [progress, setProgress] = useState<Record<string, { total: number; mastered: number }>>({});
   const [loading, setLoading] = useState(true);
-  const [showWrongBook, setShowWrongBook] = useState(false);
-  const [wrongCount, setWrongCount] = useState(0);
 
   useEffect(() => {
     if (!family || !child) return;
@@ -60,9 +60,16 @@ export function ChallengePage() {
       setLoading(true);
       try {
         const data = await fetchChallengeSets(family.id);
-        setSets(data.filter(s => s.status === 'active'));
-        const wrongs = await fetchWrongQuestions(child.id);
-        setWrongCount(wrongs.length);
+        const active = data.filter(s => s.status === 'active');
+        setSets(active);
+        // 拉取每个题集的挑战进度（已掌握/总数）
+        if (active.length > 0 && child) {
+          const prog = await fetchChallengeProgress(
+            active.map(s => s.id),
+            child.id,
+          );
+          setProgress(prog);
+        }
       } finally {
         setLoading(false);
       }
@@ -70,10 +77,6 @@ export function ChallengePage() {
   }, [family?.id, child?.id]);
 
   if (loading) return <Loading />;
-
-  if (showWrongBook) {
-    return <WrongBookView childId={child?.id ?? ''} onBack={() => setShowWrongBook(false)} onReviewed={refreshMembers} />;
-  }
 
   // 有保存的活动题集 → 直接恢复答题界面，不重新展示列表
   if (activeSet) {
@@ -91,35 +94,17 @@ export function ChallengePage() {
 
   return (
     <div className="max-w-4xl mx-auto -mt-6">
-      {/* 错题本常驻入口 - 与题集卡片设计一致 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
-        <div
-          onClick={() => setShowWrongBook(true)}
-          className={cn(
-            'relative aspect-square rounded-2xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50',
-            'cursor-pointer hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all',
-            'flex flex-col items-center justify-center p-3 text-center'
-          )}
-        >
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-400 to-orange-400 flex items-center justify-center text-white mb-2">
-            <BookX className="w-6 h-6" />
-          </div>
-          <h3 className="font-bold text-slate-800 text-sm">错题本</h3>
-          <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">复习错题</p>
-          {wrongCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
-              {wrongCount}
-            </span>
-          )}
-        </div>
-      </div>
-
       {sets.length === 0 ? (
         <EmptyState icon="📚" title="暂无挑战赛" description="家长还没发布题集哦" />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           {sets.map(set => {
             const cfg = TYPE_CONFIG[set.type];
+            const p = progress[set.id];
+            const mastered = p?.mastered ?? 0;
+            const total = p?.total ?? 0;
+            const remaining = Math.max(0, total - mastered);
+            const allDone = total > 0 && remaining === 0;
             return (
               <div
                 key={set.id}
@@ -130,12 +115,31 @@ export function ChallengePage() {
                   'flex flex-col items-center justify-center p-3 text-center'
                 )}
               >
+                {allDone && (
+                  <span className="absolute top-1.5 right-1.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-emerald-500 text-white text-[10px] font-bold rounded-full">
+                    ✓
+                  </span>
+                )}
                 <div className={cn('w-12 h-12 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white mb-2', cfg.color)}>
                   {cfg.icon}
                 </div>
                 <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{set.title}</h3>
                 {set.description && (
                   <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{set.description}</p>
+                )}
+                {/* 挑战进度：已掌握/总数，剩余 X 题 */}
+                {total > 0 && (
+                  <div className="mt-1.5 flex flex-col items-center gap-0.5">
+                    <span className={cn(
+                      'text-[11px] font-bold',
+                      allDone ? 'text-emerald-600' : 'text-slate-700'
+                    )}>
+                      {mastered}/{total}
+                    </span>
+                    {!allDone && (
+                      <span className="text-[9px] text-slate-400">剩 {remaining} 题</span>
+                    )}
+                  </div>
                 )}
                 <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">+{set.reward_easy}⭐</span>
@@ -976,179 +980,6 @@ function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = nul
           )} />
         ))}
       </div>
-    </div>
-  );
-}
-
-// ====== 错题本视图 ======
-function WrongBookView({ childId, onBack, onReviewed }: {
-  childId: string; onBack: () => void; onReviewed: () => void;
-}) {
-  const [wrongs, setWrongs] = useState<WrongQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeWrong, setActiveWrong] = useState<WrongQuestion | null>(null);
-  const toast = useToastStore();
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      setWrongs(await fetchWrongQuestions(childId));
-    } catch (e: any) {
-      toast.error(e?.message ?? '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [childId]);
-
-  if (loading) return <Loading />;
-
-  if (activeWrong) {
-    return (
-      <ReviewWrong
-        wrong={activeWrong}
-        childId={childId}
-        onBack={() => { setActiveWrong(null); load(); }}
-        onReviewed={onReviewed}
-      />
-    );
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto -mt-6">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-xl font-bold text-slate-800">错题本</h2>
-        <span className="text-sm text-slate-400">共 {wrongs.length} 题</span>
-      </div>
-
-      {wrongs.length === 0 ? (
-        <EmptyState icon="🎉" title="暂无错题" description="继续加油，保持全对！" />
-      ) : (
-        <div className="space-y-3">
-          {wrongs.map(w => {
-            const isWord = !!w.word;
-            const content = isWord ? w.word!.word_en : w.question?.question_text ?? '已删除';
-            return (
-              <Card key={w.id} className="p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveWrong(w)}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-800 line-clamp-2">{content}</p>
-                    {isWord && <p className="text-sm text-slate-400 mt-1">{w.word?.word_cn}</p>}
-                  </div>
-                  <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-500">
-                      错 {w.wrong_count} 次
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-500">
-                      对 {w.correct_count}/2
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ====== 复习错题 ======
-function ReviewWrong({ wrong, childId, onBack, onReviewed }: {
-  wrong: WrongQuestion; childId: string; onBack: () => void; onReviewed: () => void;
-}) {
-  const [answer, setAnswer] = useState('');
-  const [showResult, setShowResult] = useState(false);
-  const [isCorrect, setIsCorrect] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const toast = useToastStore();
-
-  const isWord = !!wrong.word;
-  const correctAnswer = isWord ? wrong.word!.word_en : wrong.question?.correct_answer ?? '';
-
-  const handleSubmit = async () => {
-    if (!answer.trim()) return;
-    setSubmitting(true);
-    try {
-      const correct = answer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
-      setIsCorrect(correct);
-      setShowResult(true);
-      const result = await reviewWrongQuestion(wrong.id, childId, correct);
-      onReviewed();
-      if (correct) {
-        if (result.removed) toast.success('🎉 已掌握，移出错题本');
-        else toast.success(`答对了，再答对 ${2 - wrong.correct_count - 1} 次即可移除`);
-      } else {
-        toast.error(`答错了，正确答案：${correctAnswer}`);
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? '提交失败');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto -mt-6">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-xl font-bold text-slate-800">复习错题</h2>
-      </div>
-
-      <Card className="p-6">
-        <div className="mb-6">
-          {isWord ? (
-            <>
-              <p className="text-sm text-slate-400 mb-2">请输入英文：</p>
-              <p className="text-3xl font-bold text-slate-700">{wrong.word?.word_cn}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-slate-400 mb-2">题目：</p>
-              <p className="text-lg font-medium text-slate-800">{wrong.question?.question_text}</p>
-              {wrong.question?.options && (
-                <div className="mt-2 space-y-1">
-                  {wrong.question.options.map((opt, i) => (
-                    <p key={i} className="text-sm text-slate-600">{opt}</p>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <Input
-          value={answer}
-          onChange={e => setAnswer(e.target.value)}
-          placeholder={isWord ? '输入英文单词' : wrong.question?.type === 'choice' ? '输入选项字母' : '输入答案'}
-          className="text-xl py-3"
-          disabled={showResult}
-        />
-
-        {showResult && wrong.question?.explanation && (
-          <div className="mt-4 p-3 rounded-xl bg-slate-50">
-            <p className="text-sm text-slate-600">解析：{wrong.question.explanation}</p>
-          </div>
-        )}
-
-        <div className="mt-6">
-          {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>
-              提交答案
-            </Button>
-          ) : (
-            <Button onClick={onBack} fullWidth>
-              返回错题本
-            </Button>
-          )}
-        </div>
-      </Card>
     </div>
   );
 }

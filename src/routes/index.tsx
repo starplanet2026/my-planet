@@ -6,7 +6,6 @@ import { TasksPage } from '../pages/child/TasksPage';
 import { ShopPage } from '../pages/child/ShopPage';
 import { ProfilePage } from '../pages/child/ProfilePage';
 import { ChallengePage } from '../pages/child/ChallengePage';
-import { WrongBookPage } from '../pages/child/WrongBookPage';
 import { PetPage } from '../pages/child/pet/PetPage';
 import { ParentDashboardPage } from '../pages/parent/ParentDashboardPage';
 import { TaskManagePage } from '../pages/parent/TaskManagePage';
@@ -37,7 +36,6 @@ export function AppRoutes() {
         <Route path="shop" element={<ShopPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="challenge" element={<ChallengePage />} />
-        <Route path="wrong-book" element={<WrongBookPage />} />
         <Route path="pet" element={<PetPage />} />
 
         {/* 家长端 */}
