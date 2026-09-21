@@ -4,6 +4,7 @@
 -- ============================================================
 
 -- 1. 重写 gacha_start：扣 150 星光值（原 500）
+drop function if exists public.gacha_start(uuid);
 create or replace function public.gacha_start(p_member_id uuid)
 returns table(
   success boolean,
@@ -90,6 +91,7 @@ $$;
 grant execute on function public.gacha_start(uuid) to anon, authenticated;
 
 -- 2. 重写 gacha_cancel：退回 45 星光值（150 * 30% = 45）
+drop function if exists public.gacha_cancel(uuid);
 create or replace function public.gacha_cancel(p_member_id uuid)
 returns table(success boolean, message text, remaining_star int)
 language plpgsql security definer as $$
