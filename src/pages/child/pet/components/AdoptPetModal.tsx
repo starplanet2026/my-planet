@@ -276,7 +276,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：领养抽中的宠物
+  // 抽卡：领养抽中的宠物（gacha_adopt 创建宠物记录并返回 pet_id）
   const handleGachaAdopt = async () => {
     if (!childId || !drawnItem) return;
     setAdopting(true);
@@ -289,7 +289,7 @@ export function AdoptPetModal({
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
-          setInsufficientInfo({ current: starValue, needed: drawnItem?.price_star ?? 500 });
+          setInsufficientInfo({ current: starValue, needed: 150 });
         } else {
           toast.error(result?.message || '领养失败');
         }
@@ -297,6 +297,7 @@ export function AdoptPetModal({
       }
       toast.success('领养成功！');
       refreshMembers();
+      // gacha_adopt 返回 pet_id，用它获取完整宠物信息
       if (result?.pet_id) {
         const pet = await checkPet(result.pet_id);
         setGachaResult(pet);
@@ -304,7 +305,7 @@ export function AdoptPetModal({
       onAdopted();
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
-        setInsufficientInfo({ current: starValue, needed: drawnItem?.price_star ?? 500 });
+        setInsufficientInfo({ current: starValue, needed: 150 });
       } else {
         toast.error(e?.message ?? '领养失败');
       }
