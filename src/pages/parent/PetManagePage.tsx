@@ -18,6 +18,7 @@ import {
   fetchPetShopItems, createPetShopItem, deletePetShopItem, updatePetShopItem,
   batchUpdatePetShopStatus, batchDeletePetShopItems,
   fetchPetWords, createPetWord, createPetWordsBatch, deletePetWord,
+  batchDeletePetWords, batchMovePetWordsTop, batchMovePetWordsBottom,
   fetchAllPets, deletePet,
   fetchBackgrounds, createBackground, deleteBackground,
   migrateBase64ToStorage,
@@ -276,6 +277,38 @@ export function PetManagePage() {
       loadWords();
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
+    }
+  };
+
+  // 单词批量操作（传递给 WordManageTab）
+  const handleBatchDeleteWords = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      await batchDeletePetWords(ids);
+      toast.success(`已删除 ${ids.length} 个单词`);
+      loadWords();
+    } catch (e: any) {
+      toast.error(e?.message ?? '批量删除失败');
+    }
+  };
+  const handleBatchMoveWordsTop = async (ids: string[]) => {
+    if (ids.length === 0 || !family) return;
+    try {
+      await batchMovePetWordsTop(family.id, ids);
+      toast.success(`已置顶 ${ids.length} 个单词`);
+      loadWords();
+    } catch (e: any) {
+      toast.error(e?.message ?? '置顶失败');
+    }
+  };
+  const handleBatchMoveWordsBottom = async (ids: string[]) => {
+    if (ids.length === 0 || !family) return;
+    try {
+      await batchMovePetWordsBottom(family.id, ids);
+      toast.success(`已置底 ${ids.length} 个单词`);
+      loadWords();
+    } catch (e: any) {
+      toast.error(e?.message ?? '置底失败');
     }
   };
 
@@ -563,6 +596,9 @@ export function PetManagePage() {
           onExcelImport={handleExcelImport}
           excelImporting={excelImporting}
           excelFileRef={excelFileRef}
+          onBatchDelete={handleBatchDeleteWords}
+          onBatchMoveTop={handleBatchMoveWordsTop}
+          onBatchMoveBottom={handleBatchMoveWordsBottom}
         />
       )}
 
@@ -824,6 +860,7 @@ function UserDataTab({
 // ====== 单词管理 tab ======
 function WordManageTab({
   words, onAdd, onBatchImport, onDelete, onExcelImport, excelImporting, excelFileRef,
+  onBatchDelete, onBatchMoveTop, onBatchMoveBottom,
 }: {
   words: PetWord[];
   onAdd: (en: string, cn: string, pos: string) => void | Promise<void>;
@@ -832,12 +869,65 @@ function WordManageTab({
   onExcelImport: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   excelImporting: boolean;
   excelFileRef: React.RefObject<HTMLInputElement>;
+  onBatchDelete: (ids: string[]) => void | Promise<void>;
+  onBatchMoveTop: (ids: string[]) => void | Promise<void>;
+  onBatchMoveBottom: (ids: string[]) => void | Promise<void>;
 }) {
   const [en, setEn] = useState('');
   const [cn, setCn] = useState('');
   const [pos, setPos] = useState('');
   const [batchText, setBatchText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (words.length > 0 && words.every(w => selectedIds.has(w.id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(words.map(w => w.id)));
+    }
+  };
+  const handleBatchDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBatchLoading(true);
+    try {
+      await onBatchDelete(ids);
+      setSelectedIds(new Set());
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+  const handleBatchMoveTop = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBatchLoading(true);
+    try {
+      await onBatchMoveTop(ids);
+      setSelectedIds(new Set());
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+  const handleBatchMoveBottom = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBatchLoading(true);
+    try {
+      await onBatchMoveBottom(ids);
+      setSelectedIds(new Set());
+    } finally {
+      setBatchLoading(false);
+    }
+  };
   const [importing, setImporting] = useState(false);
 
   const handleAdd = async () => {
@@ -930,45 +1020,86 @@ function WordManageTab({
 
       {/* 单词列表 */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-700">单词列表（{words.length}）</h3>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={words.length > 0 && words.every(w => selectedIds.has(w.id))}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+              />
+              <span className="text-sm font-semibold text-slate-700">
+                单词列表（{words.length}）
+              </span>
+              {selectedIds.size > 0 && (
+                <span className="text-xs text-amber-600">已选 {selectedIds.size}</span>
+              )}
+            </label>
+          </div>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap" disabled={batchLoading}>
+              <Button variant="ghost" size="sm" onClick={handleBatchMoveTop} disabled={batchLoading}
+                title="把选中的单词移到列表最前（游戏最先出现）">
+                <ChevronUp className="w-4 h-4" /> 置顶({selectedIds.size})
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleBatchMoveBottom} disabled={batchLoading}
+                title="把选中的单词移到列表最后（游戏最后出现）">
+                <ChevronDown className="w-4 h-4" /> 置底({selectedIds.size})
+              </Button>
+              <Button variant="ghost" size="sm" danger onClick={handleBatchDelete} disabled={batchLoading}>
+                <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
+              </Button>
+            </div>
+          )}
         </div>
         {words.length === 0 ? (
           <EmptyState icon="📚" title="暂无单词" description="新增或批量导入单词" />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {words.map(w => (
-              <Card key={w.id} className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400 font-mono flex-shrink-0" title="排序编号">
-                        #{w.display_order ?? 0}
-                      </span>
-                      <span className="font-medium text-slate-800 truncate">{w.word_en}</span>
-                      {w.part_of_speech && (
-                        <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
-                          {w.part_of_speech}
-                        </span>
-                      )}
-                      {w.needs_review && (
-                        <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0" title="待复习">
-                          复习
-                        </span>
-                      )}
+            {words.map(w => {
+              const checked = selectedIds.has(w.id);
+              return (
+                <Card key={w.id} className={`p-3 transition-colors ${checked ? 'border-amber-400 bg-amber-50/50' : ''}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(w.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-slate-400 font-mono flex-shrink-0" title="排序编号">
+                            #{w.display_order ?? 0}
+                          </span>
+                          <span className="font-medium text-slate-800 truncate">{w.word_en}</span>
+                          {w.part_of_speech && (
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
+                              {w.part_of_speech}
+                            </span>
+                          )}
+                          {w.needs_review && (
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0" title="待复习">
+                              复习
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 truncate">{w.word_cn}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500 truncate">{w.word_cn}</div>
+                    <button
+                      onClick={() => onDelete(w.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
+                      aria-label="删除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onDelete(w.id)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
-                    aria-label="删除"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

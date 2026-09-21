@@ -244,6 +244,66 @@ export async function deletePetWord(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 批量删除单词
+export async function batchDeletePetWords(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('pet_words').delete().in('id', ids);
+  if (error) throw error;
+}
+
+// 批量置顶：把选中的词移到最前面，其他词依次后移
+export async function batchMovePetWordsTop(familyId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  // 1. 拉取全部词，按 display_order 升序
+  const { data: allWords, error: e1 } = await supabase
+    .from('pet_words')
+    .select('id, display_order')
+    .eq('family_id', familyId)
+    .order('display_order', { ascending: true, nullsFirst: false });
+  if (e1) throw e1;
+  if (!allWords || allWords.length === 0) return;
+  // 2. 拆分：选中 + 未选中（保持原相对顺序）
+  const idSet = new Set(ids);
+  const selected = allWords.filter(w => idSet.has(w.id));
+  const rest = allWords.filter(w => !idSet.has(w.id));
+  // 3. 重新分配 display_order：选中的放最前
+  const ordered = [...selected, ...rest];
+  const updates = ordered.map((w, i) => ({ id: w.id, display_order: i + 1 }));
+  // 4. 批量更新（用 upsert 或逐个 update）
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('pet_words')
+      .update({ display_order: u.display_order })
+      .eq('id', u.id);
+    if (error) throw error;
+  }
+}
+
+// 批量置底：把选中的词移到最后，其他词依次前移
+export async function batchMovePetWordsBottom(familyId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { data: allWords, error: e1 } = await supabase
+    .from('pet_words')
+    .select('id, display_order')
+    .eq('family_id', familyId)
+    .order('display_order', { ascending: true, nullsFirst: false });
+  if (e1) throw e1;
+  if (!allWords || allWords.length === 0) return;
+  const idSet = new Set(ids);
+  const selected = allWords.filter(w => idSet.has(w.id));
+  const rest = allWords.filter(w => !idSet.has(w.id));
+  // 重新分配：未选中的放最前，选中的放最后
+  const ordered = [...rest, ...selected];
+  const updates = ordered.map((w, i) => ({ id: w.id, display_order: i + 1 }));
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('pet_words')
+      .update({ display_order: u.display_order })
+      .eq('id', u.id);
+    if (error) throw error;
+  }
+}
+
 export async function fetchPetWordProgress(memberId: string): Promise<PetWordProgress | null> {
   const { data, error } = await supabase
     .from('pet_word_progress')
