@@ -35,8 +35,9 @@ const PET_SUBS: { id: PetSubcategory; label: string }[] = [
   { id: 'cat', label: '猫' },
 ];
 
-// 用品子分类
-const SUPPLY_SUBS: { id: PetSubcategory; label: string }[] = [
+// 用品子分类（"全部"选项用 'all' 特殊值）
+const SUPPLY_SUBS: { id: string; label: string }[] = [
+  { id: 'all', label: '全部' },
   { id: 'food', label: '食品' },
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
@@ -45,21 +46,21 @@ const SUPPLY_SUBS: { id: PetSubcategory; label: string }[] = [
   { id: 'doghouse', label: '狗屋' },
 ];
 
+// 用品子分类 → 影响属性映射
+const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string; badgeCls: string }> = {
+  food: { icon: '🍖', label: '食品', color: 'text-orange-600', badgeCls: 'bg-orange-100 text-orange-600' },
+  clean: { icon: '🧴', label: '清洁', color: 'text-blue-600', badgeCls: 'bg-blue-100 text-blue-600' },
+  toy: { icon: '🎾', label: '玩具', color: 'text-green-600', badgeCls: 'bg-green-100 text-green-600' },
+  medicine: { icon: '💊', label: '药品', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
+  foster: { icon: '🏠', label: '寄养', color: 'text-purple-600', badgeCls: 'bg-purple-100 text-purple-600' },
+  doghouse: { icon: '🏠', label: '狗屋', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
+};
+
 // 稀有度文案与配色
 const RARITY_META: Record<PetRarity, { label: string; cls: string }> = {
   common: { label: '普通', cls: 'bg-slate-100 text-slate-500' },
   rare: { label: '稀有', cls: 'bg-blue-100 text-blue-600' },
   epic: { label: '史诗', cls: 'bg-purple-100 text-purple-600' },
-};
-
-// 用品子分类 → 影响属性映射
-const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string; badgeCls: string }> = {
-  food: { icon: '🍖', label: '体力', color: 'text-orange-600', badgeCls: 'bg-orange-100 text-orange-600' },
-  clean: { icon: '🧴', label: '清洁度', color: 'text-blue-600', badgeCls: 'bg-blue-100 text-blue-600' },
-  toy: { icon: '🎾', label: '心情', color: 'text-green-600', badgeCls: 'bg-green-100 text-green-600' },
-  medicine: { icon: '💊', label: '健康', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
-  foster: { icon: '🏠', label: '综合', color: 'text-purple-600', badgeCls: 'bg-purple-100 text-purple-600' },
-  doghouse: { icon: '🏠', label: '狗屋', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
 };
 
 // 商品图标：优先 image_url，否则 emoji，再否则占位
@@ -149,7 +150,7 @@ export function PetShopModal({
   // 切换主 tab 时重置子分类到首个
   const switchMain = (main: PetShopItemType) => {
     setActiveMain(main);
-    setActiveSub(main === 'pet' ? 'dog' : 'food');
+    setActiveSub(main === 'pet' ? 'dog' : 'all');
   };
 
   // 加载商品列表 + 已领养宠物
@@ -157,8 +158,10 @@ export function PetShopModal({
     if (!familyId) return;
     setLoading(true);
     try {
+      // "全部" 时传 undefined 加载所有
+      const fetchSub = activeSub === 'all' ? undefined : activeSub as PetSubcategory;
       const [data, myPets] = await Promise.all([
-        fetchPetShopItems(familyId, activeMain, activeSub),
+        fetchPetShopItems(familyId, activeMain, fetchSub),
         fetchPets(childId),
       ]);
       setItems(data);
@@ -339,10 +342,18 @@ export function PetShopModal({
         <div className="grid grid-cols-3 gap-3">
           {items.map(item => {
             const soldOut = item.stock !== null && item.stock <= 0;
-            const inlineBuy = item.subcategory !== 'doghouse';
+            const isDoghouse = item.subcategory === 'doghouse';
+            const inlineBuy = !isDoghouse;
             const qty = qtyMap[item.id] ?? 1;
             const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
             const recovery = item.recovery_value ?? 0;
+            // 狗屋容量描述
+            const doghouseCapacity = isDoghouse
+              ? (item.doghouse_level === 1 ? '容纳1只小狗'
+                 : item.doghouse_level === 2 ? '容纳5只小狗'
+                 : item.doghouse_level === 3 ? '容纳10只小狗'
+                 : '')
+              : '';
             const cardCls = cn(
               'flex flex-col items-center gap-1 p-2 rounded-2xl border-2 transition-all text-center relative',
               soldOut
@@ -370,7 +381,7 @@ export function PetShopModal({
                     <PriceBadge item={item} />
                     {effect && recovery > 0 && (
                       <span className={`font-bold ${effect.color}`}>
-                        +{recovery}{effect.label}
+                        +{recovery}
                       </span>
                     )}
                   </div>
@@ -421,12 +432,12 @@ export function PetShopModal({
                 <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
                   {item.name || '未命名'}
                 </div>
-                {/* 价格 + 恢复值放一行 */}
+                {/* 价格 + 容量描述放一行 */}
                 <div className="w-full flex items-center justify-center gap-2 text-[10px]">
                   <PriceBadge item={item} />
-                  {effect && recovery > 0 && (
-                    <span className={`font-bold ${effect.color}`}>
-                      +{recovery}{effect.label}
+                  {doghouseCapacity && (
+                    <span className={`font-bold ${effect?.color ?? 'text-amber-600'}`}>
+                      {doghouseCapacity}
                     </span>
                   )}
                 </div>
