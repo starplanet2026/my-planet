@@ -682,7 +682,7 @@ function EncounterGameModal({
       <div className="relative">
         <iframe
           ref={iframeRef}
-          src="/encounter-game.html"
+          src={`${import.meta.env.BASE_URL}encounter-game.html`}
           title="萌宠奇遇记"
           className="w-full h-[560px] rounded-xl border-0"
           sandbox="allow-scripts allow-same-origin"
