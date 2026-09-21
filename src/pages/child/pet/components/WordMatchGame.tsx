@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '../../../../lib/utils';
 import { useToastStore } from '../../../../store/toastStore';
+import { usePetUiStore } from '../../../../store/petUiStore';
 import { STAR_ICON_SM } from '../../../../lib/constants';
 import {
   fetchPetWords, fetchGameLevelResults, fetchGameLevelResult, finishGameLevel,
@@ -22,10 +23,21 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  // 当前闯关状态
-  const [currentLevel, setCurrentLevel] = useState<number | null>(null);
-  const [currentWords, setCurrentWords] = useState<PetWord[]>([]);
+  // 当前闯关状态：从全局 store 恢复（切换 tab 回来后能续上）
+  const storeGameLevel = usePetUiStore(s => s.gameLevel);
+  const storeGameWords = usePetUiStore(s => s.gameWords);
+  const setGameState = usePetUiStore(s => s.setGameState);
+  const clearGameState = usePetUiStore(s => s.clearGameState);
+
+  const [currentLevel, setCurrentLevel] = useState<number | null>(storeGameLevel);
+  const [currentWords, setCurrentWords] = useState<PetWord[]>(storeGameWords);
   const [finishing, setFinishing] = useState(false);
+
+  // 把当前关卡/单词同步到 store（让 PetPage 卸载后可恢复）
+  const syncToStore = useCallback((level: number | null, w: PetWord[]) => {
+    if (level === null) clearGameState();
+    else setGameState(level, w);
+  }, [setGameState, clearGameState]);
 
   // 加载词库 + 关卡结果
   const loadData = useCallback(async () => {
@@ -54,6 +66,11 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
   }, [familyId, memberId, toast]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // 同步当前关卡到全局 store（切换 tab 后回来可恢复）
+  useEffect(() => {
+    syncToStore(currentLevel, currentWords);
+  }, [currentLevel, currentWords, syncToStore]);
 
   // 选择关卡：准备单词并进入游戏
   const handleSelectLevel = useCallback(async (level: number) => {

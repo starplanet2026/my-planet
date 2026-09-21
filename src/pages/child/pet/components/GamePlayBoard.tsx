@@ -132,14 +132,23 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
     if (!tile || tile.eliminated) return;
 
     const setter = zone === 'cn' ? setSelectedCN : setSelectedEN;
-    const setTiles = zone === 'cn' ? setCnTiles : setEnTiles;
     const current = zone === 'cn' ? selectedCN : selectedEN;
     if (current === tileId) {
       setter(null);
-      setTiles(prev => prev.map(t => ({ ...t, selected: false })));
+      (zone === 'cn' ? setCnTiles : setEnTiles)(prev => prev.map(t => ({ ...t, selected: false })));
       return;
     }
-    setTiles(prev => prev.map(t => ({ ...t, selected: t.id === tileId })));
+    // 选新 tile：清除所有 wrong 闪烁，让用户从错误状态恢复
+    setCnTiles(prev => prev.map(t => ({
+      ...t,
+      flashing: t.flashing === 'wrong' ? null : t.flashing,
+      selected: zone === 'cn' ? t.id === tileId : false,
+    })));
+    setEnTiles(prev => prev.map(t => ({
+      ...t,
+      flashing: t.flashing === 'wrong' ? null : t.flashing,
+      selected: zone === 'en' ? t.id === tileId : false,
+    })));
     setter(tileId);
   }, [checking, completed, cnTiles, enTiles, selectedCN, selectedEN]);
 
@@ -192,28 +201,31 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
         setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, eliminated: true, selected: false, flashing: null } : t));
         setCorrectCount(c => c + 1);
         setLastCorrectWords(prev => [...prev, cnTile.wordId].slice(-2));
+        // 正确才清空选择状态
+        setSelectedCN(null);
+        setSelectedEN(null);
+        setSelectedPOS(null);
+        checkingRef.current = false;
+        setChecking(false);
       } else {
-        // 错误：不消除，只重置选中状态
-        setCnTiles(prev => prev.map(t => t.id === selectedCN ? { ...t, selected: false, flashing: null } : t));
-        setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, selected: false, flashing: null } : t));
+        // 错误：不消除，不弹文字提醒；红色闪烁保留在错误方块上，
+        // 等待用户重新点击中文/英文时由 handleTileClick 清除 wrong 闪烁
         setWrongCount(w => w + 1);
         setWrongWordIds(prev => {
           const newIds = [cnTile.wordId, enTile.wordId].filter(id => !prev.includes(id));
           return [...prev, ...newIds];
         });
-        if (!isSameWord) {
-          toast.warning('中文和英文不匹配，请重选');
-        } else if (!posMatch) {
-          toast.warning('词性不正确，请重选');
-        }
+        // 仅取消选中状态（保持错误闪烁），并立即解除 checking 锁，允许用户重选
+        setCnTiles(prev => prev.map(t => t.id === selectedCN ? { ...t, selected: false } : t));
+        setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, selected: false } : t));
+        setSelectedCN(null);
+        setSelectedEN(null);
+        setSelectedPOS(null);
+        checkingRef.current = false;
+        setChecking(false);
       }
-      setSelectedCN(null);
-      setSelectedEN(null);
-      setSelectedPOS(null);
-      checkingRef.current = false;
-      setChecking(false);
-    }, isCorrect ? 500 : 800);
-  }, [selectedCN, selectedEN, selectedPOS, cnTiles, enTiles, words, toast]);
+    }, isCorrect ? 500 : 400);
+  }, [selectedCN, selectedEN, selectedPOS, cnTiles, enTiles, words]);
 
   // 游戏结束检测
   useEffect(() => {
@@ -341,12 +353,17 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
       </div>
 
       {/* 进度条 */}
-      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-3">
+      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-2">
         <div
           className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-300"
           style={{ width: `${(correctCount / totalWords) * 100}%` }}
         />
       </div>
+
+      {/* 玩法提示（顶部） */}
+      <p className="text-center text-xs text-slate-500 mb-2">
+        中英文匹配，词性也要选择哦！无词性选空格
+      </p>
 
       {/* 游戏区域：绿草地背景 + 左右阵营 */}
       <div className="rounded-2xl bg-gradient-to-b from-green-300 to-green-400 p-3 shadow-inner">
@@ -382,11 +399,6 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
           })}
         </div>
       </div>
-
-      {/* 底部提示 */}
-      <p className="text-center text-xs text-slate-400 mt-2">
-        先选中文和英文，再选词性。正确消除，错误提醒
-      </p>
     </div>
   );
 }

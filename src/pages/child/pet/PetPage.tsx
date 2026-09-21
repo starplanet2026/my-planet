@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useFamilyStore } from '../../../store/familyStore';
 import { useModeStore } from '../../../store/modeStore';
+import { usePetUiStore } from '../../../store/petUiStore';
 import { Loading } from '../../../components/common/Loading';
 import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
@@ -51,12 +52,15 @@ export function PetPage() {
   const [pets, setPets] = useState<Pet[]>([]);
   const [dogHouse, setDogHouse] = useState<DogHouse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeModal, setActiveModal] = useState<PetModal>(null);
+  // activeModal 和 showStudy 使用全局 store，切换 tab 后回到本页可恢复弹窗
+  const activeModal = usePetUiStore(s => s.activeModal);
+  const setActiveModal = usePetUiStore(s => s.setActiveModal);
+  const showStudy = usePetUiStore(s => s.showStudy);
+  const setShowStudy = usePetUiStore(s => s.setShowStudy);
   const [activePet, setActivePet] = useState<Pet | null>(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [showDex, setShowDex] = useState(false);
   const [showAdopt, setShowAdopt] = useState(false);
-  const [showStudy, setShowStudy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
   const [evolvingPetId, setEvolvingPetId] = useState<string | null>(null);

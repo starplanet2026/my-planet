@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from '../../../../components/common/Modal';
 import { Button } from '../../../../components/common/Button';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
+import { usePetUiStore } from '../../../../store/petUiStore';
 import type { Pet } from '../../../../api/types';
 import { supabase } from '../../../../api/client';
 import { studyTaskReward, fetchStudyRecords } from '../../../../api/pets';
@@ -66,6 +67,58 @@ export function StudyCompanionModal({
   const [records, setRecords] = useState<StudyRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 从全局 store 恢复学习状态（切换 tab 回来后续上）
+  const persistedStep = usePetUiStore(s => s.studyStep);
+  const persistedPetId = usePetUiStore(s => s.studyPetId);
+  const persistedMinutes = usePetUiStore(s => s.studyMinutes);
+  const persistedTaskText = usePetUiStore(s => s.studyTaskText);
+  const persistedTaskList = usePetUiStore(s => s.studyTaskList);
+  const persistedRemaining = usePetUiStore(s => s.studyRemaining);
+  const persistedStudying = usePetUiStore(s => s.studyStudying);
+  const persistedPaused = usePetUiStore(s => s.studyPaused);
+  const setStudyState = usePetUiStore(s => s.setStudyState);
+  const clearStudyState = usePetUiStore(s => s.clearStudyState);
+  const restoredRef = useRef(false);
+
+  // 首次挂载时从 store 恢复
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (persistedStep !== 'select' || persistedPetId) {
+      setStep(persistedStep);
+      setMinutes(persistedMinutes);
+      setStudyTask(persistedTaskText);
+      setTaskList(persistedTaskList as StudyTask[]);
+      setRemaining(persistedRemaining);
+      // studying 在组件卸载时已停止，回来后默认暂停，让用户手动继续
+      setStudying(false);
+      setPaused(true);
+      const pet = pets.find(p => p.id === persistedPetId);
+      if (pet) setSelectedPet(pet);
+    }
+  }, []);
+
+  // 同步状态到 store（切换 tab 后可恢复）
+  useEffect(() => {
+    setStudyState({
+      studyStep: step,
+      studyPetId: selectedPet?.id ?? null,
+      studyMinutes: minutes,
+      studyTaskText: studyTask,
+      studyTaskList: taskList,
+      studyRemaining: remaining,
+      studyStudying: studying,
+      studyPaused: paused,
+    });
+  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, setStudyState]);
+
+  // 用户主动关闭：清空 store 中的学习状态，下次打开从 select 开始
+  const handleClose = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    clearStudyState();
+    onClose();
+  }, [clearStudyState, onClose]);
 
   // 倒计时（暂停时停止）
   useEffect(() => {
@@ -139,7 +192,7 @@ export function StudyCompanionModal({
     const minutes2 = Math.max(0, Math.round(actualMinutes));
     if (minutes2 <= 0) {
       // 不足 1 分钟，不记录、不发奖，直接关闭
-      onClose();
+      handleClose();
       return;
     }
     try {
@@ -205,7 +258,7 @@ export function StudyCompanionModal({
   // 选择宠物+时长
   if (step === 'select') {
     return (
-      <Modal open onClose={onClose} title="陪伴学习" size="md">
+      <Modal open onClose={handleClose} title="陪伴学习" size="md">
         <div className="space-y-4">
           {/* 选择宠物 */}
           <div>
@@ -293,7 +346,7 @@ export function StudyCompanionModal({
   // 学习记录页
   if (step === 'records') {
     return (
-      <Modal open onClose={onClose} title="陪伴学习记录" size="md">
+      <Modal open onClose={handleClose} title="陪伴学习记录" size="md">
         <div className="space-y-3">
           <button
             onClick={() => setStep('select')}
@@ -472,7 +525,7 @@ export function StudyCompanionModal({
   // 完成
   if (step === 'done') {
     return (
-      <Modal open onClose={onClose} title="学习完成" size="sm">
+      <Modal open onClose={handleClose} title="学习完成" size="sm">
         <div className="text-center space-y-4 py-4">
           <div className="text-6xl">🎉</div>
           <p className="text-lg font-bold text-slate-700">太棒了！</p>
@@ -485,7 +538,7 @@ export function StudyCompanionModal({
               <p>完成任务获得 <span className="text-amber-500 font-bold">⭐ {totalStarEarned}</span> 星光值</p>
             )}
           </div>
-          <Button onClick={onClose} className="w-full">返回</Button>
+          <Button onClick={handleClose} className="w-full">返回</Button>
         </div>
       </Modal>
     );
