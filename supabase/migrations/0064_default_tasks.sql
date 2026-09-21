@@ -4,7 +4,8 @@
 -- 2. 创建 seed_default_tasks RPC：批量导入成就清单
 -- ============================================================
 
--- 1. tasks 表加 is_default
+-- 1. tasks 表加 is_default + sort_order（如果 0022 未执行则补上）
+alter table public.tasks add column if not exists sort_order int not null default 0;
 alter table public.tasks add column if not exists is_default boolean not null default false;
 
 -- 2. 默认任务模板（jsonb 数组）
