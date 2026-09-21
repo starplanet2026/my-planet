@@ -411,7 +411,7 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
                 </div>
               )}
 
-              {/* 互动态：宠物名 + 稀有度 + 心情文字 + 详细经验条 */}
+              {/* 互动态：宠物名 + 稀有度 + 详细经验条（去掉会话内容） */}
               {isInteracting && (
                 <div className="mb-1 max-w-[180px] text-center">
                   <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap">
@@ -423,7 +423,6 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
                       Lv.{pet.level}/{pet.max_level}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mb-1">{moodText(pet)}</div>
                   <div className="flex items-center gap-1">
                     {pet.level < pet.max_level ? (
                       <>
