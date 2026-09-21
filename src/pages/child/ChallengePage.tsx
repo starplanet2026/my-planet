@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
+import { useChallengeUiStore } from '../../store/challengeUiStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -41,9 +42,15 @@ export function ChallengePage() {
   const child = members.find(m => m.id === currentChildId && m.role === 'child') ?? members.find(m => m.role === 'child');
   const toast = useToastStore();
 
+  // 跨页面/Tab 保活：store 保存活动题集与答题进度，回到此页自动恢复
+  const activeSet = useChallengeUiStore(s => s.activeSet);
+  const storeStarted = useChallengeUiStore(s => s.started);
+  const snapshot = useChallengeUiStore(s => s.snapshot);
+  const setActive = useChallengeUiStore(s => s.setActive);
+  const clearChallenge = useChallengeUiStore(s => s.clear);
+
   const [sets, setSets] = useState<ChallengeSet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSet, setActiveSet] = useState<ChallengeSet | null>(null);
   const [showWrongBook, setShowWrongBook] = useState(false);
   const [wrongCount, setWrongCount] = useState(0);
 
@@ -68,8 +75,18 @@ export function ChallengePage() {
     return <WrongBookView childId={child?.id ?? ''} onBack={() => setShowWrongBook(false)} onReviewed={refreshMembers} />;
   }
 
+  // 有保存的活动题集 → 直接恢复答题界面，不重新展示列表
   if (activeSet) {
-    return <ChallengePlayer set={activeSet} childId={child?.id ?? ''} onBack={() => setActiveSet(null)} onDone={refreshMembers} />;
+    return (
+      <ChallengePlayer
+        set={activeSet}
+        childId={child?.id ?? ''}
+        started={storeStarted}
+        restoreSnapshot={snapshot}
+        onBack={() => { clearChallenge(); }}
+        onDone={refreshMembers}
+      />
+    );
   }
 
   return (
@@ -106,7 +123,7 @@ export function ChallengePage() {
             return (
               <div
                 key={set.id}
-                onClick={() => setActiveSet(set)}
+                onClick={() => setActive(set, false)}
                 className={cn(
                   'relative aspect-square rounded-2xl border-2 border-emerald-400 bg-white',
                   'cursor-pointer hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all',
@@ -134,17 +151,41 @@ export function ChallengePage() {
 }
 
 // ====== 答题主组件 ======
-function ChallengePlayer({ set, childId, onBack, onDone }: {
-  set: ChallengeSet; childId: string; onBack: () => void; onDone: () => void;
+function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = false, restoreSnapshot = null }: {
+  set: ChallengeSet;
+  childId: string;
+  onBack: () => void;
+  onDone: () => void;
+  started?: boolean;
+  restoreSnapshot: import('../../store/challengeUiStore').PlayerSnapshot | null;
 }) {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [words, setWords] = useState<(Word & { progress?: any })[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [started, setStarted] = useState(false);
+  const setStoreActive = useChallengeUiStore(s => s.setActive);
+  const setStoreSnapshot = useChallengeUiStore(s => s.setSnapshot);
+  const patchStoreSnapshot = useChallengeUiStore(s => s.patchSnapshot);
+  const clearChallenge = useChallengeUiStore(s => s.clear);
+
+  // 有快照则直接恢复，避免重新拉取（已答对的题会在 fetchActiveQuestions 中被过滤，破坏 idx）
+  const [questions, setQuestions] = useState<Question[]>(
+    restoreSnapshot && restoreSnapshot.type === 'question' ? restoreSnapshot.questions : []
+  );
+  const [words, setWords] = useState<(Word & { progress?: any })[]>(
+    restoreSnapshot && restoreSnapshot.type === 'word' ? restoreSnapshot.words : []
+  );
+  const [loading, setLoading] = useState(restoreSnapshot === null);
+  const [started, setStarted] = useState(startedProp);
   // 重做时刷新题目列表（fetchActiveQuestions 会过滤掉已掌握）
   const [reloadKey, setReloadKey] = useState(0);
 
+  // 记录是否已从快照恢复（避免首次 useEffect 覆盖快照数据）
+  const restoredRef = useRef(!!restoreSnapshot);
+
   useEffect(() => {
+    // 已从快照恢复，无需重新拉取；重做时 reloadKey 变化才重新拉取
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      setLoading(false);
+      return;
+    }
     (async () => {
       setLoading(true);
       try {
@@ -168,6 +209,52 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
     })();
   }, [set.id, childId, reloadKey]);
 
+  // 持久化：当前题集 + started 状态到 store，切换页面后可恢复
+  useEffect(() => {
+    setStoreActive(set, started);
+  }, [set, started, setStoreActive]);
+
+  // 数据加载完成后，把完整快照（含 questions/words 数组）写入 store，
+  // 后续进度变化由 QuestionPlayer/WordPlayer 通过 patch 更新
+  useEffect(() => {
+    if (loading) return;
+    if (set.type === 'word_vocab') {
+      if (words.length === 0) return;
+      setStoreSnapshot({
+        type: 'word',
+        questions: [],
+        words,
+        idx: restoreSnapshot?.idx ?? 0,
+        results: restoreSnapshot?.results ?? [],
+        totalReward: restoreSnapshot?.totalReward ?? 0,
+        totalBonus: restoreSnapshot?.totalBonus ?? 0,
+        showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
+        stage: restoreSnapshot?.stage ?? 'familiar',
+        quizType: restoreSnapshot?.quizType ?? 'en2cn',
+      });
+    } else {
+      if (questions.length === 0) return;
+      setStoreSnapshot({
+        type: 'question',
+        questions,
+        words: [],
+        idx: restoreSnapshot?.idx ?? 0,
+        results: restoreSnapshot?.results ?? [],
+        totalReward: restoreSnapshot?.totalReward ?? 0,
+        totalBonus: restoreSnapshot?.totalBonus ?? 0,
+        showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
+        stage: 'familiar',
+        quizType: 'en2cn',
+      });
+    }
+  }, [loading, questions, words, set, setStoreSnapshot]);
+
+  // 返回/退出时清空 store（由父组件 onBack 触发 clear）
+  const handleBack = () => {
+    clearChallenge();
+    onBack();
+  };
+
   if (loading) return <Loading />;
 
   const hasKnowledge = !!set.knowledge_points?.trim();
@@ -178,14 +265,24 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
       <KnowledgePreview
         set={set}
         onStart={() => setStarted(true)}
-        onBack={onBack}
+        onBack={handleBack}
       />
     );
   }
 
   // 单词背诵保持原流程
   if (set.type === 'word_vocab') {
-    return <WordPlayer set={set} words={words} childId={childId} onBack={onBack} onDone={onDone} />;
+    return (
+      <WordPlayer
+        set={set}
+        words={words}
+        childId={childId}
+        onBack={handleBack}
+        onDone={onDone}
+        restoreSnapshot={restoreSnapshot && restoreSnapshot.type === 'word' ? restoreSnapshot : null}
+        onSnapshot={patchStoreSnapshot}
+      />
+    );
   }
 
   // 选择题/数学题：直接顺序做题，不再选难度
@@ -195,8 +292,12 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
       <ChallengeAllMastered
         set={set}
         childId={childId}
-        onBack={onBack}
-        onRedo={() => { setStarted(true); setReloadKey(k => k + 1); }}
+        onBack={handleBack}
+        onRedo={() => {
+          setStarted(true);
+          setStoreActive(set, true);
+          setReloadKey(k => k + 1);
+        }}
       />
     );
   }
@@ -206,9 +307,11 @@ function ChallengePlayer({ set, childId, onBack, onDone }: {
       set={set}
       questions={questions}
       childId={childId}
-      onBack={onBack}
+      onBack={handleBack}
       onDone={onDone}
       onChallengeEnd={() => setReloadKey(k => k + 1)}
+      restoreSnapshot={restoreSnapshot && restoreSnapshot.type === 'question' ? restoreSnapshot : null}
+      onSnapshot={patchStoreSnapshot}
     />
   );
 }
@@ -275,24 +378,31 @@ function KnowledgePreview({ set, onStart, onBack }: {
 // ====== 难度选择已移除：新流程直接顺序做题，做完一轮显示正确率 ======
 
 // ====== 选择题/数学题 答题（新流程：顺序做题→挑战结束页→重做错题） ======
-function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEnd }: {
+function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEnd, restoreSnapshot = null, onSnapshot }: {
   set: ChallengeSet; questions: Question[]; childId: string;
   onBack: () => void; onDone: () => void; onChallengeEnd: () => void;
+  restoreSnapshot: import('../../store/challengeUiStore').PlayerSnapshot | null;
+  onSnapshot: (patch: Partial<import('../../store/challengeUiStore').PlayerSnapshot>) => void;
 }) {
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(restoreSnapshot?.idx ?? 0);
   const [answer, setAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // 本轮挑战每题结果（true=对，false=错）
-  const [results, setResults] = useState<boolean[]>([]);
+  const [results, setResults] = useState<boolean[]>(restoreSnapshot?.results ?? []);
   // 本轮累计奖励
-  const [totalReward, setTotalReward] = useState(0);
-  const [totalBonus, setTotalBonus] = useState(0);
-  const [showChallengeResult, setShowChallengeResult] = useState(false);
+  const [totalReward, setTotalReward] = useState(restoreSnapshot?.totalReward ?? 0);
+  const [totalBonus, setTotalBonus] = useState(restoreSnapshot?.totalBonus ?? 0);
+  const [showChallengeResult, setShowChallengeResult] = useState(restoreSnapshot?.showChallengeResult ?? false);
   const toast = useToastStore();
 
   const q = questions[idx];
+
+  // 持久化快照：idx/结果/奖励/结束页状态变化时同步到 store
+  useEffect(() => {
+    onSnapshot({ idx, results, totalReward, totalBonus, showChallengeResult });
+  }, [idx, results, totalReward, totalBonus, showChallengeResult, onSnapshot]);
 
   const handleSubmit = async () => {
     if (!answer.trim()) return;
@@ -310,7 +420,9 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
         const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
         toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
       } else {
-        toast.error('答错了，已加入错题本');
+        // 错题不再写入错题本，挑战内部通过 question_progress.is_mastered 过滤，
+        // 再次挑战时未掌握的题会自动再次出现
+        toast.error('答错了，再试一次');
       }
     } catch (e: any) {
       toast.error(e?.message ?? '提交失败');
@@ -633,12 +745,14 @@ const WORD_TYPES: { type: WordQuestionType; label: string }[] = [
   { type: 'spell', label: '看中拼写' },
 ];
 
-function WordPlayer({ set, words, childId, onBack, onDone }: {
+function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = null, onSnapshot }: {
   set: ChallengeSet; words: (Word & { progress?: any })[]; childId: string; onBack: () => void; onDone: () => void;
+  restoreSnapshot: import('../../store/challengeUiStore').PlayerSnapshot | null;
+  onSnapshot: (patch: Partial<import('../../store/challengeUiStore').PlayerSnapshot>) => void;
 }) {
-  const [idx, setIdx] = useState(0);
-  const [stage, setStage] = useState<'familiar' | 'quiz'>('familiar');
-  const [quizType, setQuizType] = useState<WordQuestionType>('en2cn');
+  const [idx, setIdx] = useState(restoreSnapshot?.idx ?? 0);
+  const [stage, setStage] = useState<'familiar' | 'quiz'>(restoreSnapshot?.stage ?? 'familiar');
+  const [quizType, setQuizType] = useState<WordQuestionType>(restoreSnapshot?.quizType ?? 'en2cn');
   const [options, setOptions] = useState<string[]>([]);
   const [answer, setAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
@@ -649,6 +763,11 @@ function WordPlayer({ set, words, childId, onBack, onDone }: {
   const word = words[idx];
   const progress = word?.progress;
   const mastered = progress?.is_mastered;
+
+  // 持久化快照：idx/stage/quizType 变化时同步到 store
+  useEffect(() => {
+    onSnapshot({ idx, stage, quizType });
+  }, [idx, stage, quizType, onSnapshot]);
 
   // 生成选择题选项
   const genOptions = (correct: string, all: string[], count = 4) => {
@@ -691,7 +810,8 @@ function WordPlayer({ set, words, childId, onBack, onDone }: {
         toast.success(`答对了！+${result.reward} 星光值`);
         if (result.is_mastered) toast.success('🎉 已掌握该单词！');
       } else {
-        toast.error('答错了，已加入错题本');
+        // 错题不再写入错题本
+        toast.error('答错了，再试一次');
       }
     } catch (e: any) {
       toast.error(e?.message ?? '提交失败');
