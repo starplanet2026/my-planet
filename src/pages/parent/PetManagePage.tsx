@@ -942,10 +942,18 @@ function WordManageTab({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-400 font-mono flex-shrink-0" title="排序编号">
+                        #{w.display_order ?? 0}
+                      </span>
                       <span className="font-medium text-slate-800 truncate">{w.word_en}</span>
                       {w.part_of_speech && (
                         <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
                           {w.part_of_speech}
+                        </span>
+                      )}
+                      {w.needs_review && (
+                        <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0" title="待复习">
+                          复习
                         </span>
                       )}
                     </div>

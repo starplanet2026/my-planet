@@ -199,9 +199,18 @@ export async function fetchPetWords(familyId: string): Promise<PetWord[]> {
 }
 
 export async function createPetWord(familyId: string, wordEn: string, wordCn: string, partOfSpeech?: string): Promise<PetWord> {
+  // 取当前最大 display_order，新词排到队尾
+  const { data: maxRow } = await supabase
+    .from('pet_words')
+    .select('display_order')
+    .eq('family_id', familyId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextOrder = (maxRow?.display_order ?? 0) + 1;
   const { data, error } = await supabase
     .from('pet_words')
-    .insert({ family_id: familyId, word_en: wordEn, word_cn: wordCn, part_of_speech: partOfSpeech || null })
+    .insert({ family_id: familyId, word_en: wordEn, word_cn: wordCn, part_of_speech: partOfSpeech || null, display_order: nextOrder })
     .select()
     .single();
   if (error) throw error;
@@ -209,11 +218,22 @@ export async function createPetWord(familyId: string, wordEn: string, wordCn: st
 }
 
 export async function createPetWordsBatch(familyId: string, words: { en: string; cn: string; pos?: string }[]): Promise<void> {
-  const rows = words.map(w => ({
+  if (words.length === 0) return;
+  // 取当前最大 display_order，按 Excel 顺序追加
+  const { data: maxRow } = await supabase
+    .from('pet_words')
+    .select('display_order')
+    .eq('family_id', familyId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const startOrder = (maxRow?.display_order ?? 0) + 1;
+  const rows = words.map((w, i) => ({
     family_id: familyId,
     word_en: w.en,
     word_cn: w.cn,
     part_of_speech: w.pos || null,
+    display_order: startOrder + i,
   }));
   const { error } = await supabase.from('pet_words').insert(rows);
   if (error) throw error;

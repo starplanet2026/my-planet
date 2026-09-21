@@ -348,6 +348,8 @@ export interface PetWord {
   word_cn: string;
   part_of_speech: string | null;
   display_order: number;
+  needs_review: boolean;
+  original_display_order: number | null;
   status: 'active' | 'inactive';
   created_at: string;
 }
