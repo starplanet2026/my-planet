@@ -127,21 +127,20 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
     setCurrentLevel(level);
   }, [words, levelResults, memberId, toast]);
 
-  // 闯关结束
+  // 闯关结束：保存结果并返回给 GamePlayBoard 显示完成画面
   const handleFinish = useCallback(async (result: {
     stars: number;
     wordIds: string[];
     wrongWordIds: string[];
     lastSelectedWordIds: string[];
-  }) => {
-    if (!currentLevel || finishing) return;
+  }): Promise<{ success: boolean; rewardStar: number; newUnlockedLevel: number } | null> => {
+    if (!currentLevel || finishing) return null;
     setFinishing(true);
     try {
       const res = await finishGameLevel(
         memberId, familyId, currentLevel,
         result.stars, result.wordIds, result.wrongWordIds, result.lastSelectedWordIds,
       );
-      toast.success(`通关！获得 ${res.reward_star} 星光值（${result.stars}星）`);
       onReward();
       // 刷新关卡结果
       setLevelResults(prev => {
@@ -153,14 +152,24 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
         return next;
       });
       setUnlockedLevel(prev => Math.max(prev, res.new_unlocked_level));
-      setCurrentLevel(null);
-      setCurrentWords([]);
+      return { success: res.success, rewardStar: res.reward_star, newUnlockedLevel: res.new_unlocked_level };
     } catch (e: any) {
       toast.error(e?.message ?? '结算失败');
+      return null;
     } finally {
       setFinishing(false);
     }
   }, [currentLevel, finishing, memberId, familyId, toast, onReward]);
+
+  // 下一关
+  const handleNextLevel = useCallback(() => {
+    if (!currentLevel) return;
+    const next = currentLevel + 1;
+    if (next > 100) return;
+    setCurrentLevel(null);
+    setCurrentWords([]);
+    setTimeout(() => handleSelectLevel(next), 100);
+  }, [currentLevel, handleSelectLevel]);
 
   // 加载中
   if (loading) {
@@ -195,6 +204,7 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
           level={currentLevel}
           words={currentWords}
           onFinish={handleFinish}
+          onNextLevel={handleNextLevel}
           onExit={() => { setCurrentLevel(null); setCurrentWords([]); }}
         />
       </div>

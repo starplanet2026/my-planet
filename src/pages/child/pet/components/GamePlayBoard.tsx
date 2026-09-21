@@ -1,26 +1,65 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { cn } from '../../../../lib/utils';
+import { useToastStore } from '../../../../store/toastStore';
 import { getLevelConfig, type PetWord } from '../../../../api/types';
 
 export interface GamePlayBoardProps {
   level: number;
-  words: PetWord[]; // 本关的单词（已含复习词）
+  words: PetWord[];
   onFinish: (result: {
     stars: number;
     wordIds: string[];
     wrongWordIds: string[];
     lastSelectedWordIds: string[];
-  }) => void;
+  }) => Promise<{ success: boolean; rewardStar: number; newUnlockedLevel: number } | null>;
+  onNextLevel: () => void;
   onExit: () => void;
 }
 
-type Zone = 'en' | 'cn' | 'pos';
+// 固定词性按钮（十大词性 + 空格）
+const POS_OPTIONS = [
+  { label: '名词', abbr: 'n.' },
+  { label: '代词', abbr: 'pron.' },
+  { label: '形容词', abbr: 'adj.' },
+  { label: '副词', abbr: 'adv.' },
+  { label: '动词', abbr: 'v.' },
+  { label: '数词', abbr: 'num.' },
+  { label: '冠词', abbr: 'art.' },
+  { label: '介词', abbr: 'prep.' },
+  { label: '连词', abbr: 'conj.' },
+  { label: '感叹词', abbr: 'int.' },
+  { label: '空格', abbr: 'null' },
+];
+
+// 归一化词性，用于比较（兼容 n. / n / 名词 等写法）
+function normalizePOS(pos: string | null): string {
+  if (!pos || pos.trim() === '') return 'null';
+  const p = pos.toLowerCase().trim().replace(/\.$/, '');
+  const posMap: Record<string, string> = {
+    'n': 'n', '名词': 'n',
+    'pron': 'pron', '代词': 'pron',
+    'adj': 'adj', '形容词': 'adj',
+    'adv': 'adv', '副词': 'adv',
+    'v': 'v', '动词': 'v', 'vt': 'v', 'vi': 'v',
+    'num': 'num', '数词': 'num',
+    'art': 'art', '冠词': 'art',
+    'prep': 'prep', '介词': 'prep',
+    'conj': 'conj', '连词': 'conj',
+    'int': 'int', '感叹词': 'int', '感叹': 'int',
+  };
+  return posMap[p] ?? p;
+}
+
+function posButtonValue(abbr: string): string {
+  if (abbr === 'null') return 'null';
+  return normalizePOS(abbr);
+}
 
 interface Tile {
-  id: string; // tile 唯一 ID（zone + wordId）
+  id: string;
   wordId: string;
   text: string;
-  zone: Zone;
+  zone: 'cn' | 'en';
   eliminated: boolean;
   selected: boolean;
   flashing: 'correct' | 'wrong' | null;
@@ -35,7 +74,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// 根据正确率计算星级
+// 根据错误率计算星级
 function calcStars(wordCount: number, wrongCount: number): number {
   const rate = wrongCount / wordCount;
   if (rate <= 0.25) return 3;
@@ -43,167 +82,176 @@ function calcStars(wordCount: number, wrongCount: number): number {
   return 1;
 }
 
-const ZONE_LABELS: Record<Zone, string> = { en: 'English', cn: '中文', pos: '词性' };
-const ZONE_COLORS: Record<Zone, string> = {
-  en: 'from-sky-300 to-sky-400',
-  cn: 'from-orange-300 to-orange-400',
-  pos: 'from-purple-300 to-purple-400',
-};
-
-export function GamePlayBoard({ level, words, onFinish, onExit }: GamePlayBoardProps) {
+export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: GamePlayBoardProps) {
+  const toast = useToastStore();
   const config = getLevelConfig(level);
 
-  // 生成 tile 列表：每个单词 3 个 tile（en/cn/pos），各自 shuffle
+  // 生成 tile 列表：中文和英文各一列，各自 shuffle
   const initialTiles = useMemo(() => {
-    const enTiles: Tile[] = [];
     const cnTiles: Tile[] = [];
-    const posTiles: Tile[] = [];
+    const enTiles: Tile[] = [];
     for (const w of words) {
-      enTiles.push({
-        id: `en-${w.id}`, wordId: w.id, text: w.word_en, zone: 'en',
-        eliminated: false, selected: false, flashing: null,
-      });
       cnTiles.push({
         id: `cn-${w.id}`, wordId: w.id, text: w.word_cn, zone: 'cn',
         eliminated: false, selected: false, flashing: null,
       });
-      posTiles.push({
-        id: `pos-${w.id}`, wordId: w.id, text: w.part_of_speech || '—', zone: 'pos',
+      enTiles.push({
+        id: `en-${w.id}`, wordId: w.id, text: w.word_en, zone: 'en',
         eliminated: false, selected: false, flashing: null,
       });
     }
-    return [...shuffle(enTiles), ...shuffle(cnTiles), ...shuffle(posTiles)];
+    return { cn: shuffle(cnTiles), en: shuffle(enTiles) };
   }, [words]);
 
-  const [tiles, setTiles] = useState<Tile[]>(initialTiles);
+  const [cnTiles, setCnTiles] = useState<Tile[]>(initialTiles.cn);
+  const [enTiles, setEnTiles] = useState<Tile[]>(initialTiles.en);
+  const [selectedCN, setSelectedCN] = useState<string | null>(null);
+  const [selectedEN, setSelectedEN] = useState<string | null>(null);
+  const [selectedPOS, setSelectedPOS] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
-  const [lastCorrectWords, setLastCorrectWords] = useState<string[]>([]); // 最后匹配正确的 wordId
-  const [wrongWordIds, setWrongWordIds] = useState<string[]>([]); // 错误匹配涉及的 wordId
+  const [lastCorrectWords, setLastCorrectWords] = useState<string[]>([]);
+  const [wrongWordIds, setWrongWordIds] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [finishResult, setFinishResult] = useState<{ success: boolean; rewardStar: number; newUnlockedLevel: number } | null>(null);
 
-  const selectedTiles = tiles.filter(t => t.selected && !t.eliminated);
-  const remainingCount = tiles.filter(t => !t.eliminated).length;
   const totalWords = words.length;
+  const stars = useMemo(() => calcStars(totalWords, wrongCount), [totalWords, wrongCount]);
+  const hasNextLevel = level < 100;
 
-  // 处理点击
-  const handleTileClick = useCallback((tileId: string) => {
-    if (checking) return;
-    setTiles(prev => {
-      const next = [...prev];
-      const idx = next.findIndex(t => t.id === tileId);
-      if (idx === -1 || next[idx].eliminated) return prev;
+  // 用 ref 防止重复触发
+  const checkingRef = useRef(false);
+  const finishedRef = useRef(false);
 
-      const tile = next[idx];
+  // 点击中文/英文 tile
+  const handleTileClick = useCallback((tileId: string, zone: 'cn' | 'en') => {
+    if (checking || completed) return;
+    const tiles = zone === 'cn' ? cnTiles : enTiles;
+    const tile = tiles.find(t => t.id === tileId);
+    if (!tile || tile.eliminated) return;
 
-      // 已选中 → 取消
-      if (tile.selected) {
-        next[idx] = { ...tile, selected: false };
-        return next;
-      }
+    const setter = zone === 'cn' ? setSelectedCN : setSelectedEN;
+    const setTiles = zone === 'cn' ? setCnTiles : setEnTiles;
+    const current = zone === 'cn' ? selectedCN : selectedEN;
+    if (current === tileId) {
+      setter(null);
+      setTiles(prev => prev.map(t => ({ ...t, selected: false })));
+      return;
+    }
+    setTiles(prev => prev.map(t => ({ ...t, selected: t.id === tileId })));
+    setter(tileId);
+  }, [checking, completed, cnTiles, enTiles, selectedCN, selectedEN]);
 
-      // 同 zone 已有选中 → 替换
-      const sameZoneIdx = next.findIndex(t => t.zone === tile.zone && t.selected && !t.eliminated);
-      if (sameZoneIdx >= 0) {
-        next[sameZoneIdx] = { ...next[sameZoneIdx], selected: false };
-      }
+  // 点击词性按钮
+  const handlePOSClick = useCallback((abbr: string) => {
+    if (checking || completed) return;
+    if (!selectedCN || !selectedEN) {
+      toast.warning('请先选择中文和英文');
+      return;
+    }
+    setSelectedPOS(abbr);
+  }, [checking, completed, selectedCN, selectedEN, toast]);
 
-      // 选中当前
-      next[idx] = { ...tile, selected: true };
-      return next;
-    });
-  }, [checking]);
-
-  // 检查匹配（当 3 个 zone 都选中时触发）
-  const tryCheck = useCallback(() => {
-    const selected = tiles.filter(t => t.selected && !t.eliminated);
-    if (selected.length !== 3) return;
-
-    const zones = new Set(selected.map(t => t.zone));
-    if (zones.size !== 3) return; // 必须来自 3 个不同 zone
-
+  // 当三个都选中后，触发检查（用 useEffect 替代 setTimeout，修复连击 bug）
+  useEffect(() => {
+    if (!selectedCN || !selectedEN || !selectedPOS) return;
+    if (checkingRef.current) return;
+    checkingRef.current = true;
     setChecking(true);
 
-    const wordIds = selected.map(t => t.wordId);
-    const isMatch = wordIds.every(id => id === wordIds[0]);
-    const matchedWordId = wordIds[0];
+    const cnTile = cnTiles.find(t => t.id === selectedCN);
+    const enTile = enTiles.find(t => t.id === selectedEN);
+    if (!cnTile || !enTile) {
+      checkingRef.current = false;
+      setChecking(false);
+      return;
+    }
+
+    const cnWord = words.find(w => w.id === cnTile.wordId);
+    if (!cnWord) {
+      checkingRef.current = false;
+      setChecking(false);
+      return;
+    }
+
+    // 判断：中英文是同一单词 + 词性匹配
+    const isSameWord = cnTile.wordId === enTile.wordId;
+    const posMatch = normalizePOS(cnWord.part_of_speech) === posButtonValue(selectedPOS);
+    const isCorrect = isSameWord && posMatch;
 
     // 闪烁动画
-    setTiles(prev => prev.map(t => {
-      if (t.selected && !t.eliminated) {
-        return { ...t, flashing: isMatch ? 'correct' : 'wrong' };
-      }
-      return t;
-    }));
+    const flashStyle: 'correct' | 'wrong' = isCorrect ? 'correct' : 'wrong';
+    setCnTiles(prev => prev.map(t => t.id === selectedCN ? { ...t, flashing: flashStyle } : t));
+    setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, flashing: flashStyle } : t));
 
-    // 600ms 后消除
     setTimeout(() => {
-      setTiles(prev => prev.map(t => {
-        if (t.selected && !t.eliminated) {
-          return { ...t, eliminated: true, selected: false, flashing: null };
-        }
-        return t;
-      }));
-
-      if (isMatch) {
+      if (isCorrect) {
+        // 正确：消除中英文方块
+        setCnTiles(prev => prev.map(t => t.id === selectedCN ? { ...t, eliminated: true, selected: false, flashing: null } : t));
+        setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, eliminated: true, selected: false, flashing: null } : t));
         setCorrectCount(c => c + 1);
-        setLastCorrectWords(prev => {
-          const next = [...prev, matchedWordId];
-          return next.slice(-2); // 只保留最后 2 个
-        });
+        setLastCorrectWords(prev => [...prev, cnTile.wordId].slice(-2));
       } else {
+        // 错误：不消除，只重置选中状态
+        setCnTiles(prev => prev.map(t => t.id === selectedCN ? { ...t, selected: false, flashing: null } : t));
+        setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, selected: false, flashing: null } : t));
         setWrongCount(w => w + 1);
         setWrongWordIds(prev => {
-          const newIds = wordIds.filter(id => !prev.includes(id));
+          const newIds = [cnTile.wordId, enTile.wordId].filter(id => !prev.includes(id));
           return [...prev, ...newIds];
         });
+        if (!isSameWord) {
+          toast.warning('中文和英文不匹配，请重选');
+        } else if (!posMatch) {
+          toast.warning('词性不正确，请重选');
+        }
       }
+      setSelectedCN(null);
+      setSelectedEN(null);
+      setSelectedPOS(null);
+      checkingRef.current = false;
       setChecking(false);
-    }, 600);
-  }, [tiles]);
+    }, isCorrect ? 500 : 800);
+  }, [selectedCN, selectedEN, selectedPOS, cnTiles, enTiles, words, toast]);
 
-  // 自动检查
-  const selectedZoneCount = new Set(selectedTiles.map(t => t.zone)).size;
-  if (selectedZoneCount === 3 && !checking) {
-    // 使用 setTimeout 避免在 render 中 setState
-    setTimeout(() => tryCheck(), 0);
-  }
-
-  // 游戏结束
-  const isFinished = remainingCount === 0 && totalWords > 0;
-  if (isFinished && !checking) {
-    const stars = calcStars(totalWords, wrongCount);
-    const allWordIds = words.map(w => w.id);
-    setTimeout(() => {
+  // 游戏结束检测
+  useEffect(() => {
+    if (completed || finishedRef.current) return;
+    const remaining = cnTiles.filter(t => !t.eliminated).length;
+    if (remaining === 0 && totalWords > 0 && !checking) {
+      finishedRef.current = true;
+      // 调用 onFinish 保存结果
+      const allWordIds = words.map(w => w.id);
       onFinish({
         stars,
         wordIds: allWordIds,
         wrongWordIds,
         lastSelectedWordIds: lastCorrectWords,
+      }).then(res => {
+        setFinishResult(res);
+        setTimeout(() => setCompleted(true), 300);
       });
-    }, 500);
-  }
+    }
+  }, [cnTiles, checking, completed, totalWords, words, stars, wrongWordIds, lastCorrectWords, onFinish]);
 
-  const stars = calcStars(totalWords, wrongCount);
-
-  // 按 zone 分组渲染
-  const renderZone = (zone: Zone) => {
-    const zoneTiles = tiles.filter(t => t.zone === zone);
+  // 渲染方块列
+  const renderTiles = (tiles: Tile[], zone: 'cn' | 'en') => {
     return (
       <div className="flex-1 min-w-0">
         <div className={cn(
-          'text-center py-1.5 rounded-lg mb-2 bg-gradient-to-b text-white text-xs font-bold shadow-sm',
-          ZONE_COLORS[zone],
+          'text-center py-1.5 rounded-lg mb-2 text-white text-xs font-bold shadow-sm',
+          zone === 'cn' ? 'bg-gradient-to-b from-orange-300 to-orange-400' : 'bg-gradient-to-b from-sky-300 to-sky-400',
         )}>
-          {ZONE_LABELS[zone]}
+          {zone === 'cn' ? '中文' : 'English'}
         </div>
         <div className="flex flex-col gap-1.5">
-          {zoneTiles.map(tile => (
+          {tiles.map(tile => (
             <button
               key={tile.id}
               type="button"
               disabled={tile.eliminated || checking}
-              onClick={() => handleTileClick(tile.id)}
+              onClick={() => handleTileClick(tile.id, zone)}
               className={cn(
                 'w-full px-2 py-2.5 rounded-lg border-2 text-sm font-medium transition-all active:scale-95',
                 tile.eliminated && 'opacity-0 scale-50 pointer-events-none h-0 py-0 my-0 border-0',
@@ -222,6 +270,55 @@ export function GamePlayBoard({ level, words, onFinish, onExit }: GamePlayBoardP
       </div>
     );
   };
+
+  // 完成画面
+  if (completed && finishResult) {
+    const isSuccess = finishResult.success;
+    return (
+      <div className="flex flex-col items-center justify-center py-10 px-4">
+        <div className="text-6xl mb-4">{isSuccess ? (stars === 3 ? '🏆' : '🎉') : '🙏'}</div>
+        <h2 className="text-2xl font-bold text-slate-800 mb-3">
+          {isSuccess ? '闯关成功！' : '闯关结束'}
+        </h2>
+        <div className="text-4xl mb-4">
+          {'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}
+        </div>
+        {isSuccess && (
+          <p className="text-sm text-slate-500 mb-1">
+            获得 <span className="text-amber-500 font-bold">{finishResult.rewardStar}</span> 星光值
+          </p>
+        )}
+        <p className="text-xs text-slate-400 mb-6">
+          正确 {correctCount} · 错误 {wrongCount}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onExit}
+            className="px-6 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200"
+          >
+            返回关卡
+          </button>
+          {isSuccess && hasNextLevel && (
+            <button
+              onClick={onNextLevel}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-400 to-emerald-500 text-white text-sm font-bold shadow-md hover:shadow-lg active:scale-95"
+            >
+              下一关 →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 正在结算
+  if (finishedRef.current && !completed) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -247,22 +344,48 @@ export function GamePlayBoard({ level, words, onFinish, onExit }: GamePlayBoardP
       <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mb-3">
         <div
           className="h-full bg-gradient-to-r from-green-400 to-emerald-500 transition-all duration-300"
-          style={{ width: `${((correctCount + wrongCount) / totalWords) * 100}%` }}
+          style={{ width: `${(correctCount / totalWords) * 100}%` }}
         />
       </div>
 
-      {/* 游戏区域：绿草地背景 + 三分区 */}
+      {/* 游戏区域：绿草地背景 + 左右阵营 */}
       <div className="rounded-2xl bg-gradient-to-b from-green-300 to-green-400 p-3 shadow-inner">
-        <div className="flex gap-2 min-h-[300px]">
-          {renderZone('en')}
-          {renderZone('cn')}
-          {renderZone('pos')}
+        <div className="flex gap-3 min-h-[280px]">
+          {renderTiles(cnTiles, 'cn')}
+          {renderTiles(enTiles, 'en')}
+        </div>
+      </div>
+
+      {/* 底部固定词性按钮 */}
+      <div className="mt-3">
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+          {POS_OPTIONS.map(pos => {
+            const isSelectable = !!selectedCN && !!selectedEN;
+            return (
+              <button
+                key={pos.abbr}
+                type="button"
+                disabled={checking || !isSelectable || completed}
+                onClick={() => handlePOSClick(pos.abbr)}
+                className={cn(
+                  'px-1 py-2 rounded-lg border-2 text-xs font-medium transition-all active:scale-95',
+                  selectedPOS === pos.abbr
+                    ? 'bg-purple-400 border-purple-600 text-white scale-105 shadow-md'
+                    : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:border-purple-300',
+                  !isSelectable && 'opacity-50 cursor-not-allowed',
+                )}
+              >
+                <div className="font-bold">{pos.label}</div>
+                <div className="text-[10px] opacity-75">{pos.abbr}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* 底部提示 */}
-      <p className="text-center text-xs text-slate-400 mt-3">
-        从三列中各选一个属于同一单词的方块，正确消除得分，错误也会消除
+      <p className="text-center text-xs text-slate-400 mt-2">
+        先选中文和英文，再选词性。正确消除，错误提醒
       </p>
     </div>
   );
