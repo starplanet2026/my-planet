@@ -55,6 +55,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   sort_order: number;
+  is_default?: boolean;
 }
 
 export interface TaskTemplate {

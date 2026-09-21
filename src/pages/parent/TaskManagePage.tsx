@@ -15,7 +15,7 @@ import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square } from 'lucide-react';
 import type { Task, TaskCategory } from '../../api/types';
-import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks } from '../../api/tasks';
+import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks } from '../../api/tasks';
 
 // 周几标签（0=周日, 1=周一...6=周六）
 const WEEKDAY_LABELS: { value: number; label: string }[] = [
@@ -155,6 +155,10 @@ export function TaskManagePage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    if (deleteTarget.is_default) {
+      toast.warning('默认任务不可删除');
+      return;
+    }
     try {
       await deleteTask(deleteTarget.id);
       await refresh();
@@ -316,6 +320,29 @@ export function TaskManagePage() {
     }
   };
 
+  const [seeding, setSeeding] = useState(false);
+
+  const handleSeedDefaults = async () => {
+    if (!family?.id || !parentMember?.id) {
+      toast.error('家庭信息缺失');
+      return;
+    }
+    setSeeding(true);
+    try {
+      const res = await seedDefaultTasks(family.id, parentMember.id);
+      if (res.success) {
+        toast.success(res.message);
+        await refresh();
+      } else {
+        toast.warning(res.message);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '导入失败');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
@@ -328,9 +355,14 @@ export function TaskManagePage() {
           </button>
           <h1 className="text-xl font-bold">任务管理</h1>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> 新建
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleSeedDefaults} disabled={seeding}>
+            <Upload className="w-4 h-4" /> 导入成就清单
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="w-4 h-4" /> 新建
+          </Button>
+        </div>
       </div>
 
       {loading && tasks.length === 0 ? (
@@ -816,7 +848,9 @@ function TaskRow({
           </button>
           <button
             onClick={onDelete}
-            className="p-2 text-slate-400 hover:text-red-500"
+            disabled={task.is_default}
+            className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+            title={task.is_default ? '默认任务不可删除' : '删除'}
           >
             <Trash2 className="w-4 h-4" />
           </button>
