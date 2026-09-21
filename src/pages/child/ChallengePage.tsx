@@ -44,10 +44,10 @@ export function ChallengePage() {
 
   // 跨页面/Tab 保活：store 保存活动题集与答题进度，回到此页自动恢复
   const activeSet = useChallengeUiStore(s => s.activeSet);
-  const storeStarted = useChallengeUiStore(s => s.started);
   const snapshot = useChallengeUiStore(s => s.snapshot);
   const setActive = useChallengeUiStore(s => s.setActive);
-  const clearChallenge = useChallengeUiStore(s => s.clear);
+  const setSnapshot = useChallengeUiStore(s => s.setSnapshot);
+  const clearActive = useChallengeUiStore(s => s.clearActive);
 
   const [sets, setSets] = useState<ChallengeSet[]>([]);
   // 每个题集的挑战进度：setId → { total, mastered }
@@ -84,9 +84,9 @@ export function ChallengePage() {
       <ChallengePlayer
         set={activeSet}
         childId={child?.id ?? ''}
-        started={storeStarted}
+        started={snapshot?.started ?? false}
         restoreSnapshot={snapshot}
-        onBack={() => { clearChallenge(); }}
+        onBack={() => { clearActive(); }}
         onDone={refreshMembers}
       />
     );
@@ -108,7 +108,16 @@ export function ChallengePage() {
             return (
               <div
                 key={set.id}
-                onClick={() => setActive(set, false)}
+                onClick={() => {
+                  // 如果该题集有保存的进度（snapshot.setId 匹配），直接恢复；
+                  // 否则清空旧快照，开始新挑战
+                  if (snapshot && snapshot.setId === set.id) {
+                    setActive(set);
+                  } else {
+                    setSnapshot(null);
+                    setActive(set);
+                  }
+                }}
                 className={cn(
                   'relative aspect-square rounded-2xl border-2 border-emerald-400 bg-white',
                   'cursor-pointer hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-all',
@@ -166,9 +175,9 @@ function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = 
   const setStoreActive = useChallengeUiStore(s => s.setActive);
   const setStoreSnapshot = useChallengeUiStore(s => s.setSnapshot);
   const patchStoreSnapshot = useChallengeUiStore(s => s.patchSnapshot);
-  const clearChallenge = useChallengeUiStore(s => s.clear);
+  const clearAll = useChallengeUiStore(s => s.clear);
 
-  // 有快照则直接恢复，避免重新拉取（已答对的题会在 fetchActiveQuestions 中被过滤，破坏 idx）
+  // 有快照则直接恢复，避免重新拉取（中途退出再进入用保存的列表+idx，不重新过滤）
   const [questions, setQuestions] = useState<Question[]>(
     restoreSnapshot && restoreSnapshot.type === 'question' ? restoreSnapshot.questions : []
   );
@@ -182,6 +191,9 @@ function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = 
 
   // 记录是否已从快照恢复（避免首次 useEffect 覆盖快照数据）
   const restoredRef = useRef(!!restoreSnapshot);
+  // 记录快照是否已初始化（首次设置含 questions/words 的完整快照；
+  // 后续 questions 变化只 patch 数组，不覆盖 idx/results 等进度字段）
+  const snapshotInitRef = useRef(false);
 
   useEffect(() => {
     // 已从快照恢复，无需重新拉取；重做时 reloadKey 变化才重新拉取
@@ -213,49 +225,76 @@ function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = 
     })();
   }, [set.id, childId, reloadKey]);
 
-  // 持久化：当前题集 + started 状态到 store，切换页面后可恢复
+  // 持久化：activeSet 到 store（切 Tab 回来时直接进答题界面）
   useEffect(() => {
-    setStoreActive(set, started);
-  }, [set, started, setStoreActive]);
+    setStoreActive(set);
+  }, [set, setStoreActive]);
 
-  // 数据加载完成后，把完整快照（含 questions/words 数组）写入 store，
-  // 后续进度变化由 QuestionPlayer/WordPlayer 通过 patch 更新
+  // started 变化时 patch 到 snapshot
+  useEffect(() => {
+    patchStoreSnapshot({ started });
+  }, [started, patchStoreSnapshot]);
+
+  // 数据加载完成后写入快照：
+  // - 首次：写入完整快照（含 questions/words + 初始进度）
+  // - 后续 questions 变化（重做）：只 patch questions 数组，不覆盖 idx/results
   useEffect(() => {
     if (loading) return;
     if (set.type === 'word_vocab') {
       if (words.length === 0) return;
-      setStoreSnapshot({
-        type: 'word',
-        questions: [],
-        words,
-        idx: restoreSnapshot?.idx ?? 0,
-        results: restoreSnapshot?.results ?? [],
-        totalReward: restoreSnapshot?.totalReward ?? 0,
-        totalBonus: restoreSnapshot?.totalBonus ?? 0,
-        showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
-        stage: restoreSnapshot?.stage ?? 'familiar',
-        quizType: restoreSnapshot?.quizType ?? 'en2cn',
-      });
+      if (!snapshotInitRef.current) {
+        snapshotInitRef.current = true;
+        setStoreSnapshot({
+          setId: set.id,
+          started,
+          type: 'word',
+          questions: [],
+          words,
+          idx: restoreSnapshot?.idx ?? 0,
+          results: restoreSnapshot?.results ?? [],
+          totalReward: restoreSnapshot?.totalReward ?? 0,
+          totalBonus: restoreSnapshot?.totalBonus ?? 0,
+          showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
+          stage: restoreSnapshot?.stage ?? 'familiar',
+          quizType: restoreSnapshot?.quizType ?? 'en2cn',
+        });
+      } else {
+        // 重做后只更新 words 数组
+        patchStoreSnapshot({ words, idx: 0, results: [], totalReward: 0, totalBonus: 0, showChallengeResult: false });
+      }
     } else {
       if (questions.length === 0) return;
-      setStoreSnapshot({
-        type: 'question',
-        questions,
-        words: [],
-        idx: restoreSnapshot?.idx ?? 0,
-        results: restoreSnapshot?.results ?? [],
-        totalReward: restoreSnapshot?.totalReward ?? 0,
-        totalBonus: restoreSnapshot?.totalBonus ?? 0,
-        showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
-        stage: 'familiar',
-        quizType: 'en2cn',
-      });
+      if (!snapshotInitRef.current) {
+        snapshotInitRef.current = true;
+        setStoreSnapshot({
+          setId: set.id,
+          started,
+          type: 'question',
+          questions,
+          words: [],
+          idx: restoreSnapshot?.idx ?? 0,
+          results: restoreSnapshot?.results ?? [],
+          totalReward: restoreSnapshot?.totalReward ?? 0,
+          totalBonus: restoreSnapshot?.totalBonus ?? 0,
+          showChallengeResult: restoreSnapshot?.showChallengeResult ?? false,
+          stage: 'familiar',
+          quizType: 'en2cn',
+        });
+      } else {
+        // 重做后只更新 questions 数组 + 重置进度（QuestionPlayer 的 onRedo 已重置本地 state）
+        patchStoreSnapshot({ questions, idx: 0, results: [], totalReward: 0, totalBonus: 0, showChallengeResult: false });
+      }
     }
-  }, [loading, questions, words, set, setStoreSnapshot]);
+  }, [loading, questions, words, set, setStoreSnapshot, patchStoreSnapshot]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 返回/退出时清空 store（由父组件 onBack 触发 clear）
+  // 中途退出（点返回）：只清 activeSet 回列表，保留 snapshot（下次进入继续）
   const handleBack = () => {
-    clearChallenge();
+    onBack();
+  };
+
+  // 挑战结束/全部掌握：清空全部（下次进入重新过滤，只出现错题）
+  const handleChallengeEnd = () => {
+    clearAll();
     onBack();
   };
 
@@ -291,15 +330,14 @@ function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = 
 
   // 选择题/数学题：直接顺序做题，不再选难度
   if (questions.length === 0) {
-    // 所有题都已掌握 → 挑战完成
+    // 所有题都已掌握 → 挑战完成，清空进度
     return (
       <ChallengeAllMastered
         set={set}
         childId={childId}
-        onBack={handleBack}
+        onBack={handleChallengeEnd}
         onRedo={() => {
           setStarted(true);
-          setStoreActive(set, true);
           setReloadKey(k => k + 1);
         }}
       />
@@ -314,6 +352,7 @@ function ChallengePlayer({ set, childId, onBack, onDone, started: startedProp = 
       onBack={handleBack}
       onDone={onDone}
       onChallengeEnd={() => setReloadKey(k => k + 1)}
+      onChallengeFinish={handleChallengeEnd}
       restoreSnapshot={restoreSnapshot && restoreSnapshot.type === 'question' ? restoreSnapshot : null}
       onSnapshot={patchStoreSnapshot}
     />
@@ -382,9 +421,9 @@ function KnowledgePreview({ set, onStart, onBack }: {
 // ====== 难度选择已移除：新流程直接顺序做题，做完一轮显示正确率 ======
 
 // ====== 选择题/数学题 答题（新流程：顺序做题→挑战结束页→重做错题） ======
-function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEnd, restoreSnapshot = null, onSnapshot }: {
+function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEnd, onChallengeFinish, restoreSnapshot = null, onSnapshot }: {
   set: ChallengeSet; questions: Question[]; childId: string;
-  onBack: () => void; onDone: () => void; onChallengeEnd: () => void;
+  onBack: () => void; onDone: () => void; onChallengeEnd: () => void; onChallengeFinish: () => void;
   restoreSnapshot: import('../../store/challengeUiStore').PlayerSnapshot | null;
   onSnapshot: (patch: Partial<import('../../store/challengeUiStore').PlayerSnapshot>) => void;
 }) {
@@ -457,9 +496,9 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
         totalCount={questions.length}
         totalReward={totalReward}
         totalBonus={totalBonus}
-        onBack={onBack}
+        onBack={onChallengeFinish}
         onRedo={() => {
-          // 重置本轮状态，触发父组件 reload（自动过滤已掌握）
+          // 重置本轮状态，触发父组件 reload（fetchActiveQuestions 自动过滤已掌握，只出现错题）
           setIdx(0);
           setAnswer('');
           setShowResult(false);
@@ -467,6 +506,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
           setTotalReward(0);
           setTotalBonus(0);
           setShowChallengeResult(false);
+          onChallengeEnd();
         }}
         onDone={onDone}
       />
