@@ -412,14 +412,9 @@ export function PetShopModal({
                 </div>
               );
             }
-            // 住所：点击进详情
+            // 住所：外层直接购买
             return (
-              <button
-                key={item.id}
-                onClick={() => setDetail(item)}
-                disabled={soldOut}
-                className={cardCls}
-              >
+              <div key={item.id} className={cardCls}>
                 {/* 左上角分类标签 */}
                 {effect && (
                   <span className={cn('absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold', effect.badgeCls)}>
@@ -441,10 +436,18 @@ export function PetShopModal({
                     </span>
                   )}
                 </div>
-                {soldOut && (
+                {soldOut ? (
                   <span className="text-[10px] text-slate-400">已售罄</span>
+                ) : (
+                  <button
+                    onClick={() => handleBuy(item)}
+                    disabled={buyingItem === item.id}
+                    className="w-full py-1 rounded-md bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95 transition-colors disabled:opacity-50"
+                  >
+                    {buyingItem === item.id ? '购买中…' : '购买'}
+                  </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
