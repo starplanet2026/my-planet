@@ -303,6 +303,7 @@ export interface PetShopItem {
   daily_decay_base: number;
   upgrade_coin_reward: number;
   upgrade_percent: number;
+  trait: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -403,6 +404,17 @@ export interface Pet {
   coin_balance: number;
   is_sick: boolean;
   pending_levelup: boolean;
+  trait: string | null;
+  days_without_feed: number;
+  days_without_clean: number;
+  days_without_care: number;
+  has_stomach_issue: boolean;
+  has_skin_issue: boolean;
+  has_severe_illness: boolean;
+  happiness_rounds: number;
+  is_studying: boolean;
+  study_start_date: string | null;
+  study_total_star: number;
   last_check_at: string;
   created_at: string;
 }
@@ -529,4 +541,92 @@ export function getLevelConfig(level: number): LevelRewardConfig {
   if (level >= 41 && level <= 60) return { wordCount: 10, baseReward: 10 };
   if (level >= 61 && level <= 80) return { wordCount: 12, baseReward: 12 };
   return { wordCount: 15, baseReward: 15 }; // 81-100
+}
+
+// ====== 萌宠星球：特质 / 托管 / 进修 ======
+
+export type PetTrait =
+  | '体质强健' | '爱干净' | '大胃好养' | '乐天派'
+  | '娇弱易感' | '容易脏' | '胃口消耗快' | '平平无奇';
+
+export const TRAIT_DESC: Record<string, string> = {
+  '体质强健': '体力消耗速度-20%，清洁消耗速度-20%',
+  '爱干净': '清洁消耗速度-20%',
+  '大胃好养': '体力消耗速度-20%',
+  '乐天派': '健康恢复速度+20%',
+  '娇弱易感': '体力消耗速度+20%，清洁消耗速度+20%',
+  '容易脏': '清洁消耗速度+20%',
+  '胃口消耗快': '体力消耗速度+20%',
+  '平平无奇': '无特殊修正',
+};
+
+// 经验值需求表（按稀有度 + 等级）
+const EXP_TABLE: Record<PetRarity, Record<number, number>> = {
+  common: { 1:20,2:40,3:60,4:80,5:100,6:140,7:170,8:190,9:220 },
+  rare:   { 1:20,2:40,3:60,4:80,5:100,6:120,7:140,8:160,9:180,10:200,11:310,12:340,13:360,14:390,15:420,16:450,17:480,18:500,19:530 },
+  epic:   { 1:20,2:40,3:60,4:80,5:100,6:120,7:140,8:160,9:180,10:200,11:310,12:340,13:360,14:390,15:420,16:450,17:480,18:500,19:530,20:560,21:590,22:620,23:640,24:670 },
+};
+
+export function expNeeded(level: number, rarity: PetRarity): number {
+  return EXP_TABLE[rarity]?.[level] ?? 999999;
+}
+
+// 进修每日星光
+export function studyDailyStar(rarity: PetRarity): number {
+  return rarity === 'common' ? 2 : rarity === 'rare' ? 5 : 10;
+}
+
+// 托管卡类型
+export type BoardingCardType = 'daily' | 'weekly' | 'monthly';
+
+export interface BoardingStatus {
+  has_active_card: boolean;
+  card_end_date: string | null;
+  today_boarded_pet_ids: string[];
+}
+
+// 进修宠物信息
+export interface StudyPet {
+  pet_id: string;
+  name: string;
+  emoji: string | null;
+  image_url: string | null;
+  rarity: PetRarity;
+  level: number;
+  max_level: number;
+  study_days: number;
+  daily_star: number;
+  pending_star: number;
+  total_star: number;
+}
+
+export interface BuyBoardingCardResult {
+  success: boolean;
+  message: string;
+  new_star: number;
+  end_date: string | null;
+}
+
+export interface BoardPetsResult {
+  success: boolean;
+  message: string;
+  boarded_count: number;
+}
+
+export interface HealSevereResult {
+  success: boolean;
+  message: string;
+  new_star: number;
+}
+
+export interface SendStudyResult {
+  success: boolean;
+  message: string;
+}
+
+export interface ClaimStudyResult {
+  success: boolean;
+  message: string;
+  total_claimed: number;
+  new_star: number;
 }

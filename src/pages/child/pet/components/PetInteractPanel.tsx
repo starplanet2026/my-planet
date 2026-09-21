@@ -4,8 +4,8 @@ import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { cn } from '../../../../lib/utils';
 import { X } from 'lucide-react';
-import { interactWithPet, checkPet, claimPetCoins, fetchPetInventory } from '../../../../api/pets';
-import type { Pet, PetInventory, PetSubcategory } from '../../../../api/types';
+import { interactWithPet, checkPet, claimPetCoins, fetchPetInventory, healSevereIllness } from '../../../../api/pets';
+import type { Pet, PetInventory, PetSubcategory, TRAIT_DESC } from '../../../../api/types';
 
 const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food',
@@ -69,10 +69,15 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
     }
     setActing(action);
     try {
-      // interact_with_pet 现在返回更新后的宠物完整行（含 exp / level）
+      const prevCoin = currentPet.coin_balance || 0;
       const updated = await interactWithPet(childId, currentPet.id, action, item.item_id);
-      if (updated.level > currentPet.level) {
+      // 三项填满触发日产金
+      if ((updated.coin_balance || 0) > prevCoin) {
+        toast.success('获得今日金币 💰');
+      } else if (updated.level > currentPet.level) {
         toast.success(`升级！现在 Lv.${updated.level}`);
+      } else if (action === 'play') {
+        toast.success(`玩耍成功 +10经验（今日 ${updated.happiness_rounds || 0}/3 轮）`);
       } else {
         toast.success('互动成功');
       }
@@ -87,35 +92,97 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
     }
   };
 
+  // 重症治疗：去宠物医院
+  const handleHealSevere = async () => {
+    setActing('heal_severe');
+    try {
+      const cost = (currentPet.level || 1) * 2;
+      const result = await healSevereIllness(childId, currentPet.id);
+      if (result.success) {
+        toast.success(`治疗成功！花费 ${cost} 星光值`);
+        refreshMembers();
+        const updated = await checkPet(currentPet.id);
+        setCurrentPet(updated);
+        onUpdated(updated);
+      } else {
+        toast.error(result.message || '治疗失败');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '治疗失败');
+    } finally {
+      setActing(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
       <div
         className="bg-white rounded-3xl shadow-2xl w-[90vw] max-w-sm p-4 space-y-3"
         onClick={e => e.stopPropagation()}
       >
-        {/* 头部：名字 + 等级 + 关闭 */}
+        {/* 头部：名字 + 等级 + 特质 + 关闭 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-800 text-base">{currentPet.name}</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">Lv.{currentPet.level}</span>
+            {currentPet.trait && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium"
+                title={TRAIT_DESC[currentPet.trait] || ''}
+              >
+                🌟 {currentPet.trait}
+              </span>
+            )}
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-100 text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* 疾病提示 */}
+        {(currentPet.has_stomach_issue || currentPet.has_skin_issue || currentPet.has_severe_illness) && (
+          <div className="space-y-1">
+            {currentPet.has_stomach_issue && (
+              <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">
+                🤢 肠胃不适：连续{currentPet.days_without_feed}天未喂食，需肠胃药治疗
+              </div>
+            )}
+            {currentPet.has_skin_issue && (
+              <div className="text-xs text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
+                🐛 体表虫症：连续{currentPet.days_without_clean}天未清洁，需驱虫药治疗
+              </div>
+            )}
+            {currentPet.has_severe_illness && (
+              <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg flex items-center justify-between">
+                <span>🏥 重症：连续{currentPet.days_without_care}天未照料，需去宠物医院</span>
+                <button
+                  onClick={handleHealSevere}
+                  disabled={acting === 'heal_severe'}
+                  className="px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold disabled:opacity-50 active:scale-95"
+                >
+                  治疗 ({(currentPet.level || 1) * 2}⭐)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 4 板块：每板块上方血条 + 下方按钮 */}
         <div className="grid grid-cols-2 gap-3">
           {SECTIONS.map(section => {
             const item = getItem(section.key);
             const statValue = currentPet[section.stat];
-            const disabled = !!acting || (section.key === 'heal' && !currentPet.is_sick);
+            const isSevere = currentPet.has_severe_illness;
+            const disabled = !!acting
+              || (section.key === 'heal' && !currentPet.has_stomach_issue && !currentPet.has_skin_issue)
+              || (section.key === 'heal' && isSevere);
+            const playDisabled = section.key === 'play' && (currentPet.happiness_rounds || 0) >= 3;
             return (
               <div
                 key={section.key}
                 className={cn(
                   'rounded-2xl p-3 space-y-2 border-2 transition-colors',
-                  disabled && section.key === 'heal' && !currentPet.is_sick
+                  (disabled || playDisabled)
                     ? 'border-slate-100 bg-slate-50'
                     : 'border-slate-100 bg-white'
                 )}
@@ -125,6 +192,9 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
                   <span className="flex items-center gap-1 text-xs font-medium text-slate-600">
                     <span>{section.icon}</span>
                     {section.label}
+                    {section.key === 'play' && (
+                      <span className="text-[9px] text-slate-400">({currentPet.happiness_rounds || 0}/3)</span>
+                    )}
                   </span>
                   <span className="text-xs font-bold text-slate-500">{Math.round(statValue)}</span>
                 </div>
@@ -133,10 +203,10 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
                 {/* 按钮 */}
                 <button
                   onClick={() => handleInteract(section.key)}
-                  disabled={disabled}
+                  disabled={disabled || playDisabled}
                   className={cn(
                     'w-full py-2 rounded-xl text-xs font-bold transition-colors active:scale-95',
-                    disabled ? 'bg-slate-100 text-slate-300' : section.btnColor,
+                    (disabled || playDisabled) ? 'bg-slate-100 text-slate-300' : section.btnColor,
                   )}
                 >
                   {acting === section.key ? '...' : section.btnLabel}
@@ -148,6 +218,11 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
             );
           })}
         </div>
+
+        {/* 心情提示 */}
+        <p className="text-[10px] text-slate-400 text-center">
+          和小狗玩耍填满心情条，+10经验。心情每1小时重置，一天最多可玩耍3轮。
+        </p>
 
         {/* 领取金币 */}
         {currentPet.coin_balance >= 1 && (

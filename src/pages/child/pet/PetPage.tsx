@@ -7,8 +7,8 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet } from '../../../api/pets';
-import type { Pet, DogHouse, PetBackground, PetRarity } from '../../../api/types';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight } from '../../../api/pets';
+import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, TRAIT_DESC, expNeeded } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
 import { TopActionBar } from './components/TopActionBar';
 import { PetShopModal } from './components/PetShopModal';
@@ -18,6 +18,7 @@ import { PetDexModal } from './components/PetDexModal';
 import { WordMatchGame } from './components/WordMatchGame';
 import { AdoptPetModal } from './components/AdoptPetModal';
 import { StudyCompanionModal } from './components/StudyCompanionModal';
+import { PetBoardingModal } from './components/PetBoardingModal';
 
 // 稀有度徽章配置
 const RARITY_BADGE: Record<PetRarity, { label: string; cls: string }> = {
@@ -26,17 +27,11 @@ const RARITY_BADGE: Record<PetRarity, { label: string; cls: string }> = {
   epic: { label: '史诗', cls: 'bg-purple-100 text-purple-600' },
 };
 
-// 根据满级推断稀有度（common=3, rare=5, epic=7）—— 兜底，优先使用 pet.rarity
+// 根据满级推断稀有度（兜底，优先使用 pet.rarity）
 function inferRarity(maxLevel: number): PetRarity {
-  if (maxLevel >= 7) return 'epic';
-  if (maxLevel >= 5) return 'rare';
+  if (maxLevel >= 25) return 'epic';
+  if (maxLevel >= 20) return 'rare';
   return 'common';
-}
-
-// 经验值需求：L1=100, L2=150, L3=200, L4=350, L5=500, L6=700, L7=900
-function expNeeded(level: number): number {
-  const table: Record<number, number> = { 1: 100, 2: 150, 3: 200, 4: 350, 5: 500, 6: 700, 7: 900 };
-  return table[level] || 900;
 }
 
 type PetModal = 'shop' | 'inventory' | 'game' | 'store' | null;
@@ -63,6 +58,7 @@ export function PetPage() {
   const [showAdopt, setShowAdopt] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
+  const [showBoarding, setShowBoarding] = useState(false);
   const [evolvingPetId, setEvolvingPetId] = useState<string | null>(null);
   const [renamingPetId, setRenamingPetId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -70,6 +66,9 @@ export function PetPage() {
   const [bgImage, setBgImage] = useState(() => localStorage.getItem('pet-bg') || 'default');
   const [backgrounds, setBackgrounds] = useState<PetBackground[]>([]);
   const [bgLoading, setBgLoading] = useState(false);
+  // 进修宠物列表（我的宠物店弹窗）
+  const [studyPets, setStudyPets] = useState<StudyPet[]>([]);
+  const [studyLoading, setStudyLoading] = useState(false);
   // 隐藏的宠物 ID 集合（"回家"的宠物）；从 localStorage 恢复
   const [hiddenPetIds, setHiddenPetIds] = useState<Set<string>>(() => {
     try {
@@ -106,6 +105,53 @@ export function PetPage() {
       toast.error(e?.message ?? '进化失败');
     } finally {
       setEvolvingPetId(null);
+    }
+  };
+
+  // 送去进修
+  const handleSendStudy = async (petId: string) => {
+    if (!child) return;
+    try {
+      const result = await sendPetToStudy(child.id, petId);
+      if (result.success) {
+        toast.success(result.message || '已送去进修');
+        await refreshData();
+      } else {
+        toast.error(result.message || '操作失败');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '操作失败');
+    }
+  };
+
+  // 加载进修宠物列表
+  const loadStudyPets = useCallback(async () => {
+    if (!child) return;
+    setStudyLoading(true);
+    try {
+      const data = await getStudyPets(child.id);
+      setStudyPets(data);
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载失败');
+    } finally {
+      setStudyLoading(false);
+    }
+  }, [child?.id]);
+
+  // 领取进修星光
+  const handleClaimStudy = async () => {
+    if (!child) return;
+    try {
+      const result = await claimStudyStarlight(child.id);
+      if (result.success) {
+        toast.success(result.message || '领取成功');
+        await refreshMembers();
+        await loadStudyPets();
+      } else {
+        toast.info(result.message || '暂无可领取星光');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '领取失败');
     }
   };
 
@@ -165,10 +211,17 @@ export function PetPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // 打开宠物店弹窗时加载进修宠物列表
+  useEffect(() => {
+    if (activeModal === 'store') {
+      loadStudyPets();
+    }
+  }, [activeModal, loadStudyPets]);
+
   if (loading) return <Loading />;
 
   // 弹窗打开时隐藏所有外层 icon
-  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList;
+  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding;
 
   const base = import.meta.env.BASE_URL;
   // 菜单图标：使用圆角矩形裁剪 + object-cover 去除 jpg 白边
@@ -217,6 +270,13 @@ export function PetPage() {
           >
             <Calendar className="w-4 h-4" />
             <span className="text-xs font-medium">签到</span>
+          </button>
+          <button
+            onClick={() => setShowBoarding(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-indigo-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+          >
+            <Store className="w-4 h-4" />
+            <span className="text-xs font-medium">托管</span>
           </button>
         </div>
       )}
@@ -326,17 +386,76 @@ export function PetPage() {
       )}
       {activeModal === 'store' && (
         <Modal open onClose={() => setActiveModal(null)} title="我的宠物店" size="md">
-          <div className="text-center py-10">
-            <div className="text-6xl mb-4">🏪</div>
-            <h3 className="text-xl font-bold text-slate-700 mb-2">我的宠物店</h3>
-            <p className="text-sm text-slate-400 max-w-xs mx-auto">
-              集齐 10 只满级宠物即可解锁宠物店建设功能
-            </p>
-            <p className="text-xs text-slate-300 mt-4">
+          {/* 顶部：宠物店建设进度 */}
+          <div className="text-center py-4 border-b border-slate-100">
+            <div className="text-5xl mb-2">🏪</div>
+            <p className="text-sm text-slate-500">集齐 10 只满级宠物即可解锁宠物店建设功能</p>
+            <p className="text-xs text-slate-400 mt-1">
               当前满级宠物：{pets.filter(p => p.level >= p.max_level).length} / 10
             </p>
           </div>
+
+          {/* 进修宠物列表 */}
+          <div className="py-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-bold text-slate-700">📚 进修中的宠物</h4>
+              {studyPets.some(p => p.pending_star > 0) && (
+                <button
+                  onClick={handleClaimStudy}
+                  className="px-3 py-1 rounded-lg bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95"
+                >
+                  领取星光
+                </button>
+              )}
+            </div>
+
+            {studyLoading ? (
+              <div className="text-center py-6 text-sm text-slate-400">加载中...</div>
+            ) : studyPets.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-slate-400">暂无进修宠物</p>
+                <p className="text-xs text-slate-300 mt-1">满级宠物可送去进修，被动产出星光值</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {studyPets.map(sp => (
+                  <div key={sp.pet_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 bg-white">
+                    <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-amber-50 overflow-hidden">
+                      {sp.image_url ? (
+                        <img src={sp.image_url} alt={sp.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl">{sp.emoji || '🐾'}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-slate-700 truncate">{sp.name}</span>
+                        <span className={cn('text-[9px] px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[sp.rarity].cls)}>
+                          {RARITY_BADGE[sp.rarity].label}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">进修 {sp.study_days} 天 · {sp.daily_star}⭐/天</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-amber-500">累计 {Math.floor(sp.total_star)}⭐</p>
+                      {sp.pending_star > 0 && (
+                        <p className="text-[10px] text-emerald-500">待领 {Math.floor(sp.pending_star)}⭐</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </Modal>
+      )}
+
+      {/* 托管弹窗 */}
+      {showBoarding && (
+        <PetBoardingModal
+          onClose={() => setShowBoarding(false)}
+          onBoarded={() => { refreshData(); refreshMembers(); }}
+        />
       )}
 
       {/* 我的宠物弹窗：查看已领养宠物列表 + 出来玩/回家 */}
@@ -361,7 +480,7 @@ export function PetPage() {
                 const evolveCost = rarity === 'common' ? 150 : 400;
                 const evolveTarget: 'rare' | 'epic' = rarity === 'common' ? 'rare' : 'epic';
                 const evolveLabel = rarity === 'common' ? '进化为稀有' : '进化为史诗';
-                const need = expNeeded(pet.level);
+                const need = expNeeded(pet.level, rarity);
                 return (
                   <div
                     key={pet.id}
@@ -419,9 +538,14 @@ export function PetPage() {
                             </span>
                             <span className="text-[10px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">Lv.{pet.level}/{pet.max_level}</span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
                             <span>{pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
                             <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
+                            {pet.trait && (
+                              <span className="text-emerald-600 bg-emerald-50 px-1 rounded" title={TRAIT_DESC[pet.trait] || ''}>
+                                🌟 {pet.trait}
+                              </span>
+                            )}
                           </div>
                           {/* 经验条 */}
                           <div className="flex items-center gap-1.5 mt-1">
@@ -465,6 +589,19 @@ export function PetPage() {
                           >
                             {evolvingPetId === pet.id ? '进化中...' : `✨ ${evolveLabel} (${evolveCost}⭐)`}
                           </button>
+                        )}
+                        {isMaxLevel && !pet.is_studying && (
+                          <button
+                            onClick={() => handleSendStudy(pet.id)}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-medium hover:bg-indigo-600 active:scale-95 whitespace-nowrap"
+                          >
+                            📚 送去进修
+                          </button>
+                        )}
+                        {pet.is_studying && (
+                          <span className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-500 text-xs font-medium whitespace-nowrap">
+                            📚 进修中
+                          </span>
                         )}
                         <button
                           onClick={() => { setRenamingPetId(pet.id); setNewName(pet.name); }}

@@ -14,6 +14,7 @@ import {
   buyPetItem,
   updatePetInfo,
   buyDoghouseUpgrade,
+  buyBoardingCard,
 } from '../../../../api/pets';
 import type {
   PetShopItem,
@@ -21,6 +22,7 @@ import type {
   PetSubcategory,
   PetRarity,
   Pet,
+  BoardingCardType,
 } from '../../../../api/types';
 
 // 一级 tab：宠物 / 用品
@@ -197,6 +199,31 @@ export function PetShopModal({
         await refreshMembers();
         loadItems();
         toast.success(result.message || '狗窝扩容成功');
+        setDetail(null);
+        onBought();
+        return;
+      }
+
+      // 托管卡：按时间生效，不进背包
+      if (item.type === 'foster') {
+        const cardMap: Record<string, BoardingCardType> = {
+          foster_daily: 'daily',
+          foster_weekly: 'weekly',
+          foster_monthly: 'monthly',
+        };
+        const cardType = cardMap[item.id];
+        if (!cardType) {
+          toast.error('未知的托管卡类型');
+          return;
+        }
+        const result = await buyBoardingCard(childId, cardType);
+        if (!result.success) {
+          toast.error(result.message || '购买失败');
+          return;
+        }
+        await refreshMembers();
+        loadItems();
+        toast.success(result.message || '托管卡购买成功');
         setDetail(null);
         onBought();
         return;

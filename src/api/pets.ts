@@ -6,6 +6,8 @@ import type {
   CheckinResult, UpgradeDogHouseResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
   PetBackground,
   GameLevelResult, GameWordStat, FinishGameLevelResult,
+  BoardingStatus, StudyPet, BoardingCardType,
+  BuyBoardingCardResult, BoardPetsResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
 } from './types';
 
 // ====== 商店商品 ======
@@ -587,4 +589,70 @@ export async function fetchStudyRecords(memberId: string, limit = 50): Promise<S
   });
   if (error) throw error;
   return (data ?? []) as StudyRecord[];
+}
+
+// ====== 托管系统 ======
+
+export async function buyBoardingCard(memberId: string, cardType: BoardingCardType): Promise<BuyBoardingCardResult> {
+  const { data, error } = await supabase.rpc('buy_boarding_card', {
+    p_member_id: memberId,
+    p_card_type: cardType,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as BuyBoardingCardResult;
+}
+
+export async function boardPets(memberId: string, petIds: string[]): Promise<BoardPetsResult> {
+  const { data, error } = await supabase.rpc('board_pets', {
+    p_member_id: memberId,
+    p_pet_ids: petIds,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as BoardPetsResult;
+}
+
+export async function getBoardingStatus(memberId: string): Promise<BoardingStatus> {
+  const { data, error } = await supabase.rpc('get_boarding_status', { p_member_id: memberId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as BoardingStatus;
+}
+
+// ====== 重症治疗 ======
+
+export async function healSevereIllness(memberId: string, petId: string): Promise<HealSevereResult> {
+  const { data, error } = await supabase.rpc('heal_severe_illness', {
+    p_member_id: memberId,
+    p_pet_id: petId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as HealSevereResult;
+}
+
+// ====== 进修系统 ======
+
+export async function sendPetToStudy(memberId: string, petId: string): Promise<SendStudyResult> {
+  const { data, error } = await supabase.rpc('send_pet_to_study', {
+    p_member_id: memberId,
+    p_pet_id: petId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as SendStudyResult;
+}
+
+export async function getStudyPets(memberId: string): Promise<StudyPet[]> {
+  const { data, error } = await supabase.rpc('get_study_pets', { p_member_id: memberId });
+  if (error) throw error;
+  return (data ?? []) as StudyPet[];
+}
+
+export async function claimStudyStarlight(memberId: string): Promise<ClaimStudyResult> {
+  const { data, error } = await supabase.rpc('claim_study_starlight', { p_member_id: memberId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as ClaimStudyResult;
 }
