@@ -592,11 +592,16 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
           </div>
         )}
 
-        <div className="mt-6">
+        <div className="mt-6 flex gap-3">
           {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>
-              提交答案
-            </Button>
+            <>
+              <Button onClick={handleSubmit} loading={submitting} className="flex-1" disabled={!answer.trim()}>
+                提交答案
+              </Button>
+              <Button onClick={handleNext} variant="ghost" className="flex-1">
+                {idx < questions.length - 1 ? '下一题' : '查看挑战结果'}
+              </Button>
+            </>
           ) : (
             <Button onClick={handleNext} fullWidth>
               {idx < questions.length - 1 ? '下一题' : '查看挑战结果'}
