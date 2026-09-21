@@ -80,7 +80,10 @@ begin
       v_task->>'category',
       v_task->>'icon',
       (v_task->>'reward_coins')::int,
-      nullif(v_task->'repeat_days', 'null'::jsonb),
+      case
+        when v_task->'repeat_days' is null or v_task->'repeat_days' = 'null'::jsonb then null
+        else (select array_agg(x::text::int) from jsonb_array_elements_text(v_task->'repeat_days') as x)
+      end,
       'draft',
       p_created_by,
       v_count + 1,
