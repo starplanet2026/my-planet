@@ -167,10 +167,10 @@ export function PetPage() {
   const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList;
 
   const navButtons: { id: PetModal; icon: React.ReactNode }[] = [
-    { id: 'shop', icon: <img src="/assets/menu-shop.png" alt="商店" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
-    { id: 'inventory', icon: <img src="/assets/menu-inventory.png" alt="背包" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
-    { id: 'game', icon: <img src="/assets/menu-game.png" alt="游戏" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
-    { id: 'store', icon: <img src="/assets/menu-store.png" alt="宠物店" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
+    { id: 'shop', icon: <img src="/assets/menu-shop.jpg" alt="商店" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
+    { id: 'inventory', icon: <img src="/assets/menu-inventory.jpg" alt="背包" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
+    { id: 'game', icon: <img src="/assets/menu-game.jpg" alt="游戏" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
+    { id: 'store', icon: <img src="/assets/menu-store.jpg" alt="宠物店" className="w-[88px] h-[88px] object-contain drop-shadow-lg transition-transform active:scale-95" /> },
   ];
 
   // 草地展示"出来玩"的宠物，最多 10 只（可拖动）
