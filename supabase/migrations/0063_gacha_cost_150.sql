@@ -110,3 +110,17 @@ end;
 $$;
 
 grant execute on function public.gacha_cancel(uuid) to anon, authenticated;
+
+-- 3. 重建 gacha_adopt：参数名改为 p_shop_item_id 匹配前端调用
+--    gacha_start 已创建 pet 记录，adopt 只是确认领养
+drop function if exists public.gacha_adopt(uuid, uuid);
+create or replace function public.gacha_adopt(p_member_id uuid, p_shop_item_id uuid)
+returns table(success boolean, message text)
+language plpgsql security definer as $$
+begin
+  -- gacha_start 已创建宠物记录，此处仅确认领养
+  return query select true, '领养成功';
+end;
+$$;
+
+grant execute on function public.gacha_adopt(uuid, uuid) to anon, authenticated;
