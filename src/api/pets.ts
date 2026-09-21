@@ -162,7 +162,7 @@ export async function upgradeDogHouse(memberId: string): Promise<UpgradeDogHouse
   return row as UpgradeDogHouseResult;
 }
 
-// 购买狗屋用品直接扩容（不进背包，直接消费）
+// 购买住所用品直接扩容（不进背包，直接消费）
 export async function buyDoghouseUpgrade(memberId: string, itemId: string): Promise<BuyDoghouseUpgradeResult> {
   const { data, error } = await supabase.rpc('buy_doghouse_upgrade', {
     p_member_id: memberId,

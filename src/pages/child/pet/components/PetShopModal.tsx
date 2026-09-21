@@ -43,7 +43,7 @@ const SUPPLY_SUBS: { id: string; label: string }[] = [
   { id: 'toy', label: '玩具' },
   { id: 'medicine', label: '药品' },
   { id: 'foster', label: '寄养' },
-  { id: 'doghouse', label: '狗屋' },
+  { id: 'doghouse', label: '住所' },
 ];
 
 // 用品子分类 → 影响属性映射
@@ -53,7 +53,7 @@ const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string
   toy: { icon: '🎾', label: '玩具', color: 'text-green-600', badgeCls: 'bg-green-100 text-green-600' },
   medicine: { icon: '💊', label: '药品', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
   foster: { icon: '🏠', label: '寄养', color: 'text-purple-600', badgeCls: 'bg-purple-100 text-purple-600' },
-  doghouse: { icon: '🏠', label: '狗屋', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
+  doghouse: { icon: '🏠', label: '住所', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
 };
 
 // 稀有度文案与配色
@@ -187,7 +187,7 @@ export function PetShopModal({
     if (buying) return;
     setBuying(true);
     try {
-      // 狗屋：直接消费升级容量，不进背包
+      // 住所：直接消费升级容量，不进背包
       if (item.type === 'supply' && item.subcategory === 'doghouse') {
         const result = await buyDoghouseUpgrade(childId, item.id);
         if (!result.success) {
@@ -347,7 +347,7 @@ export function PetShopModal({
             const qty = qtyMap[item.id] ?? 1;
             const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
             const recovery = item.recovery_value ?? 0;
-            // 狗屋容量描述
+            // 住所容量描述
             const doghouseCapacity = isDoghouse
               ? (item.doghouse_level === 1 ? '容纳1只小狗'
                  : item.doghouse_level === 2 ? '容纳5只小狗'
@@ -360,7 +360,7 @@ export function PetShopModal({
                 ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
                 : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
             );
-            // 用品内联卡片（非狗屋）
+            // 用品内联卡片（非住所）
             if (inlineBuy) {
               return (
                 <div key={item.id} className={cardCls}>
@@ -412,7 +412,7 @@ export function PetShopModal({
                 </div>
               );
             }
-            // 狗屋：点击进详情
+            // 住所：点击进详情
             return (
               <button
                 key={item.id}

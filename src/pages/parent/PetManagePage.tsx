@@ -43,19 +43,19 @@ const PET_SUBS = [
   { id: 'cat' as const, label: '猫', emoji: '🐱' },
 ];
 
-// 用品子分类（食品 / 清洁 / 玩具 / 药品 / 寄养 / 狗屋）
+// 用品子分类（食品 / 清洁 / 玩具 / 药品 / 寄养 / 住所）
 const SUPPLY_SUBS = [
   { id: 'food' as const, label: '食品', emojis: ['🍖', '🥩', '🍗', '🐟', '🥛', '🍪', '🥫'] },
   { id: 'clean' as const, label: '清洁', emojis: ['🧼', '🚿', '🛁', '🧴'] },
   { id: 'toy' as const, label: '玩具', emojis: ['🎾', '🧸', '🎈', '🎮', '🪀', '🎁', '🎯'] },
   { id: 'medicine' as const, label: '药品', emojis: ['💊', '💉', '🧪', '🩺'] },
   { id: 'foster' as const, label: '寄养', emojis: ['🏠', '🏨', '🛏️'] },
-  { id: 'doghouse' as const, label: '狗屋', emojis: ['🏡', '🏠', '🛖'] },
+  { id: 'doghouse' as const, label: '住所', emojis: ['🏡', '🏠', '🛖'] },
 ];
 
 // 子分类标签文案
 const SUB_LABEL: Record<string, string> = {
-  dog: '狗', cat: '猫', food: '食品', clean: '清洁', toy: '玩具', medicine: '药品', foster: '寄养', doghouse: '狗屋',
+  dog: '狗', cat: '猫', food: '食品', clean: '清洁', toy: '玩具', medicine: '药品', foster: '寄养', doghouse: '住所',
 };
 
 // 稀有度配置
@@ -90,7 +90,7 @@ const PET_EMOJIS: Record<'dog' | 'cat', string[]> = {
   cat: ['🐱', '🐈', '😺', '😻', '🐾'],
 };
 
-// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 药品 / 狗屋
+// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 药品 / 住所
 type CategoryFilter = 'all' | 'pet' | 'food' | 'clean' | 'toy' | 'medicine' | 'doghouse';
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: '全部' },
@@ -99,7 +99,7 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
   { id: 'medicine', label: '药品' },
-  { id: 'doghouse', label: '狗屋' },
+  { id: 'doghouse', label: '住所' },
 ];
 
 // 顶部 tab：商品管理 / 单词管理 / 用户数据
@@ -753,7 +753,7 @@ function ItemCard({
               )}
             </div>
           )}
-          {/* 狗屋只显示容量 */}
+          {/* 住所只显示容量 */}
           {item.type === 'supply' && item.subcategory === 'doghouse' && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <span className="text-xs text-slate-400">
@@ -1372,15 +1372,15 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
         </div>
 
-        {/* 狗屋等级选择：仅当用品+狗屋分类时显示 */}
+        {/* 住所等级选择：仅当用品+住所分类时显示 */}
         {type === 'supply' && subcategory === 'doghouse' && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">狗屋等级（对应容纳数量）</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">住所等级（对应容纳数量）</label>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { lv: 1, label: '茅草屋', cap: '容纳 1 只' },
-                { lv: 2, label: '温馨狗屋', cap: '容纳 5 只' },
-                { lv: 3, label: '豪华狗屋', cap: '容纳 10 只' },
+                { lv: 2, label: '温馨住所', cap: '容纳 5 只' },
+                { lv: 3, label: '豪华住所', cap: '容纳 10 只' },
               ].map(opt => (
                 <button
                   key={opt.lv}
@@ -1541,7 +1541,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
           />
         </div>
 
-        {/* 用品恢复值（非狗屋用品） */}
+        {/* 用品恢复值（非住所用品） */}
         {type === 'supply' && subcategory !== 'doghouse' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1789,7 +1789,7 @@ function EditItemModal({
           />
         </div>
 
-        {/* 用品恢复值（非狗屋用品） */}
+        {/* 用品恢复值（非住所用品） */}
         {item.type === 'supply' && subcategory !== 'doghouse' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">

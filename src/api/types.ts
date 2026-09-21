@@ -464,7 +464,7 @@ export interface UpgradeDogHouseResult {
   new_star: number;
 }
 
-// 购买狗屋直接升级容量：不进背包，直接消费并扩容
+// 购买住所直接升级容量：不进背包，直接消费并扩容
 export interface BuyDoghouseUpgradeResult {
   success: boolean;
   message: string;

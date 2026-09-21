@@ -542,7 +542,7 @@ export function PetPage() {
               </div>
               <div>
                 <p className="font-bold text-slate-700 mb-1">🏠 狗窝</p>
-                <p>在商店「用品-狗屋」购买狗屋用品可立即扩容，每只狗屋 +2 容量。宠物达到满级后可产出金币。</p>
+                <p>在商店「用品-住所」购买住所用品可立即扩容，每只住所 +2 容量。宠物达到满级后可产出金币。</p>
               </div>
               <div>
                 <p className="font-bold text-slate-700 mb-1">🐾 我的宠物</p>
