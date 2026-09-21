@@ -168,7 +168,8 @@ export function PetPage() {
 
   const base = import.meta.env.BASE_URL;
   // 菜单图标：使用圆角矩形裁剪 + object-cover 去除 jpg 白边
-  const navIconCls = 'w-[72px] h-[72px] object-cover rounded-2xl drop-shadow-lg transition-transform active:scale-95';
+  // 移动端缩小（56px）让 4 个按钮更靠近；桌面端保持 72px
+  const navIconCls = 'w-14 h-14 sm:w-[72px] sm:h-[72px] object-cover rounded-2xl drop-shadow-lg transition-transform active:scale-95';
   const navButtons: { id: PetModal; icon: React.ReactNode }[] = [
     { id: 'shop', icon: <img src={`${base}assets/menu-shop.jpg`} alt="商店" className={navIconCls} /> },
     { id: 'inventory', icon: <img src={`${base}assets/menu-inventory.jpg`} alt="背包" className={navIconCls} /> },
@@ -257,20 +258,20 @@ export function PetPage() {
         )
       )}
       {!modalOpen && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 flex gap-4">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 flex gap-2 sm:gap-4">
           <button
             onClick={() => setShowAdopt(true)}
-            className="flex flex-col items-center gap-1 px-5 py-2.5 rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95"
+            className="flex flex-col items-center gap-0.5 sm:gap-1 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95"
           >
-            <PawPrint className="w-8 h-8" />
-            <span className="text-sm font-bold">领养新宠</span>
+            <PawPrint className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-xs sm:text-sm font-bold">领养新宠</span>
           </button>
           <button
             onClick={() => setShowStudy(true)}
-            className="flex flex-col items-center gap-1 px-5 py-2.5 rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95"
+            className="flex flex-col items-center gap-0.5 sm:gap-1 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95"
           >
-            <BookOpen className="w-8 h-8" />
-            <span className="text-sm font-bold">陪伴学习</span>
+            <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-xs sm:text-sm font-bold">陪伴学习</span>
           </button>
         </div>
       )}
