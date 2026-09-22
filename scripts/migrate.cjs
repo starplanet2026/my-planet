@@ -42,11 +42,9 @@ async function main() {
   // Supavisor pooler requires user format: postgres.{project_ref}
   const projectRef = 'zsqnpwvkbkwiokokldfv';
   const hosts = [
-    { host: 'aws-0-us-east-1.pooler.supabase.com', port: 6543, label: 'us-east-1 pooler', user: `postgres.${projectRef}` },
-    { host: 'aws-0-us-west-1.pooler.supabase.com', port: 6543, label: 'us-west-1 pooler', user: `postgres.${projectRef}` },
-    { host: 'aws-0-ap-southeast-1.pooler.supabase.com', port: 6543, label: 'ap-southeast-1 pooler', user: `postgres.${projectRef}` },
-    { host: 'aws-0-ap-northeast-1.pooler.supabase.com', port: 6543, label: 'ap-northeast-1 pooler', user: `postgres.${projectRef}` },
-    { host: 'aws-0-eu-west-1.pooler.supabase.com', port: 6543, label: 'eu-west-1 pooler', user: `postgres.${projectRef}` },
+    { host: 'aws-0-ap-southeast-2.pooler.supabase.com', port: 5432, label: 'ap-southeast-2 pooler', user: `postgres.${projectRef}` },
+    { host: 'aws-0-ap-southeast-1.pooler.supabase.com', port: 5432, label: 'ap-southeast-1 pooler', user: `postgres.${projectRef}` },
+    { host: 'aws-0-us-east-1.pooler.supabase.com', port: 5432, label: 'us-east-1 pooler', user: `postgres.${projectRef}` },
   ];
 
   let client = null;

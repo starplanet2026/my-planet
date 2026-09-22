@@ -207,11 +207,11 @@ export function PetShopModal({
       // 托管卡：按时间生效，不进背包
       if (item.type === 'foster') {
         const cardMap: Record<string, BoardingCardType> = {
-          foster_daily: 'daily',
-          foster_weekly: 'weekly',
-          foster_monthly: 'monthly',
+          '托管日卡': 'daily',
+          '托管周卡': 'weekly',
+          '托管月卡': 'monthly',
         };
-        const cardType = cardMap[item.id];
+        const cardType = cardMap[item.name];
         if (!cardType) {
           toast.error('未知的托管卡类型');
           return;
