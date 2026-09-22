@@ -364,6 +364,7 @@ export function PetPage() {
         <PetShopModal
           familyId={family?.id ?? ''}
           childId={child?.id ?? ''}
+          dogHouseLevel={dogHouse?.level ?? 0}
           onClose={() => setActiveModal(null)}
           onBought={() => { refreshData(); refreshMembers(); }}
         />

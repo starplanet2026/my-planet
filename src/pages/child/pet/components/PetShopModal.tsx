@@ -121,12 +121,14 @@ export function PetShopModal({
   isInline,
   onClose,
   onBought,
+  dogHouseLevel = 0,
 }: {
   familyId: string;
   childId: string;
   isInline?: boolean; // true=内嵌渲染 false=弹窗
   onClose?: () => void;
   onBought: () => void;
+  dogHouseLevel?: number;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -370,6 +372,7 @@ export function PetShopModal({
           {items.map(item => {
             const soldOut = item.stock !== null && item.stock <= 0;
             const isDoghouse = item.subcategory === 'doghouse';
+            const doghouseOwned = isDoghouse && dogHouseLevel >= (item.doghouse_level ?? 0);
             const inlineBuy = !isDoghouse;
             const qty = qtyMap[item.id] ?? 1;
             const effect = item.subcategory ? SUPPLY_EFFECT[item.subcategory] : null;
@@ -465,6 +468,8 @@ export function PetShopModal({
                 </div>
                 {soldOut ? (
                   <span className="text-[10px] text-slate-400">已售罄</span>
+                ) : doghouseOwned ? (
+                  <span className="w-full py-1 rounded-md bg-green-100 text-green-600 text-xs font-bold text-center">已拥有</span>
                 ) : (
                   <button
                     onClick={() => handleBuy(item)}

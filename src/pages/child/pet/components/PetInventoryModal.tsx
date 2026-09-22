@@ -9,6 +9,7 @@ import type { PetInventory, PetSubcategory } from '../../../../api/types';
 
 // 分组标签
 const SUB_LABEL: Record<string, string> = {
+  doghouse: '住所',
   food: '食品',
   clean: '清洁',
   toy: '玩具',
@@ -17,7 +18,7 @@ const SUB_LABEL: Record<string, string> = {
 };
 
 // 分组顺序
-const SUB_ORDER: PetSubcategory[] = ['food', 'clean', 'toy', 'medicine', 'foster'];
+const SUB_ORDER: PetSubcategory[] = ['doghouse', 'food', 'clean', 'toy', 'medicine', 'foster'];
 
 // 单个物品卡片：图标 + 名字 + 数量
 function InventoryItemCard({ item }: { item: PetInventory }) {
