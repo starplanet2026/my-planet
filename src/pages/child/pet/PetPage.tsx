@@ -56,6 +56,7 @@ export function PetPage() {
   const [showCheckin, setShowCheckin] = useState(false);
   const [showDex, setShowDex] = useState(false);
   const [showAdopt, setShowAdopt] = useState(false);
+  const [shopJumpDoghouse, setShopJumpDoghouse] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
   const [showBoarding, setShowBoarding] = useState(false);
@@ -365,6 +366,8 @@ export function PetPage() {
           familyId={family?.id ?? ''}
           childId={child?.id ?? ''}
           dogHouseLevel={dogHouse?.level ?? 0}
+          jumpDoghouse={shopJumpDoghouse}
+          onJumpDone={() => setShopJumpDoghouse(false)}
           onClose={() => setActiveModal(null)}
           onBought={() => { refreshData(); refreshMembers(); }}
         />
@@ -641,7 +644,7 @@ export function PetPage() {
       {showAdopt && (
         <AdoptPetModal
           onClose={() => setShowAdopt(false)}
-          onGoShop={() => { setShowAdopt(false); setActiveModal('shop'); }}
+          onGoShop={() => { setShowAdopt(false); setShopJumpDoghouse(true); setActiveModal('shop'); }}
           onAdopted={() => refreshData()}
           onGoGame={() => { setShowAdopt(false); setActiveModal('game'); }}
         />

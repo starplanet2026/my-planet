@@ -122,6 +122,8 @@ export function PetShopModal({
   onClose,
   onBought,
   dogHouseLevel = 0,
+  jumpDoghouse = false,
+  onJumpDone,
 }: {
   familyId: string;
   childId: string;
@@ -129,12 +131,14 @@ export function PetShopModal({
   onClose?: () => void;
   onBought: () => void;
   dogHouseLevel?: number;
+  jumpDoghouse?: boolean;
+  onJumpDone?: () => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
 
-  const [activeMain, setActiveMain] = useState<PetShopItemType>('pet');
-  const [activeSub, setActiveSub] = useState<PetSubcategory>('dog');
+  const [activeMain, setActiveMain] = useState<PetShopItemType>(jumpDoghouse ? 'supply' : 'pet');
+  const [activeSub, setActiveSub] = useState<PetSubcategory>(jumpDoghouse ? 'doghouse' : 'dog');
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [ownedPets, setOwnedPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
@@ -233,7 +237,15 @@ export function PetShopModal({
 
       const result = await buyPetItem(childId, item.id);
       if (!result.success) {
-        toast.error(result.message || '购买失败');
+        const msg = result.message || '购买失败';
+        if (msg.includes('茅草屋') || msg.includes('狗屋') || msg.includes('住所')) {
+          toast.error(msg);
+          setActiveMain('supply');
+          setActiveSub('doghouse');
+          setDetail(null);
+        } else {
+          toast.error(msg);
+        }
         return;
       }
       // 刷新星光/金币余额

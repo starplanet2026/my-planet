@@ -290,6 +290,9 @@ export function AdoptPetModal({
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
           setInsufficientInfo({ current: starValue, needed: 150 });
+        } else if (result?.message?.includes('茅草屋') || result?.message?.includes('狗屋') || result?.message?.includes('住所')) {
+          toast.error(result.message);
+          onGoShop();
         } else {
           toast.error(result?.message || '领养失败');
         }
@@ -306,6 +309,9 @@ export function AdoptPetModal({
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
         setInsufficientInfo({ current: starValue, needed: 150 });
+      } else if (e?.message?.includes('茅草屋') || e?.message?.includes('狗屋') || e?.message?.includes('住所')) {
+        toast.error(e.message);
+        onGoShop();
       } else {
         toast.error(e?.message ?? '领养失败');
       }
