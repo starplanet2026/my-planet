@@ -10,7 +10,9 @@ export type CoinRecordCategory = 'task' | 'purchase' | 'manual' | 'system' | 'ta
 // 题库模块类型
 export type ChallengeSetType = 'word_vocab' | 'math' | 'choice';
 export type ChallengeSetStatus = 'draft' | 'active';
-export type QuestionType = 'choice' | 'math' | 'multi_choice';
+export type ChallengeBoardType = 'today_review' | 'gap_check' | 'wrong_battle' | 'advance';
+// 七种题型 + math（兼容存量）+ word_vocab 走 words 表独立流程
+export type QuestionType = 'choice' | 'multi_choice' | 'spell' | 'match' | 'scramble' | 'recite' | 'correct' | 'math';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type WordQuestionType = 'en2cn' | 'cn2en' | 'listen' | 'spell';
 
@@ -156,6 +158,7 @@ export interface ChallengeSet {
   title: string;
   description: string | null;
   type: ChallengeSetType;
+  board: ChallengeBoardType;
   // 分级别奖励星光值（按题目难度选择对应奖励）
   reward_easy: number;
   reward_medium: number;
@@ -170,6 +173,7 @@ export interface ChallengeSet {
 export interface Question {
   id: string;
   challenge_set_id: string;
+  level_id: string | null;
   type: QuestionType;
   question_text: string;
   options: string[] | null;
@@ -178,7 +182,105 @@ export interface Question {
   difficulty: Difficulty;
   display_order: number;
   is_active: boolean;
+  metadata: Record<string, any> | null;
   created_at: string;
+}
+
+// ====== 关卡 / 板块 / 进度（二次开发新增） ======
+
+export interface ChallengeLevel {
+  id: string;
+  challenge_set_id: string;
+  level_no: number;
+  title: string | null;
+  pass_reward: number;
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
+// get_challenge_boards RPC 返回的关卡（含进度统计）
+export interface LevelWithProgress {
+  id: string;
+  level_no: number;
+  title: string | null;
+  pass_reward: number;
+  status: string;
+  total: number;
+  mastered: number;
+  is_cleared: boolean;
+  is_paused: boolean;
+  cleared_ids: string[];
+  current_idx: number;
+}
+
+// get_challenge_boards RPC 返回的题集（含关卡列表）
+export interface SetWithLevels {
+  id: string;
+  title: string;
+  description: string | null;
+  type: string;
+  status: string;
+  reward_easy: number;
+  reward_medium: number;
+  reward_hard: number;
+  knowledge_points: string | null;
+  levels: LevelWithProgress[];
+}
+
+// get_challenge_boards RPC 返回的板块
+export interface ChallengeBoard {
+  board: ChallengeBoardType;
+  sets: SetWithLevels[];
+}
+
+// load_level_snapshot RPC 返回
+export interface LevelSnapshot {
+  current_idx: number;
+  cleared_question_ids: string[];
+  is_cleared: boolean;
+  is_paused: boolean;
+  last_played_at: string | null;
+}
+
+// finish_challenge_level RPC 返回
+export interface FinishLevelResult {
+  level_awarded: boolean;
+  level_reward: number;
+  set_awarded: boolean;
+  set_reward: number;
+  new_star: number;
+}
+
+// 错题混战池条目
+export interface WrongBattlePoolItem {
+  pool_id: string;
+  question_id: string;
+  source_challenge_set_id: string | null;
+  added_at: string;
+  question_text: string;
+  options: string[] | null;
+  correct_answer: string;
+  explanation: string | null;
+  type: string;
+  difficulty: string;
+  metadata: Record<string, any> | null;
+}
+
+// 错题统计（后台筛选用）
+export interface WrongQuestionStat {
+  question_id: string;
+  challenge_set_id: string;
+  question_text: string;
+  type: string;
+  difficulty: string;
+  display_order: number;
+  attempt_count: number;
+  correct_count: number;
+  wrong_count: number;
+  error_rate: number;
+  is_mastered: boolean;
+  member_id: string | null;
+  member_name: string | null;
 }
 
 export interface Word {

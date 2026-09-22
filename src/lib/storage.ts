@@ -9,7 +9,8 @@ export async function uploadImageToStorage(
   familyId: string,
   category: ImageCategory,
 ): Promise<string> {
-  const ext = file instanceof File && file.type === 'image/png' ? 'png' : 'jpg';
+  // 问题17: 使用 blob.type 判断格式，保留 PNG 透明背景
+  const ext = file.type === 'image/png' ? 'png' : 'jpg';
   const filename = `${category}/${familyId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   const { error } = await supabase.storage

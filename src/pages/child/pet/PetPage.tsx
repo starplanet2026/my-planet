@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFamilyStore } from '../../../store/familyStore';
 import { useModeStore } from '../../../store/modeStore';
 import { usePetUiStore } from '../../../store/petUiStore';
@@ -8,7 +8,8 @@ import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight } from '../../../api/pets';
-import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, TRAIT_DESC, expNeeded } from '../../../api/types';
+import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet } from '../../../api/types';
+import { expNeeded, TRAIT_DESC } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
 import { TopActionBar } from './components/TopActionBar';
 import { PetShopModal } from './components/PetShopModal';
@@ -219,6 +220,11 @@ export function PetPage() {
     }
   }, [activeModal, loadStudyPets]);
 
+  // 草地展示"出来玩"的宠物，最多 10 只（可拖动）
+  // 使用 useMemo 防止不必要的引用变化导致 PetGrassland 重渲染覆盖状态
+  // 注意：useMemo 必须在 early return 之前调用，否则违反 Hooks 规则导致白屏
+  const grasslandPets = useMemo(() => pets.filter(p => !hiddenPetIds.has(p.id)).slice(0, 10), [pets, hiddenPetIds]);
+
   if (loading) return <Loading />;
 
   // 弹窗打开时隐藏所有外层 icon
@@ -235,9 +241,6 @@ export function PetPage() {
     { id: 'store', icon: <img src={`${base}assets/menu-store.jpg`} alt="宠物店" className={navIconCls} /> },
   ];
 
-  // 草地展示"出来玩"的宠物，最多 10 只（可拖动）
-  const grasslandPets = pets.filter(p => !hiddenPetIds.has(p.id)).slice(0, 10);
-
   return (
     <div className="relative min-h-screen">
       {/* 背景全屏：草地常驻渲染（最多10只可拖拽） */}
@@ -246,6 +249,7 @@ export function PetPage() {
         dogHouse={dogHouse}
         onPetClick={(pet) => setActivePet(pet)}
         bgImage={bgImage}
+        onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? updated : p))}
       />
 
       {/* 左上角功能按钮组：图鉴 / 我的宠物 / 签到（弹窗时隐藏，往中间靠） */}
@@ -272,13 +276,15 @@ export function PetPage() {
             <Calendar className="w-4 h-4" />
             <span className="text-xs font-medium">签到</span>
           </button>
-          <button
-            onClick={() => setShowBoarding(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-indigo-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
-          >
-            <Store className="w-4 h-4" />
-            <span className="text-xs font-medium">托管</span>
-          </button>
+          {pets.length >= 3 && (
+            <button
+              onClick={() => setShowBoarding(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-indigo-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            >
+              <Store className="w-4 h-4" />
+              <span className="text-xs font-medium">托管</span>
+            </button>
+          )}
         </div>
       )}
 

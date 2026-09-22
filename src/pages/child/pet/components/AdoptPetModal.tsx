@@ -7,7 +7,7 @@ import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { cn } from '../../../../lib/utils';
 import { ShoppingBag, Heart, Dices, Sparkles } from 'lucide-react';
-import { fetchPetShopItems, buyPetItem, checkPet } from '../../../../api/pets';
+import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo } from '../../../../api/pets';
 import { supabase } from '../../../../api/client';
 import type { PetShopItem, Pet } from '../../../../api/types';
 
@@ -80,17 +80,19 @@ const STORIES = [
 
 type AdoptMode = 'menu' | 'quiz' | 'gacha' | 'story';
 
-// 根据 trait 推荐具体宠物
-function recommendPetByTrait(trait: string, items: PetShopItem[]): PetShopItem | null {
-  if (items.length === 0) return null;
-  // active/social → 偏向狗（subcategory=dog）
-  // calm/independent → 偏向猫（subcategory=cat）
-  const dogs = items.filter(i => i.subcategory === 'dog');
-  const cats = items.filter(i => i.subcategory === 'cat');
+// 根据 trait 推荐具体宠物（排除已拥有的）
+function recommendPetByTrait(trait: string, items: PetShopItem[], ownedIds?: Set<string>): PetShopItem | null {
+  // 问题16: 剔除已拥有的宠物
+  const available = ownedIds && ownedIds.size > 0
+    ? items.filter(i => !ownedIds.has(i.id))
+    : items;
+  if (available.length === 0) return null;
+  const dogs = available.filter(i => i.subcategory === 'dog');
+  const cats = available.filter(i => i.subcategory === 'cat');
   if (trait === 'active' || trait === 'social') {
-    return dogs[0] || items[0];
+    return dogs[0] || available[0];
   }
-  return cats[0] || items[0];
+  return cats[0] || available[0];
 }
 
 // 星光值不足引导：展示当前余额、所需数额，并提供赚取入口
@@ -165,6 +167,8 @@ export function AdoptPetModal({
   const [recommendedPet, setRecommendedPet] = useState<PetShopItem | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [adoptedPet, setAdoptedPet] = useState<Pet | null>(null);
+  // 问题16: 已拥有的宠物 shop_item_id 集合
+  const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
 
   const [gachaPaid, setGachaPaid] = useState(false);
   const [gachaDraws, setGachaDraws] = useState(0);
@@ -172,15 +176,25 @@ export function AdoptPetModal({
   const [gachaResult, setGachaResult] = useState<Pet | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [storyStep, setStoryStep] = useState(0);
+  // 问题11: 领养后直接弹起名框，不跳转
+  const [namingPet, setNamingPet] = useState<{ petId: string; name: string } | null>(null);
+  const [savingName, setSavingName] = useState(false);
 
-  // 加载宠物商品
+  // 加载宠物商品 + 已拥有宠物
   useEffect(() => {
     if (family?.id && (mode === 'quiz' || mode === 'gacha')) {
       fetchPetShopItems('pet', undefined, false).then(items => {
         setPetItems(items);
       }).catch(() => {});
+      // 问题16: 查询已拥有的宠物
+      if (childId) {
+        supabase.from('pets').select('shop_item_id').eq('member_id', childId)
+          .then(({ data }) => {
+            setOwnedIds(new Set((data ?? []).map((p: any) => p.shop_item_id).filter(Boolean)));
+          }).catch(() => {});
+      }
     }
-  }, [family?.id, mode]);
+  }, [family?.id, mode, childId]);
 
   const navigate = useNavigate();
   // 当前孩子的星光值
@@ -213,7 +227,7 @@ export function AdoptPetModal({
     navigate(path);
   };
 
-  // 抽卡：开始（扣 150 星光值）
+  // 抽卡：开始（不扣星光，只抽一个未拥有的宠物）
   const handleGachaStart = async () => {
     if (!childId) return;
     setDrawing(true);
@@ -229,10 +243,23 @@ export function AdoptPetModal({
         }
         return;
       }
-      toast.success('已扣除 150 星光值，开始抽卡！');
+      // 问题9: 抽卡开始不扣星光
       setGachaPaid(true);
       refreshMembers();
-      await handleGachaDraw();
+      // 用 RPC 返回的宠物信息设置 drawnItem
+      setDrawnItem({
+        id: result.drawn_item_id,
+        name: result.drawn_item_name,
+        emoji: result.drawn_item_emoji,
+        image_url: result.drawn_item_image,
+        type: 'pet',
+        subcategory: 'dog',
+        price_star: 150,
+        price_coin: 0,
+        status: 'active',
+        rarity: 'common',
+      } as PetShopItem);
+      setGachaDraws(1);
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
         setInsufficientInfo({ current: starValue, needed: 150 });
@@ -244,30 +271,30 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：随机抽取一只宠物（已拥有则重抽）
+  // 抽卡：再抽一次（调用 gacha_start RPC，不扣星光）
   const handleGachaDraw = async () => {
-    if (!family?.id || !childId) return;
+    if (!childId) return;
     setDrawing(true);
     try {
-      const items = petItems.length > 0
-        ? petItems
-        : await fetchPetShopItems('pet', undefined, false);
-      if (items.length === 0) {
-        toast.error('暂无可抽取的宠物');
+      const { data, error } = await supabase.rpc('gacha_start', { p_member_id: childId });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result?.success) {
+        toast.error(result?.message || '抽取失败');
         return;
       }
-      // 查询已拥有宠物，避免重复
-      const { data: existingPets } = await supabase
-        .from('pets')
-        .select('shop_item_id')
-        .eq('member_id', childId);
-      const ownedIds = new Set(
-        (existingPets ?? []).map((p: any) => p.shop_item_id),
-      );
-      const available = items.filter(i => !ownedIds.has(i.id));
-      const pool = available.length > 0 ? available : items;
-      const pick = pool[Math.floor(Math.random() * pool.length)];
-      setDrawnItem(pick);
+      setDrawnItem({
+        id: result.drawn_item_id,
+        name: result.drawn_item_name,
+        emoji: result.drawn_item_emoji,
+        image_url: result.drawn_item_image,
+        type: 'pet',
+        subcategory: 'dog',
+        price_star: 150,
+        price_coin: 0,
+        status: 'active',
+        rarity: 'common',
+      } as PetShopItem);
       setGachaDraws(prev => prev + 1);
     } catch (e: any) {
       toast.error(e?.message ?? '抽取失败');
@@ -276,7 +303,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：领养抽中的宠物（gacha_adopt 创建宠物记录并返回 pet_id）
+  // 抽卡：领养抽中的宠物（扣 150 星光值）
   const handleGachaAdopt = async () => {
     if (!childId || !drawnItem) return;
     setAdopting(true);
@@ -290,28 +317,25 @@ export function AdoptPetModal({
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
           setInsufficientInfo({ current: starValue, needed: 150 });
-        } else if (result?.message?.includes('茅草屋') || result?.message?.includes('狗屋') || result?.message?.includes('住所')) {
+        } else if (result?.message?.includes('小屋') || result?.message?.includes('狗屋') || result?.message?.includes('住所') || result?.message?.includes('饲养位')) {
           toast.error(result.message);
-          onGoShop();
         } else {
           toast.error(result?.message || '领养失败');
         }
         return;
       }
-      toast.success('领养成功！');
+      toast.success('领养成功！扣除150星光值');
       refreshMembers();
-      // gacha_adopt 返回 pet_id，用它获取完整宠物信息
+      // 问题11: 直接弹起名框，不跳转
       if (result?.pet_id) {
-        const pet = await checkPet(result.pet_id);
-        setGachaResult(pet);
+        setNamingPet({ petId: result.pet_id, name: '' });
       }
       onAdopted();
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
         setInsufficientInfo({ current: starValue, needed: 150 });
-      } else if (e?.message?.includes('茅草屋') || e?.message?.includes('狗屋') || e?.message?.includes('住所')) {
+      } else if (e?.message?.includes('小屋') || e?.message?.includes('狗屋') || e?.message?.includes('住所')) {
         toast.error(e.message);
-        onGoShop();
       } else {
         toast.error(e?.message ?? '领养失败');
       }
@@ -320,7 +344,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：放弃（退回 30% = 45 星光值）
+  // 抽卡：放弃（扣 45 星光值 = 原价30%）
   const handleGachaCancel = async () => {
     if (!childId) return;
     try {
@@ -328,13 +352,42 @@ export function AdoptPetModal({
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
       if (result?.success) {
-        toast.info('已放弃，退回 45 星光值');
+        toast.info('已放弃，扣除45星光值');
         refreshMembers();
       }
     } catch (e: any) {
       toast.error(e?.message ?? '放弃失败');
     } finally {
       onClose();
+    }
+  };
+
+  // 问题9: 关闭弹窗时，如果已抽卡但未领养，按放弃处理
+  const handleClose = () => {
+    if (gachaPaid && drawnItem && !namingPet && !gachaResult) {
+      handleGachaCancel();
+    } else {
+      onClose();
+    }
+  };
+
+  // 问题11: 保存宠物名字
+  const handleSaveName = async () => {
+    if (!namingPet || !namingPet.name.trim()) return;
+    setSavingName(true);
+    try {
+      await updatePetInfo(namingPet.petId, childId, namingPet.name.trim(), null);
+      toast.success('命名成功！好好照顾它吧');
+      const pet = await checkPet(namingPet.petId);
+      setGachaResult(pet);
+      setAdoptedPet(pet);
+      setNamingPet(null);
+      refreshMembers();
+      onAdopted();
+    } catch (e: any) {
+      toast.error(e?.message ?? '命名失败');
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -347,15 +400,19 @@ export function AdoptPetModal({
       if (!result.success) {
         if (isInsufficientError(result.message)) {
           setInsufficientInfo({ current: starValue, needed: recommendedPet.price_star });
+        } else if (result.message?.includes('小屋') || result.message?.includes('狗屋') || result.message?.includes('住所') || result.message?.includes('饲养位')) {
+          toast.error(result.message);
         } else {
           toast.error(result.message || '领养失败');
         }
         return;
       }
-      toast.success(`领养成功！`);
+      toast.success('领养成功！');
       refreshMembers();
-      const pet = await checkPet(result.pet_id);
-      setAdoptedPet(pet);
+      // 问题11: 直接弹起名框，不跳转
+      if (result.pet_id) {
+        setNamingPet({ petId: result.pet_id, name: '' });
+      }
       onAdopted();
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
@@ -374,7 +431,8 @@ export function AdoptPetModal({
     allTraits.forEach(t => traitCount[t] = (traitCount[t] || 0) + 1);
     const top = Object.entries(traitCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'active';
     setTopTrait(top);
-    const pet = recommendPetByTrait(top, petItems);
+    // 问题16: 传入 ownedIds 排除已拥有
+    const pet = recommendPetByTrait(top, petItems, ownedIds);
     setRecommendedPet(pet);
   };
 
@@ -452,8 +510,29 @@ export function AdoptPetModal({
             <p className="text-sm text-slate-500 mt-1">{result.desc}</p>
           </div>
 
-          {adoptedPet ? (
-            // 领养成功
+          {/* 问题11: 起名弹框 */}
+          {namingPet ? (
+            <div className="space-y-3 py-4">
+              <p className="text-sm text-slate-500 text-center">领养成功！给它取个名字吧</p>
+              {recommendedPet?.image_url ? (
+                <img src={recommendedPet.image_url} alt="" className="w-28 h-36 mx-auto object-contain" />
+              ) : (
+                <div className="text-6xl text-center">{recommendedPet?.emoji || '🐾'}</div>
+              )}
+              <input
+                value={namingPet.name}
+                onChange={e => setNamingPet({ ...namingPet, name: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-green-300 text-sm text-center"
+                placeholder="给它取个名字"
+                maxLength={10}
+                autoFocus
+              />
+              <Button onClick={handleSaveName} disabled={savingName || !namingPet.name.trim()} className="w-full">
+                {savingName ? '保存中...' : '确认命名'}
+              </Button>
+            </div>
+          ) : adoptedPet ? (
+            // 命名完成
             <div className="text-center space-y-3 py-4">
               <p className="text-sm text-slate-500">领养成功！</p>
               {adoptedPet.image_url ? (
@@ -462,10 +541,7 @@ export function AdoptPetModal({
                 <div className="text-6xl">{adoptedPet.emoji || '🐾'}</div>
               )}
               <p className="font-bold text-slate-700">{adoptedPet.name}</p>
-              <div className="flex gap-2">
-                <Button onClick={() => onGoShop()} className="flex-1">去起名</Button>
-                <Button variant="ghost" onClick={onClose} className="flex-1">完成</Button>
-              </div>
+              <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
             </div>
           ) : recommendedPet ? (
             // 推荐宠物
@@ -513,10 +589,10 @@ export function AdoptPetModal({
     );
   }
 
-  // 抽卡：付费抽 3 次，领养一只或放弃退回 30%
+  // 抽卡：开始不扣，领养扣150，放弃扣45
   if (mode === 'gacha') {
     return (
-      <Modal open onClose={onClose} title="抽卡" size="md">
+      <Modal open onClose={handleClose} title="抽卡" size="md">
         <div className="space-y-4 py-2">
           {!gachaPaid ? (
             // 抽卡入口
@@ -525,10 +601,10 @@ export function AdoptPetModal({
               <div>
                 <p className="text-lg font-bold text-slate-700">宠物抽卡</p>
                 <p className="text-sm text-slate-500 mt-1">
-                  花150星光值，最多可抽取三次
+                  领养扣150星光值，最多可抽取三次
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  放弃可退回 30%（45 星光值）
+                  放弃扣45星光值（原价30%）
                 </p>
               </div>
               {(insufficientInfo || starValue < 150) && (
@@ -541,14 +617,35 @@ export function AdoptPetModal({
                 />
               )}
               <Button onClick={handleGachaStart} disabled={drawing} className="w-full">
-                {drawing ? '抽取中...' : '开始抽卡（150 星光值）'}
+                {drawing ? '抽取中...' : '开始抽卡'}
               </Button>
               <button onClick={() => setMode('menu')} className="text-xs text-slate-400">
                 返回菜单
               </button>
             </div>
+          ) : namingPet ? (
+            // 问题11: 起名弹框
+            <div className="space-y-3 py-4">
+              <p className="text-sm text-slate-500 text-center">领养成功！扣除150星光值</p>
+              {drawnItem?.image_url ? (
+                <img src={drawnItem.image_url} alt="" className="w-28 h-36 mx-auto object-contain" />
+              ) : (
+                <div className="text-6xl text-center">{drawnItem?.emoji || '🐾'}</div>
+              )}
+              <input
+                value={namingPet.name}
+                onChange={e => setNamingPet({ ...namingPet, name: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-green-300 text-sm text-center"
+                placeholder="给它取个名字"
+                maxLength={10}
+                autoFocus
+              />
+              <Button onClick={handleSaveName} disabled={savingName || !namingPet.name.trim()} className="w-full">
+                {savingName ? '保存中...' : '确认命名'}
+              </Button>
+            </div>
           ) : gachaResult ? (
-            // 领养成功结果
+            // 命名完成结果
             <div className="text-center space-y-3 py-4">
               <p className="text-sm text-slate-500">领养成功！</p>
               {gachaResult.image_url ? (
@@ -557,10 +654,7 @@ export function AdoptPetModal({
                 <div className="text-6xl">{gachaResult.emoji || '🐾'}</div>
               )}
               <p className="font-bold text-slate-700">{gachaResult.name}</p>
-              <div className="flex gap-2">
-                <Button onClick={() => onGoShop()} className="flex-1">去起名</Button>
-                <Button variant="ghost" onClick={onClose} className="flex-1">完成</Button>
-              </div>
+              <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
             </div>
           ) : drawing ? (
             // 抽取中
@@ -604,7 +698,7 @@ export function AdoptPetModal({
               )}
               <div className="flex gap-2">
                 <Button onClick={handleGachaAdopt} disabled={adopting} className="flex-1">
-                  {adopting ? '领养中...' : '领养它'}
+                  {adopting ? '领养中...' : '领养它（扣150⭐）'}
                 </Button>
                 {gachaDraws < 3 ? (
                   <Button variant="ghost" onClick={handleGachaDraw} disabled={drawing} className="flex-1">
@@ -612,7 +706,7 @@ export function AdoptPetModal({
                   </Button>
                 ) : (
                   <Button variant="ghost" onClick={handleGachaCancel} className="flex-1">
-                    放弃（退回 30%）
+                    放弃（扣45⭐）
                   </Button>
                 )}
               </div>

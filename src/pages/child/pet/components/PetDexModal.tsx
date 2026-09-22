@@ -4,7 +4,6 @@ import { Loading } from '../../../../components/common/Loading';
 import { EmptyState } from '../../../../components/common/EmptyState';
 import { useToastStore } from '../../../../store/toastStore';
 import { cn } from '../../../../lib/utils';
-import { Star, Crown, Coins } from 'lucide-react';
 import { fetchPetShopItems, fetchPets } from '../../../../api/pets';
 import type { PetShopItem, Pet, PetRarity } from '../../../../api/types';
 
@@ -55,12 +54,6 @@ export function PetDexModal({ familyId, memberId, onClose }: {
   const getOwnedPet = (itemId: string): Pet | undefined =>
     pets.find(p => p.shop_item_id === itemId);
 
-  // 已领养且达到满级
-  const isMaxLevel = (itemId: string): boolean => {
-    const pet = getOwnedPet(itemId);
-    return !!pet && pet.level >= pet.max_level;
-  };
-
   // 统计：已收集 / 总数
   const ownedCount = items.filter(it => getOwnedPet(it.id)).length;
 
@@ -85,97 +78,55 @@ export function PetDexModal({ familyId, memberId, onClose }: {
             </div>
           </div>
 
-          {/* 宠物网格 */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* 宠物网格 - 问题15: 一行5个，仅展示图片+品种名+稀有度+是否拥有 */}
+          <div className="grid grid-cols-5 gap-2">
             {items.map(item => {
               const ownedPet = getOwnedPet(item.id);
               const owned = !!ownedPet;
-              const maxLevel = isMaxLevel(item.id);
               return (
                 <div
                   key={item.id}
                   className={cn(
-                    'rounded-2xl border-2 p-3 flex flex-col items-center gap-1.5 transition-all',
-                    owned ? 'border-emerald-200 bg-white' : 'border-slate-100 bg-slate-50/60',
+                    'rounded-xl border-2 p-1.5 flex flex-col items-center gap-0.5 transition-all',
+                    owned ? 'border-emerald-300 bg-white' : 'border-slate-100 bg-slate-50/60',
                   )}
                 >
-                  {/* 宠物图标 */}
-                  <div className="w-full aspect-[3/4] rounded-2xl bg-slate-50 flex items-center justify-center overflow-hidden">
+                  {/* 宠物图标 - 竖版3:4 */}
+                  <div className="w-full aspect-[3/4] rounded-lg bg-slate-50 flex items-center justify-center overflow-hidden">
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.name ?? '宠物'} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-3xl">{item.emoji || '🐾'}</span>
+                      <span className="text-xl">{item.emoji || '🐾'}</span>
                     )}
                   </div>
 
-                  {/* 名字 */}
-                  <p className="text-sm font-medium text-slate-700 text-center truncate w-full">
+                  {/* 品种名 */}
+                  <p className="text-[10px] font-medium text-slate-700 text-center truncate w-full">
                     {item.name ?? '未命名'}
                   </p>
 
-                  {/* 基础产金 */}
-                  <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-yellow-50">
-                    <Coins className="w-3 h-3 text-yellow-600" />
-                    <span className="text-[10px] font-bold text-yellow-600">
-                      {item.base_coin_per_day}/天
-                    </span>
-                  </div>
-
-                  {/* 等级 */}
-                  {owned && ownedPet && (
-                    <div className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-amber-100">
-                      <Star className="w-3 h-3 text-amber-500" />
-                      <span className="text-[10px] font-bold text-amber-600">
-                        Lv.{ownedPet.level}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 状态标签 */}
-                  <div className="flex flex-wrap items-center justify-center gap-1 mt-0.5">
-                    <span
-                      className={cn(
-                        'text-[10px] px-2 py-0.5 rounded-full font-medium',
-                        owned ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500',
-                      )}
-                    >
-                      {owned ? '已拥有' : '未解锁'}
-                    </span>
-                    {maxLevel && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-600">
-                        <Crown className="w-3 h-3" />
-                        满级
-                      </span>
+                  {/* 稀有度 */}
+                  <span
+                    className={cn(
+                      'text-[8px] px-1 py-0.5 rounded-full font-medium',
+                      rarityStyle[item.rarity],
                     )}
-                    <span
-                      className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                        rarityStyle[item.rarity],
-                      )}
-                    >
-                      {rarityLabel[item.rarity]}
-                    </span>
-                  </div>
+                  >
+                    {rarityLabel[item.rarity]}
+                  </span>
+
+                  {/* 是否拥有 */}
+                  <span
+                    className={cn(
+                      'text-[8px] px-1 py-0.5 rounded-full font-medium',
+                      owned ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400',
+                    )}
+                  >
+                    {owned ? '已拥有' : '未拥有'}
+                  </span>
                 </div>
               );
             })}
-
-            {/* 锁定预告卡 */}
-            <div
-              className={cn(
-                'rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-3 flex flex-col items-center justify-center gap-1.5 text-center',
-                'opacity-70 select-none'
-              )}
-              aria-disabled="true"
-            >
-              <div className="text-3xl">🔒</div>
-              <p className="text-[11px] font-medium text-slate-500 leading-tight">
-                领养满 2 只宠物后解锁更多萌宠
-              </p>
-              <p className="text-[10px] text-slate-400">
-                当前: {Math.min(pets.length, 2)}/2
-              </p>
-            </div>
           </div>
         </div>
       )}

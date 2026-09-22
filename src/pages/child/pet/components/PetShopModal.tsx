@@ -24,6 +24,7 @@ import type {
   Pet,
   BoardingCardType,
 } from '../../../../api/types';
+import { TRAIT_DESC } from '../../../../api/types';
 
 // 一级 tab：宠物 / 用品
 const MAIN_TABS: { id: PetShopItemType; label: string }[] = [
@@ -102,13 +103,7 @@ function PriceBadge({ item, big }: { item: PetShopItem; big?: boolean }) {
           {item.price_star}
         </span>
       )}
-      {item.price_coin > 0 && (
-        <span className={cn('inline-flex items-center gap-1 font-bold text-yellow-600', textCls)}>
-          <Coins className={iconCls} />
-          {item.price_coin}
-        </span>
-      )}
-      {item.price_star === 0 && item.price_coin === 0 && (
+      {item.price_star === 0 && (
         <span className="text-sm font-bold text-emerald-500">免费</span>
       )}
     </div>
@@ -544,6 +539,11 @@ export function PetShopModal({
                   <div className="text-[10px] text-yellow-600 font-medium">
                     💰 {item.base_coin_per_day}/天
                   </div>
+                  {item.trait && (
+                    <div className="text-[10px] text-purple-500 font-medium">
+                      🌟 {item.trait}
+                    </div>
+                  )}
                 </div>
                 {soldOut && !owned && (
                   <span className="text-[10px] text-slate-400">已售罄</span>
@@ -582,8 +582,6 @@ export function PetShopModal({
           const owned = detail.type === 'pet' && isOwned(detail.id);
           const soldOut = detail.stock !== null && detail.stock <= 0;
           const disabled = owned || soldOut;
-          const ownedPet = detail.type === 'pet' ? ownedPets.find(p => p.shop_item_id === detail.id) : null;
-          const evolved = !!ownedPet && ownedPet.evolved_bonus > 0;
           return (
             <div className="space-y-4">
               {/* 大图 */}
@@ -591,7 +589,7 @@ export function PetShopModal({
                 <ItemIcon item={detail} size="lg" />
               </div>
 
-              {/* 稀有度 / 性别 / 品种 / 进化 */}
+              {/* 稀有度 / 性别 / 特质 */}
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 {detail.type === 'pet' && (
                   <span
@@ -608,14 +606,9 @@ export function PetShopModal({
                     {detail.gender === 'male' ? '♂ 公' : '♀ 母'}
                   </span>
                 )}
-                {detail.breed && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-600">
-                    {detail.breed}
-                  </span>
-                )}
-                {evolved && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-600">
-                    ✨ 进化+10%
+                {detail.type === 'pet' && detail.trait && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
+                    🌟 {detail.trait}
                   </span>
                 )}
                 {owned && (
@@ -647,12 +640,13 @@ export function PetShopModal({
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-slate-500">升级奖励</span>
-                    <span className="text-sm font-bold text-slate-700">{detail.upgrade_coin_reward}</span>
-                    <span className="text-[10px] text-slate-400">金币</span>
+                    <span className="text-sm font-bold text-slate-700">等级×1.25</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-500">血条上限</span>
-                    <span className="text-sm font-bold text-slate-700">{detail.max_blood_bar}</span>
+                    <span className="text-xs text-slate-500">特质效果</span>
+                    <span className="text-xs font-bold text-purple-600">
+                      {detail.trait ? (TRAIT_DESC[detail.trait] || '无') : '无'}
+                    </span>
                   </div>
                 </div>
               )}

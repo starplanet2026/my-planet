@@ -9,6 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   loading?: boolean;
   fullWidth?: boolean;
+  danger?: boolean;
 }
 
 const variants: Record<Variant, string> = {
@@ -26,7 +27,7 @@ const sizes: Record<Size, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', loading, fullWidth, className, disabled, children, ...props }, ref) => {
+  ({ variant = 'primary', size = 'md', loading, fullWidth, danger, className, disabled, children, ...props }, ref) => {
     return (
       <button
         ref={ref}
@@ -35,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           'min-h-[44px] min-w-[44px]',
-          variants[variant],
+          danger ? variants.danger : variants[variant],
           sizes[size],
           fullWidth && 'w-full',
           className

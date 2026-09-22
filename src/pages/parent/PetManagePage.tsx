@@ -813,6 +813,11 @@ function UserDataTab({
       .finally(() => setStatsLoading(false));
   }, [selectedChildId, children.length]);
 
+  // 问题14: 按选中的孩子过滤宠物列表，区分不同孩子的宠物
+  const filteredPets = selectedChildId
+    ? pets.filter(p => p.member_id === selectedChildId)
+    : pets;
+
   if (loading) return <Loading />;
   return (
     <div className="space-y-6">
@@ -885,13 +890,15 @@ function UserDataTab({
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Dog className="w-4 h-4 text-amber-500" />
-          <h2 className="text-sm font-semibold text-slate-700">孩子领养的宠物（{pets.length}）</h2>
+          <h2 className="text-sm font-semibold text-slate-700">
+            孩子领养的宠物（{filteredPets.length}）
+          </h2>
         </div>
-        {pets.length === 0 ? (
+        {filteredPets.length === 0 ? (
           <EmptyState icon="🐾" title="暂无宠物" description="孩子还没有领养宠物" />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pets.map(pet => (
+            {filteredPets.map(pet => (
               <Card key={pet.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-[60px] h-[80px] rounded-2xl overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-2xl flex-shrink-0">
@@ -1840,9 +1847,11 @@ function compressImageToBlob(file: File, maxWidth: number, quality: number): Pro
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas not supported')); return; }
         ctx.drawImage(img, 0, 0, width, height);
+        // 问题17: PNG 保留透明背景，不强制转 JPEG
+        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
         canvas.toBlob(
           (blob) => blob ? resolve(blob) : reject(new Error('压缩失败')),
-          'image/jpeg',
+          outputType,
           quality,
         );
       };

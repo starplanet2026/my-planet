@@ -3,16 +3,12 @@ import { cn } from '../../../../lib/utils';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
-import type { Pet, DogHouse, PetInventory, PetSubcategory } from '../../../../api/types';
+import type { Pet, DogHouse, PetInventory, PetSubcategory, PetRarity } from '../../../../api/types';
+import { expNeeded } from '../../../../api/types';
 import {
   interactWithPet, claimPetCoins, fetchPetInventory, checkPet,
 } from '../../../../api/pets';
 import { PetLevelUpQuiz } from './PetLevelUpQuiz';
-
-// 经验值需求：level * 100（与 0046 后端 exp_needed 一致）
-function expNeeded(level: number): number {
-  return Math.max(level, 1) * 100;
-}
 
 // 稀有度文字
 function rarityLabel(rarity: string | undefined | null): string {
@@ -27,12 +23,23 @@ function moodState(pet: Pet): { emoji: string; text: string } {
   if (pet.is_sick) {
     return { emoji: '😢', text: '我不舒服...快带我去看医生！' };
   }
-  const avg = (pet.hunger + pet.clean + pet.happiness + pet.health) / 4;
+  // 新领养宠物：体力/清洁/玩耍均为0，显示欢迎文案
+  const h = coalesce0(pet.hunger);
+  const c = coalesce0(pet.clean);
+  const hp = coalesce0(pet.happiness);
+  if (h === 0 && c === 0 && hp === 0) {
+    return { emoji: '🐶', text: '快来和我互动吧，小主人' };
+  }
+  const avg = (h + c + hp + coalesce0(pet.health)) / 4;
   if (avg > 80) return { emoji: '🤩', text: '主人我好开心呀！💕' };
   if (avg > 60) return { emoji: '😊', text: '今天也是元气满满的一天~' };
   if (avg > 30) return { emoji: '😐', text: '还行，但还可以更好~' };
   if (avg > 10) return { emoji: '😟', text: '需要照顾啦...' };
   return { emoji: '😫', text: '我快不行了...快来救我！' };
+}
+
+function coalesce0(v: number | null | undefined): number {
+  return typeof v === 'number' ? v : 0;
 }
 
 // 心情表情
@@ -57,12 +64,13 @@ const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food', clean: 'clean', play: 'toy', heal: 'medicine',
 };
 
-export function PetGrassland({ pets, dogHouse, bgImage }: {
+export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   pets: Pet[];
   dogHouse: DogHouse | null;
   onPetClick?: (pet: Pet) => void;
   onDogHouseUpgraded?: () => void;
   bgImage?: string;
+  onPetUpdate?: (updated: Pet) => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -82,21 +90,30 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
   });
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
-  // 初始化宠物状态
+  // 初始化宠物状态（合并：保留已有状态中可能更新的数据）
   useEffect(() => {
-    const map: Record<string, Pet> = {};
+    setPetStates(prev => {
+      const map: Record<string, Pet> = {};
+      pets.forEach((p, i) => {
+        // 如果已有状态，比较 exp/hunger 等决定用哪个
+        const existing = prev[p.id];
+        if (existing && existing.exp >= p.exp) {
+          map[p.id] = existing;
+        } else {
+          map[p.id] = p;
+        }
+      });
+      return map;
+    });
     const fixed: Record<string, { x: number; y: number }> = {};
     pets.forEach((p, i) => {
-      map[p.id] = p;
       const cur = positions[p.id];
       if (cur) {
-        // 修正越界位置：y 不能超过 70（避免被底部导航栏遮挡）
         fixed[p.id] = {
           x: Math.max(5, Math.min(95, cur.x)),
           y: Math.max(10, Math.min(70, cur.y)),
         };
       } else {
-        // 默认 5×2 网格
         const col = i % 5;
         const row = Math.floor(i / 5);
         fixed[p.id] = {
@@ -106,7 +123,8 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
       }
     });
     setPositions(fixed);
-    setPetStates(map);
+    // 问题2: 购买用品后刷新背包
+    loadInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pets]);
 
@@ -152,6 +170,21 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
       toast.info('宠物没有生病');
       return;
     }
+    // 问题6: 属性满值时拦截，提示友好文案
+    const actionCfg = ACTIONS.find(a => a.key === action);
+    if (actionCfg) {
+      const statVal = pet[actionCfg.stat] ?? 0;
+      if (statVal >= 100) {
+        const fullMsg: Record<string, string> = {
+          feed: '我已经饱啦 🍖',
+          clean: '我很干净啦 🧼',
+          play: '我很开心啦 🎾',
+          heal: '我很健康啦 💊',
+        };
+        toast.info(fullMsg[action] || '该属性已满');
+        return;
+      }
+    }
     const item = getItem(action);
     if (!item) {
       toast.error('背包无此物品，去商店购买');
@@ -159,16 +192,45 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
     }
     setActing(action);
     try {
-      // interact_with_pet 现在返回更新后的宠物完整行（含 exp / pending_levelup）
+      const oldStat = actionCfg ? (pet[actionCfg.stat] ?? 0) : 0;
+      const oldExp = pet.exp ?? 0;
+      const oldCoin = pet.coin_balance ?? 0;
+      const oldLevel = pet.level ?? 1;
       const updated = await interactWithPet(childId, pet.id, action, item.item_id);
-      // 新规则：经验满后置 pending_levelup = true，需通过挑战完成升级
+      const newCoin = updated.coin_balance ?? 0;
+      const coinEarned = Math.max(0, newCoin - oldCoin);
+      const expEarned = Math.max(0, (updated.exp ?? 0) - oldExp);
+      const isLevelUp = (updated.level ?? 1) > oldLevel;
+
       if (updated.pending_levelup && !pet.pending_levelup) {
         toast.success('经验已满！点击宠物上方的「升级挑战」完成升级');
+      } else if (actionCfg) {
+        const newStat = updated[actionCfg.stat] ?? 0;
+        const recovery = Math.max(0, Math.round(newStat - oldStat));
+        if (recovery > 0) {
+          if (newStat >= 100 && expEarned > 0) {
+            toast.success(`${actionCfg.statLabel}恢复+${recovery}，经验+${expEarned}`);
+          } else if (newStat >= 100 && expEarned === 0) {
+            toast.success(`${actionCfg.statLabel}恢复+${recovery}（今日经验已满）`);
+          } else {
+            toast.success(`${actionCfg.statLabel}恢复+${recovery}`);
+          }
+        } else if (newStat === oldStat) {
+          toast.info('该属性已满');
+        } else {
+          toast.success('互动成功');
+        }
       } else {
         toast.success('互动成功');
       }
+      // 金币奖励提示：四项全满时触发"今日收获"
+      if (coinEarned > 0) {
+        toast.success(`🎉 今日收获 金币+${coinEarned}`);
+      }
       refreshMembers();
       setPetStates(prev => ({ ...prev, [pet.id]: updated }));
+      // 问题3: 同步到父组件，避免父组件 re-render 时覆盖本地状态
+      onPetUpdate?.(updated);
       loadInventory();
     } catch (e: any) {
       toast.error(e?.message ?? '操作失败');
@@ -184,6 +246,7 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
   const handleLevelUpDone = (updated: Pet) => {
     refreshMembers();
     setPetStates(prev => ({ ...prev, [updated.id]: updated }));
+    onPetUpdate?.(updated);
   };
 
   const handleClaim = async (petId: string) => {
@@ -279,7 +342,7 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
           >
             {/* 升级挑战悬浮按钮：经验满 + 未满级时显示 */}
-            {pet.pending_levelup && pet.level < pet.max_level && (
+            {(pet.pending_levelup || pet.exp >= expNeeded(pet.level, pet.rarity as PetRarity)) && pet.level < pet.max_level && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); handleLevelUpClick(pet); }}
@@ -388,11 +451,11 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
                   <div className="w-14 h-1 bg-slate-200/80 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level)) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
                     />
                   </div>
                   <span className="text-[8px] font-medium text-slate-500 whitespace-nowrap">
-                    {pet.level < pet.max_level ? `${pet.exp}/${expNeeded(pet.level)}` : 'MAX'}
+                    {pet.level < pet.max_level ? `${pet.exp}/${expNeeded(pet.level, pet.rarity as PetRarity)}` : 'MAX'}
                   </span>
                 </div>
               )}
@@ -415,11 +478,11 @@ export function PetGrassland({ pets, dogHouse, bgImage }: {
                         <div className="flex-1 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
-                            style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level)) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
                           />
                         </div>
                         <span className="text-[8px] font-medium text-slate-500">
-                          {pet.exp}/{expNeeded(pet.level)}
+                          {pet.exp}/{expNeeded(pet.level, pet.rarity as PetRarity)}
                         </span>
                       </>
                     ) : (

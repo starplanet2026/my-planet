@@ -115,9 +115,16 @@ export function PetLevelUpQuiz({
   const isChoiceLike = (q: QuizItem | undefined) =>
     !!q && (q.type === 'choice' || q.type === 'multi_choice') && Array.isArray(q.options) && q.options.length > 0;
 
-  const handleAnswer = (qid: string, value: string) => {
+  const handleAnswer = (qid: string, letter: string, isMulti: boolean) => {
     if (revealed[qid]) return;
-    setAnswers(prev => ({ ...prev, [qid]: value }));
+    setAnswers(prev => {
+      const prevAns = prev[qid] ?? '';
+      if (isMulti) {
+        const newAns = prevAns.includes(letter) ? prevAns.replace(letter, '') : prevAns + letter;
+        return { ...prev, [qid]: newAns };
+      }
+      return { ...prev, [qid]: letter };
+    });
   };
 
   const handleConfirm = () => {
@@ -132,7 +139,14 @@ export function PetLevelUpQuiz({
       // 提交判分
       const correctCount = questions.reduce((acc, q) => {
         const userAns = (answers[q.id] ?? '').trim();
-        return acc + (userAns && userAns === q.correct_answer ? 1 : 0);
+        if (!userAns) return acc;
+        // 选择题/多选题：比较选项字母（排序后比较）
+        if (q.type === 'choice' || q.type === 'multi_choice') {
+          const sortStr = (s: string) => s.split('').sort().join('');
+          return acc + (sortStr(userAns) === sortStr(q.correct_answer) ? 1 : 0);
+        }
+        // 填空题：直接比较文本
+        return acc + (userAns === q.correct_answer ? 1 : 0);
       }, 0);
       const passed = correctCount / questions.length >= PASS_THRESHOLD;
       setResult({ correct: correctCount, total: questions.length, passed });
@@ -147,7 +161,8 @@ export function PetLevelUpQuiz({
     setSubmitting(true);
     try {
       const updated = await completePetLevelup(memberId, pet.id);
-      toast.success(`升级成功！Lv.${pet.level} → Lv.${updated.level}，获得10金币`);
+      const reward = (updated.level ?? 1) * 1.25;
+      toast.success(`升级成功！Lv.${pet.level} → Lv.${updated.level}，升级奖励 ${reward} 金币`);
       onLevelUp(updated);
       onClose();
     } catch (e: any) {
@@ -160,7 +175,12 @@ export function PetLevelUpQuiz({
   // 单题是否答对（用于已揭示时显示对错）
   const isCorrect = (q: QuizItem) => {
     const userAns = (answers[q.id] ?? '').trim();
-    return !!userAns && userAns === q.correct_answer;
+    if (!userAns) return false;
+    if (q.type === 'choice' || q.type === 'multi_choice') {
+      const sortStr = (s: string) => s.split('').sort().join('');
+      return sortStr(userAns) === sortStr(q.correct_answer);
+    }
+    return userAns === q.correct_answer;
   };
 
   return (
@@ -202,16 +222,18 @@ export function PetLevelUpQuiz({
               loading={submitting}
               onClick={handleCompleteLevelup}
             >
-              领取升级奖励（+10 金币）
+              领取升级奖励（等级×1.25）
             </Button>
           ) : (
-            <Button variant="primary" fullWidth onClick={handleRetry}>
-              再来一次
-            </Button>
+            <>
+              <Button variant="primary" fullWidth onClick={handleRetry}>
+                再来一次
+              </Button>
+              <Button variant="ghost" fullWidth onClick={onClose}>
+                稍后再试
+              </Button>
+            </>
           )}
-          <Button variant="ghost" fullWidth onClick={onClose}>
-            稍后再试
-          </Button>
         </div>
       ) : current ? (
         <div className="space-y-4">
@@ -238,13 +260,16 @@ export function PetLevelUpQuiz({
           {isChoiceLike(current) ? (
             <div className="space-y-2">
               {(current.options ?? []).map((opt, idx) => {
-                const selected = answers[current.id] === opt;
-                const showCorrect = revealed[current.id] && opt === current.correct_answer;
-                const showWrong = revealed[current.id] && selected && opt !== current.correct_answer;
+                const letter = String.fromCharCode(65 + idx);
+                const isMulti = current.type === 'multi_choice';
+                const userAns = answers[current.id] ?? '';
+                const selected = isMulti ? userAns.includes(letter) : userAns === letter;
+                const showCorrect = revealed[current.id] && current.correct_answer.includes(letter);
+                const showWrong = revealed[current.id] && selected && !current.correct_answer.includes(letter);
                 return (
                   <button
                     key={idx}
-                    onClick={() => handleAnswer(current.id, opt)}
+                    onClick={() => handleAnswer(current.id, letter, isMulti)}
                     disabled={revealed[current.id]}
                     className={cn(
                       'w-full text-left px-3 py-2.5 rounded-xl border-2 text-sm transition-colors',
@@ -255,7 +280,7 @@ export function PetLevelUpQuiz({
                     )}
                   >
                     <span className="font-mono text-xs text-slate-500 mr-2">
-                      {String.fromCharCode(65 + idx)}.
+                      {letter}.
                     </span>
                     <span className="text-slate-700">{opt}</span>
                     {showCorrect && <span className="ml-2 text-emerald-600 text-xs">✓ 正确答案</span>}
