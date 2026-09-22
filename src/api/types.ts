@@ -60,7 +60,6 @@ export interface Task {
 
 export interface TaskTemplate {
   id: string;
-  family_id: string;
   title: string;
   description: string | null;
   category: TaskCategory;
@@ -70,7 +69,6 @@ export interface TaskTemplate {
 
 export interface Item {
   id: string;
-  family_id: string;
   name: string;
   description: string | null;
   price: number;
@@ -155,7 +153,6 @@ export interface InitFamilyResult {
 
 export interface ChallengeSet {
   id: string;
-  family_id: string;
   title: string;
   description: string | null;
   type: ChallengeSetType;
@@ -281,7 +278,6 @@ export type PetRarity = 'common' | 'rare' | 'epic';
 
 export interface PetShopItem {
   id: string;
-  family_id: string;
   type: PetShopItemType;
   subcategory: PetSubcategory | null;
   name: string | null;
@@ -345,7 +341,6 @@ export interface DogHouse {
 // 单词消消乐词库
 export interface PetWord {
   id: string;
-  family_id: string;
   word_en: string;
   word_cn: string;
   part_of_speech: string | null;
@@ -359,7 +354,6 @@ export interface PetWord {
 // 背景图
 export interface PetBackground {
   id: string;
-  family_id: string;
   name: string;
   image_data: string;
   sort_order: number;

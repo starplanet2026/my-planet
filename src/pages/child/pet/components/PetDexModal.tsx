@@ -39,7 +39,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
     setLoading(true);
     try {
       const [itemsData, petsData] = await Promise.all([
-        fetchPetShopItems(familyId, 'pet'),
+        fetchPetShopItems('pet'),
         fetchPets(memberId),
       ]);
       setItems(itemsData);

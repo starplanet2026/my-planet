@@ -168,16 +168,15 @@ export async function refreshAndExpireTasks(familyId: string): Promise<void> {
 
 // ---- 模板 ----
 
-export async function fetchTaskTemplates(familyId: string): Promise<TaskTemplate[]> {
+export async function fetchTaskTemplates(): Promise<TaskTemplate[]> {
   const { data, error } = await supabase
-    .from('task_templates').select('*').eq('family_id', familyId)
+    .from('task_templates').select('*')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as TaskTemplate[];
 }
 
 export async function saveTaskTemplate(template: {
-  family_id: string;
   title: string;
   description: string | null;
   category: TaskCategory;

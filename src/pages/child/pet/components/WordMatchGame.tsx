@@ -45,7 +45,7 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
     setLoading(true);
     try {
       const [wordList, results] = await Promise.all([
-        fetchPetWords(familyId),
+        fetchPetWords(),
         fetchGameLevelResults(memberId),
       ]);
       setWords(wordList);
@@ -112,7 +112,7 @@ export function WordMatchGame({ familyId, memberId, onReward }: WordMatchGamePro
       onReward();
       // 重新加载词库：错词+最后1个消除词已被 RPC 推到队尾，下一关要按新顺序取词
       try {
-        const freshWords = await fetchPetWords(familyId);
+        const freshWords = await fetchPetWords();
         setWords(freshWords);
       } catch { /* 静默：词库刷新失败不阻塞结算 */ }
       // 刷新关卡结果（stars 固定为 3，仅用于UI兼容显示）

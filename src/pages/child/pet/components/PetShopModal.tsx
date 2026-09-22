@@ -163,7 +163,7 @@ export function PetShopModal({
       // "全部" 时传 undefined 加载所有
       const fetchSub = activeSub === 'all' ? undefined : activeSub as PetSubcategory;
       const [data, myPets] = await Promise.all([
-        fetchPetShopItems(familyId, activeMain, fetchSub),
+        fetchPetShopItems(activeMain, fetchSub),
         fetchPets(childId),
       ]);
       setItems(data);

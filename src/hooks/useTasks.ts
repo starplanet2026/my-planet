@@ -49,13 +49,9 @@ export function useTasks(category?: TaskCategory) {
 }
 
 export function useTaskTemplates() {
-  const familyId = useFamilyStore(s => s.family?.id);
-
   const { rows: templates, loading } = useRealtimeTable<TaskTemplate>({
     table: 'task_templates',
-    filter: familyId ? `family_id=eq.${familyId}` : undefined,
-    fetchFn: () => familyId ? fetchTaskTemplates(familyId) : Promise.resolve([]),
-    enabled: !!familyId,
+    fetchFn: () => fetchTaskTemplates(),
   });
 
   return {

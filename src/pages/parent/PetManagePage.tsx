@@ -146,7 +146,7 @@ export function PetManagePage() {
     if (!family) return;
     setLoading(true);
     try {
-      setItems(await fetchPetShopItems(family.id, undefined, undefined, true));
+      setItems(await fetchPetShopItems(undefined, undefined, true));
     } catch (e: any) {
       toast.error(e?.message ?? '加载商品失败');
     } finally {
@@ -157,7 +157,7 @@ export function PetManagePage() {
   const loadWords = async () => {
     if (!family) return;
     try {
-      setWords(await fetchPetWords(family.id));
+      setWords(await fetchPetWords());
     } catch (e: any) {
       toast.error(e?.message ?? '加载单词失败');
     }
@@ -295,7 +295,7 @@ export function PetManagePage() {
   const handleBatchMoveWordsTop = async (ids: string[]) => {
     if (ids.length === 0 || !family) return;
     try {
-      await batchMovePetWordsTop(family.id, ids);
+      await batchMovePetWordsTop(ids);
       toast.success(`已置顶 ${ids.length} 个单词`);
       loadWords();
     } catch (e: any) {
@@ -305,7 +305,7 @@ export function PetManagePage() {
   const handleBatchMoveWordsBottom = async (ids: string[]) => {
     if (ids.length === 0 || !family) return;
     try {
-      await batchMovePetWordsBottom(family.id, ids);
+      await batchMovePetWordsBottom(ids);
       toast.success(`已置底 ${ids.length} 个单词`);
       loadWords();
     } catch (e: any) {
@@ -320,7 +320,7 @@ export function PetManagePage() {
       return;
     }
     try {
-      await createPetWord(family.id, en.trim(), cn.trim(), pos.trim() || undefined);
+      await createPetWord(en.trim(), cn.trim(), pos.trim() || undefined);
       toast.success('已添加');
       loadWords();
     } catch (e: any) {
@@ -349,7 +349,7 @@ export function PetManagePage() {
       return;
     }
     try {
-      await createPetWordsBatch(family.id, parsed);
+      await createPetWordsBatch(parsed);
       toast.success(`已导入 ${parsed.length} 个单词`);
       loadWords();
     } catch (e: any) {
@@ -400,7 +400,7 @@ export function PetManagePage() {
         return;
       }
 
-      await createPetWordsBatch(family.id, parsed);
+      await createPetWordsBatch(parsed);
       toast.success(`Excel 导入成功：${parsed.length} 个单词`);
       loadWords();
     } catch (e: any) {
@@ -1290,7 +1290,6 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setSaving(true);
     try {
       await createPetShopItem({
-        family_id: family.id,
         type,
         subcategory,
         name: type === 'supply' ? name.trim() : undefined,
@@ -1586,7 +1585,8 @@ function EditItemModal({
   onUpdated: () => void;
 }) {
   const toast = useToastStore();
-  const { fileRef, imageUrl, setImageUrl, handleImageUpload, uploading: imgUploading } = useImageUpload(item.image_url || '', toast, item.family_id, 'shop');
+  const family = useFamilyStore(s => s.family);
+  const { fileRef, imageUrl, setImageUrl, handleImageUpload, uploading: imgUploading } = useImageUpload(item.image_url || '', toast, family?.id || '', 'shop');
 
   const [subcategory, setSubcategory] = useState<PetSubcategory>(
     item.subcategory ?? defaultSubcategory(item.type)
@@ -1867,7 +1867,7 @@ function BackgroundTab() {
     if (!family) return;
     setLoading(true);
     try {
-      const data = await fetchBackgrounds(family.id);
+      const data = await fetchBackgrounds();
       setBackgrounds(data);
     } catch (e: any) {
       toast.error(e?.message ?? '加载失败');
@@ -1891,7 +1891,7 @@ function BackgroundTab() {
       const blob = await compressImageToBlob(file, 1280, 0.8);
       const url = await uploadImageToStorage(blob, family!.id, 'backgrounds');
       const name = file.name.replace(/\.[^.]+$/, '');
-      await createBackground(family!.id, name, url);
+      await createBackground(name, url);
       toast.success('上传成功');
       loadBgs();
     } catch (e: any) {

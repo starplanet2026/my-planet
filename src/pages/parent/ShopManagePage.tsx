@@ -125,7 +125,6 @@ export function ShopManagePage() {
     setSaving(true);
     try {
       const data = {
-        family_id: family.id,
         name: form.name.trim(),
         description: form.description.trim() || null,
         price: Number(form.price),

@@ -176,7 +176,7 @@ export function AdoptPetModal({
   // 加载宠物商品
   useEffect(() => {
     if (family?.id && (mode === 'quiz' || mode === 'gacha')) {
-      fetchPetShopItems(family.id, 'pet', undefined, false).then(items => {
+      fetchPetShopItems('pet', undefined, false).then(items => {
         setPetItems(items);
       }).catch(() => {});
     }
@@ -251,7 +251,7 @@ export function AdoptPetModal({
     try {
       const items = petItems.length > 0
         ? petItems
-        : await fetchPetShopItems(family.id, 'pet', undefined, false);
+        : await fetchPetShopItems('pet', undefined, false);
       if (items.length === 0) {
         toast.error('暂无可抽取的宠物');
         return;

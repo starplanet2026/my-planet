@@ -38,7 +38,7 @@ export function ChallengeManagePage() {
     if (!family) return;
     setLoading(true);
     try {
-      const data = await fetchChallengeSets(family.id);
+      const data = await fetchChallengeSets();
       setSets(data);
     } catch (e: any) {
       toast.error(e?.message ?? '加载失败');
@@ -181,7 +181,6 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
     setCreating(true);
     try {
       const set = await createChallengeSet({
-        family_id: family.id,
         title: title.trim(),
         description: description.trim() || undefined,
         type,

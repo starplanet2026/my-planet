@@ -2,11 +2,10 @@ import { supabase } from './client';
 import type { Item } from './types';
 
 // 查询商品
-export async function fetchItems(familyId: string, activeOnly = false): Promise<Item[]> {
+export async function fetchItems(activeOnly = false): Promise<Item[]> {
   let q = supabase
     .from('items')
     .select('*')
-    .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (activeOnly) q = q.eq('status', 'active');
   const { data, error } = await q;
@@ -16,7 +15,6 @@ export async function fetchItems(familyId: string, activeOnly = false): Promise<
 
 // 创建商品
 export async function createItem(item: {
-  family_id: string;
   name: string;
   description: string | null;
   price: number;

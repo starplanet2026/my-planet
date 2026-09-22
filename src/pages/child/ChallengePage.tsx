@@ -59,7 +59,7 @@ export function ChallengePage() {
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchChallengeSets(family.id);
+        const data = await fetchChallengeSets();
         const active = data.filter(s => s.status === 'active');
         setSets(active);
         // 拉取每个题集的挑战进度（已掌握/总数）

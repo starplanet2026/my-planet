@@ -60,12 +60,11 @@ export function PetLevelUpQuiz({
     try {
       const picked: QuizItem[] = [];
 
-      // 从本家庭所有题集中随机抽题（错题本已下线，升级挑战只用随机题库）
+      // 从所有题集中随机抽题（错题本已下线，升级挑战只用随机题库）
       if (family) {
         const { data: sets, error: setsErr } = await supabase
           .from('challenge_sets')
-          .select('id')
-          .eq('family_id', family.id);
+          .select('id');
         if (setsErr) throw setsErr;
 
         const setIds = (sets ?? []).map((s: any) => s.id).filter(Boolean);

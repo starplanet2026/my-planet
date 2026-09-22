@@ -7,8 +7,8 @@ import type {
 
 // ====== ChallengeSet 题集 ======
 
-export async function fetchChallengeSets(familyId: string, type?: ChallengeSetType): Promise<ChallengeSet[]> {
-  let q = supabase.from('challenge_sets').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
+export async function fetchChallengeSets(type?: ChallengeSetType): Promise<ChallengeSet[]> {
+  let q = supabase.from('challenge_sets').select('*').order('created_at', { ascending: false });
   if (type) q = q.eq('type', type);
   const { data, error } = await q;
   if (error) throw error;
@@ -16,7 +16,6 @@ export async function fetchChallengeSets(familyId: string, type?: ChallengeSetTy
 }
 
 export async function createChallengeSet(data: {
-  family_id: string;
   title: string;
   description?: string;
   type: ChallengeSetType;

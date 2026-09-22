@@ -160,7 +160,7 @@ export function PetPage() {
     if (!family) return;
     setBgLoading(true);
     try {
-      const list = await fetchBackgrounds(family.id);
+      const list = await fetchBackgrounds();
       setBackgrounds(list);
     } catch (e: any) {
       toast.error(e?.message ?? '加载背景失败');

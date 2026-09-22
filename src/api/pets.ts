@@ -12,9 +12,8 @@ import type {
 
 // ====== 商店商品 ======
 
-export async function fetchPetShopItems(familyId: string, type?: PetShopItemType, subcategory?: PetSubcategory, includeInactive = false): Promise<PetShopItem[]> {
+export async function fetchPetShopItems(type?: PetShopItemType, subcategory?: PetSubcategory, includeInactive = false): Promise<PetShopItem[]> {
   let q = supabase.from('pet_shop_items').select('*')
-    .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (!includeInactive) {
     q = q.eq('status', 'active');
@@ -27,7 +26,6 @@ export async function fetchPetShopItems(familyId: string, type?: PetShopItemType
 }
 
 export async function createPetShopItem(data: {
-  family_id: string;
   type: PetShopItemType;
   subcategory?: PetSubcategory;
   name?: string;
@@ -188,11 +186,10 @@ export async function evolvePet(petId: string, targetRarity: 'rare' | 'epic'): P
 
 // ====== 单词消消乐 ======
 
-export async function fetchPetWords(familyId: string): Promise<PetWord[]> {
+export async function fetchPetWords(): Promise<PetWord[]> {
   const { data, error } = await supabase
     .from('pet_words')
     .select('*')
-    .eq('family_id', familyId)
     .eq('status', 'active')
     .order('display_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
@@ -200,38 +197,35 @@ export async function fetchPetWords(familyId: string): Promise<PetWord[]> {
   return (data ?? []) as PetWord[];
 }
 
-export async function createPetWord(familyId: string, wordEn: string, wordCn: string, partOfSpeech?: string): Promise<PetWord> {
+export async function createPetWord(wordEn: string, wordCn: string, partOfSpeech?: string): Promise<PetWord> {
   // 取当前最大 display_order，新词排到队尾
   const { data: maxRow } = await supabase
     .from('pet_words')
     .select('display_order')
-    .eq('family_id', familyId)
     .order('display_order', { ascending: false })
     .limit(1)
     .maybeSingle();
   const nextOrder = (maxRow?.display_order ?? 0) + 1;
   const { data, error } = await supabase
     .from('pet_words')
-    .insert({ family_id: familyId, word_en: wordEn, word_cn: wordCn, part_of_speech: partOfSpeech || null, display_order: nextOrder })
+    .insert({ word_en: wordEn, word_cn: wordCn, part_of_speech: partOfSpeech || null, display_order: nextOrder })
     .select()
     .single();
   if (error) throw error;
   return data as PetWord;
 }
 
-export async function createPetWordsBatch(familyId: string, words: { en: string; cn: string; pos?: string }[]): Promise<void> {
+export async function createPetWordsBatch(words: { en: string; cn: string; pos?: string }[]): Promise<void> {
   if (words.length === 0) return;
   // 取当前最大 display_order，按 Excel 顺序追加
   const { data: maxRow } = await supabase
     .from('pet_words')
     .select('display_order')
-    .eq('family_id', familyId)
     .order('display_order', { ascending: false })
     .limit(1)
     .maybeSingle();
   const startOrder = (maxRow?.display_order ?? 0) + 1;
   const rows = words.map((w, i) => ({
-    family_id: familyId,
     word_en: w.en,
     word_cn: w.cn,
     part_of_speech: w.pos || null,
@@ -254,13 +248,12 @@ export async function batchDeletePetWords(ids: string[]): Promise<void> {
 }
 
 // 批量置顶：把选中的词移到最前面，其他词依次后移
-export async function batchMovePetWordsTop(familyId: string, ids: string[]): Promise<void> {
+export async function batchMovePetWordsTop(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   // 1. 拉取全部词，按 display_order 升序
   const { data: allWords, error: e1 } = await supabase
     .from('pet_words')
     .select('id, display_order')
-    .eq('family_id', familyId)
     .order('display_order', { ascending: true, nullsFirst: false });
   if (e1) throw e1;
   if (!allWords || allWords.length === 0) return;
@@ -282,12 +275,11 @@ export async function batchMovePetWordsTop(familyId: string, ids: string[]): Pro
 }
 
 // 批量置底：把选中的词移到最后，其他词依次前移
-export async function batchMovePetWordsBottom(familyId: string, ids: string[]): Promise<void> {
+export async function batchMovePetWordsBottom(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const { data: allWords, error: e1 } = await supabase
     .from('pet_words')
     .select('id, display_order')
-    .eq('family_id', familyId)
     .order('display_order', { ascending: true, nullsFirst: false });
   if (e1) throw e1;
   if (!allWords || allWords.length === 0) return;
@@ -419,20 +411,19 @@ export async function fetchGameWordStats(memberId: string): Promise<GameWordStat
 
 // ====== 背景图管理 ======
 
-export async function fetchBackgrounds(familyId: string): Promise<PetBackground[]> {
+export async function fetchBackgrounds(): Promise<PetBackground[]> {
   const { data, error } = await supabase
     .from('pet_backgrounds')
     .select('*')
-    .eq('family_id', familyId)
     .order('sort_order', { ascending: true });
   if (error) throw error;
   return (data ?? []) as PetBackground[];
 }
 
-export async function createBackground(familyId: string, name: string, imageData: string): Promise<PetBackground> {
+export async function createBackground(name: string, imageData: string): Promise<PetBackground> {
   const { data, error } = await supabase
     .from('pet_backgrounds')
-    .insert({ family_id: familyId, name, image_data: imageData })
+    .insert({ name, image_data: imageData })
     .select()
     .single();
   if (error) throw error;
@@ -458,8 +449,7 @@ export async function migrateBase64ToStorage(
   // 1. 迁移 pet_shop_items.image_url
   const { data: shopItems, error: shopErr } = await supabase
     .from('pet_shop_items')
-    .select('id, image_url')
-    .eq('family_id', familyId);
+    .select('id, image_url');
   if (shopErr) throw shopErr;
 
   for (const item of shopItems ?? []) {
@@ -478,8 +468,7 @@ export async function migrateBase64ToStorage(
   // 2. 迁移 pet_backgrounds.image_data
   const { data: bgs, error: bgErr } = await supabase
     .from('pet_backgrounds')
-    .select('id, image_data')
-    .eq('family_id', familyId);
+    .select('id, image_data');
   if (bgErr) throw bgErr;
 
   for (const bg of bgs ?? []) {
