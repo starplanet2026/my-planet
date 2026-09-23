@@ -1134,6 +1134,7 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
     : Math.max(...existingLevels.map(l => l.level_no)) + 1;
   const [levelNo, setLevelNo] = useState<number>(level?.level_no ?? defaultNo);
   const [title, setTitle] = useState<string>(level?.title ?? '');
+  const [description, setDescription] = useState<string>(level?.description ?? '');
   const [passReward, setPassReward] = useState<number>(level?.pass_reward ?? 3);
   const [status, setStatus] = useState<'active' | 'inactive'>(level?.status ?? 'active');
   const [saving, setSaving] = useState(false);
@@ -1152,6 +1153,7 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
         await updateChallengeLevel(level.id, {
           level_no: levelNo,
           title: title.trim() || null,
+          description: description.trim() || null,
           pass_reward: passReward,
           status,
         });
@@ -1161,6 +1163,7 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
           challenge_set_id: setId,
           level_no: levelNo,
           title: title.trim() || undefined,
+          description: description.trim() || undefined,
           pass_reward: passReward,
           status,
         });
@@ -1185,6 +1188,16 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">关卡标题（可选）</label>
           <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={`如：第一单元练习`} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">关卡描述（可选）</label>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="描述本关卡的学习目标、知识点范围等，孩子做题时可查看"
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-800 focus:outline-none focus:border-star-400 resize-none"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">通关奖励星光值</label>
@@ -1955,7 +1968,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   // 筛选条件
   const [memberId, setMemberId] = useState<string>('');
   const [setId, setSetId] = useState<string>('');
-  const [minWrongCount, setMinWrongCount] = useState<number>(0);
+  const [minWrongCount, setMinWrongCount] = useState<number>(1);
   const [minErrorRate, setMinErrorRate] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'error_rate' | 'wrong_count'>('wrong_count');
 
@@ -1979,8 +1992,9 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
         memberId || undefined,
         setId || undefined,
       );
-      // 客户端二次筛选 + 排序
+      // 客户端二次筛选 + 排序（错误次数为0的题不进入混战管理）
       const filtered = data
+        .filter(s => s.wrong_count > 0)
         .filter(s => s.wrong_count >= minWrongCount)
         .filter(s => {
           if (minErrorRate <= 0) return true;
@@ -2017,6 +2031,11 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   useEffect(() => {
     if (subView === 'pool' && poolMemberId) loadPool(poolMemberId);
   }, [subView, poolMemberId]);
+
+  // 自动加载错题统计（首次进入 + 孩子或题集变化时）
+  useEffect(() => {
+    if (subView === 'list') loadStats();
+  }, [subView, memberId, setId]);
 
   // 默认选中第一个孩子
   useEffect(() => {
@@ -2190,6 +2209,12 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
                         <p className="text-sm text-slate-800 break-words">{s.question_text || '（无题干）'}</p>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           {setCfg && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{setCfg.title}</span>}
+                          {setCfg && (
+                            <span className={cn('text-xs px-1.5 py-0.5 rounded',
+                              setCfg.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+                              {setCfg.status === 'active' ? '已发布' : '未发布'}
+                            </span>
+                          )}
                           <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[s.type as QuestionType] ?? s.type}</span>
                           <span className={cn('text-xs px-1.5 py-0.5 rounded',
                             s.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :

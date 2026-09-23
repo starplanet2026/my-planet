@@ -193,6 +193,7 @@ export interface ChallengeLevel {
   challenge_set_id: string;
   level_no: number;
   title: string | null;
+  description: string | null;
   pass_reward: number;
   status: 'active' | 'inactive';
   created_at: string;
@@ -203,6 +204,7 @@ export interface LevelWithProgress {
   id: string;
   level_no: number;
   title: string | null;
+  description: string | null;
   pass_reward: number;
   status: string;
   total: number;
@@ -224,6 +226,9 @@ export interface SetWithLevels {
   reward_medium: number;
   reward_hard: number;
   knowledge_points: string | null;
+  easy_count: number;
+  medium_count: number;
+  hard_count: number;
   levels: LevelWithProgress[];
 }
 

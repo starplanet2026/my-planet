@@ -10,7 +10,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight } from 'lucide-react';
+import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight, AlertCircle } from 'lucide-react';
 import { QuestionRenderer } from './challenge/questions/QuestionRenderer';
 import {
   fetchChallengeSets, fetchQuestions, fetchWords, fetchWordProgress,
@@ -19,10 +19,13 @@ import {
   fetchChallengeBoards, fetchLevelQuestions,
   saveLevelSnapshot, loadLevelSnapshot, resetLevelSnapshot,
   finishChallengeLevel,
+  fetchWrongQuestionStats,
+  fetchWrongBattlePool,
 } from '../../api/challenges';
 import type {
   ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, SetWithLevels, LevelWithProgress,
+  WrongQuestionStat, WrongBattlePoolItem,
 } from '../../api/types';
 
 // ====== 板块配置 ======
@@ -73,6 +76,8 @@ export function ChallengePage() {
   const [boards, setBoards] = useState<ChallengeBoard[]>([]);
   const [activeBoard, setActiveBoard] = useState<ChallengeBoardType>('today_review');
   const [loading, setLoading] = useState(true);
+  const [wrongRetry, setWrongRetry] = useState<{ setId: string; setTitle: string; questionIds: string[] } | null>(null);
+  const [battleMode, setBattleMode] = useState(false);
 
   // 板块 ref（用于 scrollIntoView）
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -95,6 +100,7 @@ export function ChallengePage() {
             type: s.type, status: s.status,
             reward_easy: s.reward_easy, reward_medium: s.reward_medium, reward_hard: s.reward_hard,
             knowledge_points: s.knowledge_points,
+            easy_count: 0, medium_count: 0, hard_count: 0,
             levels: [],
           })),
         };
@@ -152,9 +158,11 @@ export function ChallengePage() {
       ?.levels.find(l => l.id === activeLevelId);
     return (
       <LevelPlayer
+        key={activeLevelId}
         set={activeSet}
         levelId={activeLevelId}
         levelInfo={levelInfo}
+        allLevels={boards.flatMap(b => b.sets).find(s => s.id === activeSet.id)?.levels ?? []}
         childId={child?.id ?? ''}
         board={activeSet.board}
         restoreSnapshot={lvSnap}
@@ -163,11 +171,19 @@ export function ChallengePage() {
           clearLevel();
         }}
         onDone={refreshMembers}
-        onLevelCleared={() => {
-          // 关卡清零，回到关卡列表（刷新 boards）
-          clearLevel();
+        onLevelCleared={(nextLevelId) => {
+          // 关卡清零，刷新 boards 数据
           if (family && child) {
-            fetchChallengeBoards(child.id).then(setBoards).catch(() => {});
+            fetchChallengeBoards(child.id).then(freshBoards => {
+              setBoards(freshBoards);
+              if (nextLevelId) {
+                setActiveLevel(nextLevelId);
+              } else {
+                clearLevel();
+              }
+            }).catch(() => { clearLevel(); });
+          } else {
+            clearLevel();
           }
         }}
       />
@@ -186,6 +202,29 @@ export function ChallengePage() {
         childId={child?.id ?? ''}
         onBack={() => { clearActive(); }}
         onEnterLevel={(levelId) => { setActiveLevel(levelId); }}
+      />
+    );
+  }
+
+  // 3.5) 错题混战池：全屏答题
+  if (battleMode) {
+    return (
+      <WrongBattlePlayer
+        childId={child?.id ?? ''}
+        onBack={() => setBattleMode(false)}
+      />
+    );
+  }
+
+  // 3.6) 错题再战：全屏答题
+  if (wrongRetry) {
+    return (
+      <WrongQuestionPlayer
+        setId={wrongRetry.setId}
+        setTitle={wrongRetry.setTitle}
+        childId={child?.id ?? ''}
+        questionIds={wrongRetry.questionIds}
+        onBack={() => setWrongRetry(null)}
       />
     );
   }
@@ -253,11 +292,14 @@ export function ChallengePage() {
                 label={bcfg.label}
                 icon={bcfg.icon}
                 sets={sets}
+                childId={child?.id ?? ''}
                 onSelectSet={(s) => {
                   // 清除旧快照，进入新题集
                   setSnapshot(null);
                   setActive(s);
                 }}
+                onWrongRetry={(setId, setTitle, questionIds) => setWrongRetry({ setId, setTitle, questionIds })}
+                onStartBattle={() => setBattleMode(true)}
               />
             </div>
           );
@@ -270,14 +312,19 @@ export function ChallengePage() {
 // ================================================================
 // 板块组件：标题 + 题集卡片网格
 // ================================================================
-function BoardSection({ boardType, label, icon, sets, onSelectSet }: {
+function BoardSection({ boardType, label, icon, sets, onSelectSet, childId, onWrongRetry, onStartBattle }: {
   boardType: ChallengeBoardType;
   label: string;
   icon: string;
   sets: SetWithLevels[];
   onSelectSet: (s: ChallengeSet) => void;
+  childId: string;
+  onWrongRetry: (setId: string, setTitle: string, questionIds: string[]) => void;
+  onStartBattle: () => void;
 }) {
-  if (sets.length === 0) return null;
+  const [wrongSet, setWrongSet] = useState<{ id: string; title: string } | null>(null);
+
+  if (sets.length === 0 && boardType !== 'wrong_battle') return null;
 
   return (
     <div>
@@ -285,11 +332,22 @@ function BoardSection({ boardType, label, icon, sets, onSelectSet }: {
       <div className="flex items-center gap-2 mb-3 px-1">
         <span className="text-xl">{icon}</span>
         <h2 className="text-base font-bold text-slate-800">{label}</h2>
-        <span className="text-xs text-slate-400">({sets.length})</span>
+        <span className="text-xs text-slate-400">({boardType === 'wrong_battle' ? Math.max(1, sets.length) : sets.length})</span>
       </div>
 
       {/* 题集卡片网格 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+        {/* 错题混战池入口（仅错题大混战板块显示） */}
+        {boardType === 'wrong_battle' && (
+          <div
+            onClick={onStartBattle}
+            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-purple-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow"
+          >
+            <span className="text-3xl mb-1">⚔️</span>
+            <span className="text-sm font-bold">错题混战池</span>
+            <span className="text-[10px] mt-1 opacity-90">点击开始挑战</span>
+          </div>
+        )}
         {sets.map(set => {
           const cfg = TYPE_CONFIG[set.type] ?? TYPE_CONFIG.choice;
           // 汇总整个题集的进度
@@ -346,14 +404,532 @@ function BoardSection({ boardType, label, icon, sets, onSelectSet }: {
                   )}
                 </div>
               )}
-              <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">+{set.reward_easy}⭐</span>
-                <span className="text-[10px] text-slate-400">{cfg.label}</span>
+              {/* 难度分布 */}
+              <div className="flex items-center gap-1.5 mt-1.5 text-[9px]">
+                <span className="text-emerald-500">简 {set.easy_count}</span>
+                <span className="text-amber-500">中 {set.medium_count}</span>
+                <span className="text-red-400">难 {set.hard_count}</span>
               </div>
+              {/* 查看错题按钮：仅在该题集有答题记录时显示 */}
+              {set.levels.some(l => l.mastered > 0) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setWrongSet({ id: set.id, title: set.title }); }}
+                  className="mt-2 w-full flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  <AlertCircle className="w-3 h-3" /> 查看错题
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* 错题查看弹窗 */}
+      {wrongSet && (
+        <WrongQuestionsModal
+          childId={childId}
+          setId={wrongSet.id}
+          setTitle={wrongSet.title}
+          onClose={() => setWrongSet(null)}
+          onRetry={(questionIds) => {
+            const id = wrongSet.id;
+            const title = wrongSet.title;
+            setWrongSet(null);
+            onWrongRetry(id, title, questionIds);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ================================================================
+// 错题查看弹窗：展示孩子在某题集中的错题，带错误次数
+// ================================================================
+function WrongQuestionsModal({ childId, setId, setTitle, onClose, onRetry }: {
+  childId: string;
+  setId: string;
+  setTitle: string;
+  onClose: () => void;
+  onRetry: (questionIds: string[]) => void;
+}) {
+  const [stats, setStats] = useState<WrongQuestionStat[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await fetchWrongQuestionStats(childId, setId);
+        // 只展示有错误记录的题
+        setStats(data.filter(s => s.wrong_count > 0));
+      } catch {
+        setStats([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [childId, setId]);
+
+  return (
+    <Modal open onClose={onClose} title={`${setTitle} - 错题`} size="md">
+      {loading ? (
+        <Loading />
+      ) : stats.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="text-4xl mb-2">🎉</div>
+          <p className="text-sm text-slate-500">没有错题，全部答对了！</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+            {stats.map(s => (
+              <div key={s.question_id} className="relative p-3 rounded-xl border border-slate-200 bg-slate-50">
+                {/* 右上角错误次数 */}
+                <span className="absolute top-1.5 right-1.5 min-w-5 h-5 px-1.5 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+                  {s.wrong_count}
+                </span>
+                <p className="text-sm text-slate-800 pr-6 break-words">{s.question_text || '（无题干）'}</p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600">错 {s.wrong_count} 次</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">
+                    错误率 {Math.round(s.error_rate)}%
+                  </span>
+                  <span className="text-[10px] text-slate-400">共答 {s.attempt_count} 次</span>
+                  {s.is_mastered && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">已掌握</span>
+                  )}
+                </div>
+                {s.correct_count > 0 && (
+                  <p className="text-[10px] text-emerald-500 mt-1">答对 {s.correct_count} 次</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Button variant="ghost" onClick={onClose} className="flex-1">返回</Button>
+            <Button
+              onClick={() => onRetry(stats.map(s => s.question_id))}
+              className="flex-1"
+            >
+              再战一次
+            </Button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ================================================================
+// 错题再战播放器：只做错题，答对得星光值，可反复挑战
+// ================================================================
+function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: {
+  setId: string;
+  setTitle: string;
+  childId: string;
+  questionIds: string[];
+  onBack: () => void;
+}) {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [idx, setIdx] = useState(0);
+  const [answer, setAnswer] = useState('');
+  const [showResult, setShowResult] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [results, setResults] = useState<boolean[]>([]);
+  const [totalReward, setTotalReward] = useState(0);
+  const [showFinal, setShowFinal] = useState(false);
+  const toast = useToastStore();
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const all = await fetchQuestions(setId);
+        setQuestions(all.filter(q => questionIds.includes(q.id)));
+      } catch {
+        setQuestions([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [setId, questionIds]);
+
+  const q = questions[idx];
+
+  const handleSubmit = async () => {
+    if (!answer.trim() || !q) return;
+    setSubmitting(true);
+    try {
+      const result = await answerQuestion(childId, q.id, answer);
+      setIsCorrect(result.is_correct);
+      setShowResult(true);
+      setResults(prev => [...prev, result.is_correct]);
+      setTotalReward(r => r + (result.reward ?? 0));
+      if (result.is_correct) {
+        const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
+        toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
+      } else {
+        toast.error('答错了，再试一次');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (idx < questions.length - 1) {
+      setAnswer('');
+      setShowResult(false);
+      setIdx(i => i + 1);
+    } else {
+      setShowFinal(true);
+    }
+  };
+
+  const handleRedo = () => {
+    setIdx(0);
+    setAnswer('');
+    setShowResult(false);
+    setResults([]);
+    setTotalReward(0);
+    setShowFinal(false);
+  };
+
+  if (loading) return <Loading />;
+
+  if (questions.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto -mt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-xl font-bold text-slate-800">{setTitle} - 错题再战</h2>
+        </div>
+        <EmptyState icon="🎉" title="没有错题" description="全部答对了！" />
+      </div>
+    );
+  }
+
+  // 最终结果
+  if (showFinal) {
+    const correctCount = results.filter(Boolean).length;
+    const wrongCount = results.length - correctCount;
+    return (
+      <div className="max-w-2xl mx-auto -mt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-xl font-bold text-slate-800">{setTitle} - 再战结果</h2>
+        </div>
+        <Card className="p-6 text-center bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100">
+          <div className="text-5xl mb-3">{correctCount === results.length ? '🎉' : '💪'}</div>
+          <div className="text-4xl font-bold text-emerald-500 mb-1">
+            {results.length > 0 ? Math.round((correctCount / results.length) * 100) : 0}%
+          </div>
+          <p className="text-sm text-slate-500">
+            答对 {correctCount} 题，答错 {wrongCount} 题
+          </p>
+          {totalReward > 0 && (
+            <span className="inline-block mt-3 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium">
+              ⭐ +{totalReward} 星光值
+            </span>
+          )}
+        </Card>
+        <div className="flex gap-2 mt-4">
+          <Button variant="ghost" onClick={onBack} className="flex-1">返回</Button>
+          <Button onClick={handleRedo} className="flex-1">再战一次</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
+
+  return (
+    <div className="max-w-2xl mx-auto -mt-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-bold text-slate-800">{setTitle} - 错题再战</h2>
+        <span className="ml-auto text-sm text-slate-400">{idx + 1}/{questions.length}</span>
+      </div>
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          {q.type === 'multi_choice' && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
+          )}
+        </div>
+        {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+          <div className="space-y-3">
+            {q.options.map((opt, i) => {
+              const letter = String.fromCharCode(65 + i);
+              const isMulti = q.type === 'multi_choice';
+              const isSelected = isMulti ? answer.includes(letter) : answer === letter;
+              const isRightAnswer = showResult && q.correct_answer.includes(letter);
+              const isWrongPick = showResult && isSelected && !q.correct_answer.includes(letter);
+              const toggle = () => {
+                if (showResult) return;
+                if (isMulti) {
+                  setAnswer(prev => prev.includes(letter) ? prev.replace(letter, '') : prev + letter);
+                } else {
+                  setAnswer(letter);
+                }
+              };
+              return (
+                <button key={i} onClick={toggle}
+                  className={cn('w-full p-4 rounded-xl border-2 text-left transition-colors flex items-center',
+                    isRightAnswer ? 'border-emerald-400 bg-emerald-50' :
+                    isWrongPick ? 'border-red-400 bg-red-50' :
+                    isSelected ? 'border-star-400 bg-star-50' : 'border-slate-200 hover:border-star-200')}>
+                  <span className={cn('w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
+                    isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
+                    {isMulti && isSelected ? '✓' : letter}
+                  </span>
+                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <Input type="number" value={answer} onChange={e => setAnswer(e.target.value)}
+            placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
+        )}
+        {showResult && q.explanation && (
+          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
+            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
+              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
+            </p>
+            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+          </div>
+        )}
+        <div className="mt-6 flex gap-3">
+          {!showResult ? (
+            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
+          ) : (
+            <Button onClick={handleNext} fullWidth>
+              {idx < questions.length - 1 ? '下一题' : '查看再战结果'}
+            </Button>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ================================================================
+// 错题混战播放器：从错题混战池中抽题作答，答对得星光值
+// ================================================================
+function WrongBattlePlayer({ childId, onBack }: {
+  childId: string;
+  onBack: () => void;
+}) {
+  const [pool, setPool] = useState<WrongBattlePoolItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [idx, setIdx] = useState(0);
+  const [answer, setAnswer] = useState('');
+  const [showResult, setShowResult] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [results, setResults] = useState<boolean[]>([]);
+  const [totalReward, setTotalReward] = useState(0);
+  const [showFinal, setShowFinal] = useState(false);
+  const toast = useToastStore();
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await fetchWrongBattlePool(childId);
+        setPool(data);
+      } catch {
+        setPool([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [childId]);
+
+  const q = pool[idx];
+
+  const handleSubmit = async () => {
+    if (!answer.trim() || !q) return;
+    setSubmitting(true);
+    try {
+      const result = await answerQuestion(childId, q.question_id, answer);
+      setIsCorrect(result.is_correct);
+      setShowResult(true);
+      setResults(prev => [...prev, result.is_correct]);
+      setTotalReward(r => r + (result.reward ?? 0));
+      if (result.is_correct) {
+        toast.success(`答对了！+${result.reward} 星光值`);
+      } else {
+        toast.error('答错了，继续加油');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (idx < pool.length - 1) {
+      setAnswer('');
+      setShowResult(false);
+      setIdx(i => i + 1);
+    } else {
+      setShowFinal(true);
+    }
+  };
+
+  const handleRedo = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchWrongBattlePool(childId);
+      setPool(data);
+    } catch {
+      setPool([]);
+    } finally {
+      setLoading(false);
+    }
+    setIdx(0);
+    setAnswer('');
+    setShowResult(false);
+    setResults([]);
+    setTotalReward(0);
+    setShowFinal(false);
+  };
+
+  if (loading) return <Loading />;
+
+  if (pool.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto -mt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-xl font-bold text-slate-800">错题混战池</h2>
+        </div>
+        <EmptyState icon="🎉" title="混战池为空" description="家长还没添加错题到混战池，做完其他题集的错题后再来看看吧！" />
+      </div>
+    );
+  }
+
+  // 最终结果
+  if (showFinal) {
+    const correctCount = results.filter(Boolean).length;
+    const wrongCount = results.length - correctCount;
+    return (
+      <div className="max-w-2xl mx-auto -mt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-xl font-bold text-slate-800">混战结果</h2>
+        </div>
+        <Card className="p-6 text-center bg-gradient-to-br from-purple-50 to-pink-50 border-purple-100">
+          <div className="text-5xl mb-3">{correctCount === results.length ? '🏆' : '💪'}</div>
+          <div className="text-4xl font-bold text-purple-500 mb-1">
+            {results.length > 0 ? Math.round((correctCount / results.length) * 100) : 0}%
+          </div>
+          <p className="text-sm text-slate-500">
+            答对 {correctCount} 题，答错 {wrongCount} 题
+          </p>
+          {totalReward > 0 && (
+            <span className="inline-block mt-3 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium">
+              ⭐ +{totalReward} 星光值
+            </span>
+          )}
+        </Card>
+        <div className="flex gap-2 mt-4">
+          <Button variant="ghost" onClick={onBack} className="flex-1">返回</Button>
+          <Button onClick={handleRedo} className="flex-1">再战一轮</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
+
+  return (
+    <div className="max-w-2xl mx-auto -mt-6">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-bold text-slate-800">⚔️ 错题混战</h2>
+        <span className="ml-auto text-sm text-slate-400">{idx + 1}/{pool.length}</span>
+      </div>
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          {q.type === 'multi_choice' && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
+          )}
+        </div>
+        {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+          <div className="space-y-3">
+            {q.options.map((opt, i) => {
+              const letter = String.fromCharCode(65 + i);
+              const isMulti = q.type === 'multi_choice';
+              const isSelected = isMulti ? answer.includes(letter) : answer === letter;
+              const isRightAnswer = showResult && q.correct_answer.includes(letter);
+              const isWrongPick = showResult && isSelected && !q.correct_answer.includes(letter);
+              const toggle = () => {
+                if (showResult) return;
+                if (isMulti) {
+                  setAnswer(prev => prev.includes(letter) ? prev.replace(letter, '') : prev + letter);
+                } else {
+                  setAnswer(letter);
+                }
+              };
+              return (
+                <button key={i} onClick={toggle}
+                  className={cn('w-full p-4 rounded-xl border-2 text-left transition-colors flex items-center',
+                    isRightAnswer ? 'border-emerald-400 bg-emerald-50' :
+                    isWrongPick ? 'border-red-400 bg-red-50' :
+                    isSelected ? 'border-star-400 bg-star-50' : 'border-slate-200 hover:border-star-200')}>
+                  <span className={cn('w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
+                    isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
+                    {isMulti && isSelected ? '✓' : letter}
+                  </span>
+                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <Input type="number" value={answer} onChange={e => setAnswer(e.target.value)}
+            placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
+        )}
+        {showResult && q.explanation && (
+          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
+            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
+              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
+            </p>
+            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+          </div>
+        )}
+        <div className="mt-6 flex gap-3">
+          {!showResult ? (
+            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
+          ) : (
+            <Button onClick={handleNext} fullWidth>
+              {idx < pool.length - 1 ? '下一题' : '查看混战结果'}
+            </Button>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -430,6 +1006,9 @@ function SetDetailPage({ set, levels, childId, onBack, onEnterLevel }: {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600">已通关</span>
                     )}
                   </div>
+                  {level.description && (
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{level.description}</p>
+                  )}
                   {level.total > 0 && (
                     <div className="mt-1 flex items-center gap-2">
                       <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -469,16 +1048,17 @@ function SetDetailPage({ set, levels, childId, onBack, onEnterLevel }: {
 // ================================================================
 // 关卡答题组件（新流程）：消题/错题循环/关卡解锁
 // ================================================================
-function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot = null, onBack, onDone, onLevelCleared }: {
+function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, restoreSnapshot = null, onBack, onDone, onLevelCleared }: {
   set: ChallengeSet;
   levelId: string;
   levelInfo?: LevelWithProgress;
+  allLevels: LevelWithProgress[];
   childId: string;
   board: ChallengeBoardType;
   restoreSnapshot: import('../../store/challengeUiStore').LevelSnapshotState | null;
   onBack: () => void;
   onDone: () => void;
-  onLevelCleared: () => void;
+  onLevelCleared: (nextLevelId?: string) => void;
 }) {
   const setLevelSnapshot = useChallengeUiStore(s => s.setLevelSnapshot);
   const patchLevelSnapshot = useChallengeUiStore(s => s.patchLevelSnapshot);
@@ -497,12 +1077,17 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
   const [totalReward, setTotalReward] = useState(restoreSnapshot?.totalReward ?? 0);
   // 是否显示一轮结果弹窗
   const [showRoundResult, setShowRoundResult] = useState(restoreSnapshot?.showRoundResult ?? false);
+  // 本轮题目列表（固定，本轮内不缩小，避免 currentIdx 跳过未答题）
+  const [roundQuestions, setRoundQuestions] = useState<Question[]>([]);
 
   const [loading, setLoading] = useState(!restoreSnapshot);
   const [answer, setAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resultQuestion, setResultQuestion] = useState<Question | null>(null);
+  const [levelCleared, setLevelCleared] = useState(false);
+  const [levelBonus, setLevelBonus] = useState(0);
 
   const restoredRef = useRef(!!restoreSnapshot);
   const snapshotInitRef = useRef(false);
@@ -511,6 +1096,11 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
   useEffect(() => {
     if (restoredRef.current) {
       restoredRef.current = false;
+      // 从快照恢复本轮题目列表
+      if (restoreSnapshot?.questions?.length) {
+        setRoundQuestions(restoreSnapshot.questions);
+        setAllQuestions(restoreSnapshot.questions);
+      }
       setLoading(false);
       return;
     }
@@ -523,6 +1113,10 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
         const snap = await loadLevelSnapshot(childId, levelId);
         if (snap && snap.cleared_question_ids?.length > 0) {
           setClearedIds(snap.cleared_question_ids);
+          // 初始化本轮题目（排除已消题）
+          setRoundQuestions(data.filter(q => !snap.cleared_question_ids.includes(q.id)));
+        } else {
+          setRoundQuestions(data);
         }
       } finally {
         setLoading(false);
@@ -538,7 +1132,7 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
       setLevelSnapshot({
         setId: set.id,
         levelId,
-        questions: remainingQuestions,
+        questions: roundQuestions,
         clearedIds,
         currentIdx,
         results,
@@ -548,21 +1142,22 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
     } else {
       patchLevelSnapshot({
         clearedIds, currentIdx, results, totalReward, showRoundResult,
-        questions: remainingQuestions,
+        questions: roundQuestions,
       });
     }
     // 服务端快照（非今日复习板需要保存暂停态）
     saveLevelSnapshot(childId, levelId, currentIdx, clearedIds, board !== 'today_review').catch(() => {});
-  }, [clearedIds, currentIdx, results, totalReward, showRoundResult, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clearedIds, currentIdx, results, totalReward, showRoundResult, roundQuestions, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 剩余题目 = 原始题 - 已消题
-  const remainingQuestions = allQuestions.filter(q => !clearedIds.includes(q.id));
+  // 剩余题目 = 原始题 - 已消题（用于通关判断）
   const originalTotal = allQuestions.length; // 正确率分母：关卡原始总题数
-  const q = remainingQuestions[currentIdx];
+  // 答题中：showResult 时用 resultQuestion（锁定的题目），避免消题后 q 漏出下一题答案
+  const q = showResult && resultQuestion ? resultQuestion : roundQuestions[currentIdx];
 
   const handleSubmit = async () => {
     if (!answer.trim() || !q) return;
     setSubmitting(true);
+    setResultQuestion(q); // 锁定当前题目，防止消题后 q 指向下一题
     try {
       const result = await answerQuestion(childId, q.id, answer);
       setIsCorrect(result.is_correct);
@@ -588,11 +1183,11 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
   const handleNext = () => {
     setAnswer('');
     setShowResult(false);
-    if (currentIdx < remainingQuestions.length - 1) {
+    setResultQuestion(null);
+    if (currentIdx < roundQuestions.length - 1) {
       setCurrentIdx(i => i + 1);
     } else {
-      // 本轮做完，所有剩余题循环完毕
-      // 检查是否全部消题
+      // 本轮做完，检查是否全部消题
       const stillRemaining = allQuestions.filter(qid => !clearedIds.includes(qid.id));
       if (stillRemaining.length === 0) {
         // 关卡 100% 通关
@@ -607,7 +1202,9 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
   // 一轮结果弹窗：再试一次 / 明日再战
   const handleRedo = () => {
     // 再试一次：只重做本轮错题，已对题目不再出现
-    // clearedIds 已包含答对的题，remainingQuestions 自然只剩错题
+    // clearedIds 已包含答对的题，重新生成 roundQuestions 只含错题
+    const newRound = allQuestions.filter(q => !clearedIds.includes(q.id));
+    setRoundQuestions(newRound);
     setCurrentIdx(0);
     setAnswer('');
     setShowResult(false);
@@ -623,43 +1220,63 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
     onBack();
   };
 
-  // 关卡清零 → 发奖 → 解锁下一关
+  // 关卡清零 → 发奖 → 展示通关页（不立即跳转）
   const handleLevelClear = async () => {
     try {
       const result = await finishChallengeLevel(childId, levelId);
       if (result.level_awarded) {
-        toast.success(`🎉 关卡通关！+${result.level_reward} 星光值`);
+        setLevelBonus(result.level_reward ?? 0);
         onDone();
       }
       if (result.set_awarded) {
         toast.success(`🏆 题集全部通关！额外 +${result.set_reward} 星光值`);
         onDone();
       }
-      onLevelCleared();
+      setLevelCleared(true); // 展示通关页，等待用户选择
     } catch (e: any) {
       toast.error(e?.message ?? '通关发奖失败');
     }
   };
 
+  const [showLevelDesc, setShowLevelDesc] = useState(false);
+
   if (loading) return <Loading />;
 
   // 关卡已全部通关
-  if (originalTotal > 0 && clearedIds.length >= originalTotal) {
+  if (levelCleared && originalTotal > 0 && clearedIds.length >= originalTotal) {
+    // 计算下一关
+    const sortedLevels = [...allLevels].sort((a, b) => a.level_no - b.level_no);
+    const currentLevelNo = levelInfo?.level_no ?? 0;
+    const nextLevel = sortedLevels.find(l => l.level_no > currentLevelNo);
+    const isLastLevel = !nextLevel;
+
     return (
       <div className="max-w-2xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <button onClick={() => onLevelCleared()} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h2 className="text-xl font-bold text-slate-800">{set.title}</h2>
         </div>
         <Card className="p-8 text-center bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100">
-          <div className="text-6xl mb-3">🏆</div>
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">关卡通关！</h3>
+          <div className="text-6xl mb-3">{isLastLevel ? '🏆' : '🎉'}</div>
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">
+            {isLastLevel ? '题集全部通关！' : '关卡通关！'}
+          </h3>
           <p className="text-sm text-slate-500 mb-6">
             {levelInfo?.title || `第 ${levelInfo?.level_no ?? 1} 关`} 全部清零
           </p>
-          <Button onClick={onBack} fullWidth>返回关卡列表</Button>
+          {levelBonus > 0 && (
+            <span className="inline-block mb-4 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-medium">
+              ⭐ +{levelBonus} 星光值
+            </span>
+          )}
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => onLevelCleared()} className="flex-1">返回关卡列表</Button>
+            {!isLastLevel && nextLevel && (
+              <Button onClick={() => onLevelCleared(nextLevel.id)} className="flex-1">挑战下一关</Button>
+            )}
+          </div>
         </Card>
       </div>
     );
@@ -723,13 +1340,35 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h2 className="text-xl font-bold text-slate-800">{set.title}</h2>
+        {levelInfo?.description && (
+          <button
+            onClick={() => setShowLevelDesc(s => !s)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+            title="查看关卡说明"
+          >
+            <Lightbulb className="w-4 h-4" />
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {set.knowledge_points?.trim() && <KnowledgePointsButton points={set.knowledge_points} />}
           <span className="text-sm text-slate-400">
-            {currentIdx + 1}/{remainingQuestions.length}
+            {currentIdx + 1}/{roundQuestions.length}
           </span>
         </div>
       </div>
+
+      {/* 关卡描述展开 */}
+      {showLevelDesc && levelInfo?.description && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-100">
+          <div className="flex items-start gap-2">
+            <Lightbulb className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-amber-700 mb-0.5">{levelInfo.title || `第 ${levelInfo.level_no} 关`}</p>
+              <p className="text-sm text-amber-900">{levelInfo.description}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 进度条：已消题/原始总数 */}
       <div className="mb-4 flex items-center gap-2">
@@ -776,7 +1415,7 @@ function LevelPlayer({ set, levelId, levelInfo, childId, board, restoreSnapshot 
             </Button>
           ) : (
             <Button onClick={handleNext} fullWidth>
-              {currentIdx < remainingQuestions.length - 1 ? '下一题' : '查看本轮结果'}
+              {currentIdx < roundQuestions.length - 1 ? '下一题' : '查看本轮结果'}
             </Button>
           )}
         </div>
@@ -1107,7 +1746,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
                     isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
                     {isMulti && isSelected ? '✓' : letter}
                   </span>
-                  <span className="flex-1">{opt.replace(/^[A-H][.、\s]*/, '')}</span>
+                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
                 </button>
               );
             })}

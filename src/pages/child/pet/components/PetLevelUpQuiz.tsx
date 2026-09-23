@@ -3,18 +3,14 @@ import { Modal } from '../../../../components/common/Modal';
 import { Button } from '../../../../components/common/Button';
 import { Loading } from '../../../../components/common/Loading';
 import { useToastStore } from '../../../../store/toastStore';
-import { useFamilyStore } from '../../../../store/familyStore';
 import { cn } from '../../../../lib/utils';
-import { supabase } from '../../../../api/client';
+import { fetchWrongBattlePool } from '../../../../api/challenges';
 import { completePetLevelup } from '../../../../api/pets';
 import type { Pet } from '../../../../api/types';
 
-// 升级挑战所需题目数
-const QUIZ_QUESTION_COUNT = 5;
 // 通过分数线
 const PASS_THRESHOLD = 0.8;
 
-// 统一题面结构（题库随机题）
 interface QuizItem {
   id: string;
   type: string;
@@ -36,7 +32,10 @@ export function PetLevelUpQuiz({
   onLevelUp: (updated: Pet) => void;
 }) {
   const toast = useToastStore();
-  const family = useFamilyStore(s => s.family);
+
+  // 升级到的目标级别 = 当前级别 + 1，题目数 = 目标级别数
+  const targetLevel = pet.level + 1;
+  const quizCount = targetLevel;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +44,7 @@ export function PetLevelUpQuiz({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [result, setResult] = useState<{ correct: number; total: number; passed: boolean } | null>(null);
+  const [poolEmpty, setPoolEmpty] = useState(false);
 
   const shuffle = <T,>(arr: T[]): T[] => {
     const a = [...arr];
@@ -57,44 +57,30 @@ export function PetLevelUpQuiz({
 
   const loadQuestions = useCallback(async () => {
     setLoading(true);
+    setPoolEmpty(false);
     try {
-      const picked: QuizItem[] = [];
+      // 从错题混战池获取题目
+      const pool = await fetchWrongBattlePool(memberId);
+      const poolQuestions: QuizItem[] = (pool ?? [])
+        .filter(r => r && r.question_text)
+        .map(r => ({
+          id: r.question_id,
+          type: r.type,
+          question_text: r.question_text,
+          options: r.options,
+          correct_answer: r.correct_answer,
+          explanation: r.explanation,
+        }));
 
-      // 从所有题集中随机抽题（错题本已下线，升级挑战只用随机题库）
-      if (family) {
-        const { data: sets, error: setsErr } = await supabase
-          .from('challenge_sets')
-          .select('id');
-        if (setsErr) throw setsErr;
-
-        const setIds = (sets ?? []).map((s: any) => s.id).filter(Boolean);
-        if (setIds.length > 0) {
-          const { data: randRows, error: qErr } = await supabase
-            .from('questions')
-            .select('id, type, question_text, options, correct_answer, explanation')
-            .in('challenge_set_id', setIds)
-            .order('created_at', { ascending: false })
-            .limit(50);
-
-          if (qErr) throw qErr;
-
-          const randomQs: QuizItem[] = (randRows ?? [])
-            .filter((r: any) => r && r.question_text)
-            .map((q: any) => ({
-              id: q.id as string,
-              type: q.type as string,
-              question_text: q.question_text as string,
-              options: q.options as string[] | null,
-              correct_answer: q.correct_answer as string,
-              explanation: (q.explanation ?? null) as string | null,
-            }));
-
-          picked.push(...shuffle(randomQs).slice(0, QUIZ_QUESTION_COUNT));
-        }
+      if (poolQuestions.length === 0) {
+        setPoolEmpty(true);
+        setQuestions([]);
+        return;
       }
 
-      // 兜底：题库不足 5 道，就把已有的全部展示
-      setQuestions(picked.length > 0 ? picked : []);
+      // 题目数 = 目标级别数，池中不足则全部使用
+      const picked = shuffle(poolQuestions).slice(0, quizCount);
+      setQuestions(picked);
       setCurrentIndex(0);
       setAnswers({});
       setRevealed({});
@@ -104,7 +90,7 @@ export function PetLevelUpQuiz({
     } finally {
       setLoading(false);
     }
-  }, [memberId, family, toast]);
+  }, [memberId, quizCount, toast]);
 
   useEffect(() => {
     loadQuestions();
@@ -187,9 +173,13 @@ export function PetLevelUpQuiz({
     <Modal open onClose={onClose} title="升级挑战" size="md">
       {loading ? (
         <Loading text="加载题目中..." />
-      ) : questions.length === 0 ? (
+      ) : questions.length === 0 || poolEmpty ? (
         <div className="py-8 text-center space-y-4">
-          <p className="text-sm text-slate-500">暂无可用的挑战题目，请先去答题积累错题。</p>
+          <p className="text-sm text-slate-500">
+            {poolEmpty
+              ? '错题混战池为空，请先在智慧星战中答错题目，由家长加入混战池后再来挑战。'
+              : '暂无足够的挑战题目。'}
+          </p>
           <Button variant="secondary" onClick={onClose} fullWidth>关闭</Button>
         </div>
       ) : result ? (
@@ -239,8 +229,8 @@ export function PetLevelUpQuiz({
         <div className="space-y-4">
           {/* 进度 */}
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>第 {currentIndex + 1} / {questions.length} 题</span>
-            <span>随机题</span>
+            <span>第 {currentIndex + 1} / {questions.length} 题（Lv.{pet.level} → Lv.{targetLevel}）</span>
+            <span>错题混战</span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -282,7 +272,7 @@ export function PetLevelUpQuiz({
                     <span className="font-mono text-xs text-slate-500 mr-2">
                       {letter}.
                     </span>
-                    <span className="text-slate-700">{opt}</span>
+                    <span className="text-slate-700">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
                     {showCorrect && <span className="ml-2 text-emerald-600 text-xs">✓ 正确答案</span>}
                     {showWrong && <span className="ml-2 text-red-600 text-xs">✗ 你的选择</span>}
                   </button>
@@ -294,7 +284,7 @@ export function PetLevelUpQuiz({
               <input
                 type="text"
                 value={answers[current.id] ?? ''}
-                onChange={e => handleAnswer(current.id, e.target.value)}
+                onChange={e => handleAnswer(current.id, e.target.value, false)}
                 disabled={revealed[current.id]}
                 placeholder="请输入答案"
                 className={cn(

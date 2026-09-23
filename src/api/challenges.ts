@@ -382,7 +382,48 @@ export async function fetchChallengeBoards(memberId: string): Promise<ChallengeB
     p_member_id: memberId,
   });
   if (error) throw error;
-  return (data ?? []) as ChallengeBoard[];
+  const boards = (data ?? []) as ChallengeBoard[];
+
+  // 拉取各题集的难度分布（避免依赖 RPC 迁移）
+  const allLevelIds = boards.flatMap(b => b.sets.flatMap(s => s.levels.map(l => l.id)));
+  if (allLevelIds.length > 0) {
+    const { data: qData } = await supabase
+      .from('questions')
+      .select('difficulty, level_id')
+      .in('level_id', allLevelIds)
+      .eq('is_active', true);
+    if (qData) {
+      // level_id -> set_id 映射
+      const levelToSet = new Map<string, string>();
+      for (const b of boards) {
+        for (const s of b.sets) {
+          for (const l of s.levels) levelToSet.set(l.id, s.id);
+        }
+      }
+      // 按题集统计各难度数量
+      const counts = new Map<string, { easy: number; medium: number; hard: number }>();
+      for (const q of qData as { difficulty: string; level_id: string }[]) {
+        const setId = levelToSet.get(q.level_id);
+        if (!setId) continue;
+        const c = counts.get(setId) ?? { easy: 0, medium: 0, hard: 0 };
+        if (q.difficulty === 'easy') c.easy++;
+        else if (q.difficulty === 'medium') c.medium++;
+        else if (q.difficulty === 'hard') c.hard++;
+        counts.set(setId, c);
+      }
+      // 写回 boards
+      for (const b of boards) {
+        for (const s of b.sets) {
+          const c = counts.get(s.id);
+          s.easy_count = c?.easy ?? 0;
+          s.medium_count = c?.medium ?? 0;
+          s.hard_count = c?.hard ?? 0;
+        }
+      }
+    }
+  }
+
+  return boards;
 }
 
 // 按关卡 ID 拉取题目（按 display_order 排序）
@@ -527,6 +568,7 @@ export async function createChallengeLevel(data: {
   challenge_set_id: string;
   level_no: number;
   title?: string;
+  description?: string;
   pass_reward?: number;
   status?: 'active' | 'inactive';
 }): Promise<ChallengeLevel> {

@@ -41,7 +41,7 @@ export function ChoiceQuestion({ question: q, answer, setAnswer, showResult }: Q
             )}>
               {isMulti && isSelected ? '✓' : letter}
             </span>
-            <span className="flex-1">{opt.replace(/^[A-H][.、\s]*/, '')}</span>
+            <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
           </button>
         );
       })}

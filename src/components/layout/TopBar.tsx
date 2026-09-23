@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Settings, ChevronDown } from 'lucide-react';
+import { Shield, ChevronDown } from 'lucide-react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { supabase } from '../../api/client';
@@ -133,23 +133,9 @@ export function TopBar() {
     return () => { cancelled = true; };
   }, [currentChild?.id, isChallengePage]);
 
-  const clickCountRef = useRef(0);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [showHint, setShowHint] = useState(false);
-
   const handleToggleClick = () => {
     if (mode === 'parent') return;
-    clickCountRef.current += 1;
-    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-    clickTimerRef.current = setTimeout(() => { clickCountRef.current = 0; }, 1000);
-
-    if (clickCountRef.current >= 2) {
-      clickCountRef.current = 0;
-      navigate(ROUTES.PARENT_DASHBOARD);
-    } else {
-      setShowHint(true);
-      setTimeout(() => setShowHint(false), 1500);
-    }
+    navigate(ROUTES.PARENT_DASHBOARD);
   };
 
   // 渲染左侧货币区域
@@ -278,13 +264,13 @@ export function TopBar() {
         {renderCurrencyBar()}
 
         <div className="flex items-center gap-2">
-          {showHint && <span className="text-xs text-slate-400">再点 1 次进入家长模式</span>}
           <button
             onClick={handleToggleClick}
-            className="p-2 rounded-full text-star-300 hover:text-star-500 hover:bg-star-50 transition-colors"
-            aria-label="切换"
+            className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
+            aria-label="家长管理"
+            title="家长管理"
           >
-            <Settings className="w-5 h-5" />
+            <Shield className="w-5 h-5" />
           </button>
           {mode === 'parent' && (
             <button
