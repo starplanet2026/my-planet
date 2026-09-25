@@ -33,7 +33,7 @@ interface AddedWord {
   save_to_library: boolean;
 }
 
-export function DictationTaskCreatePage() {
+export function DictationTaskCreatePage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const family = useFamilyStore(s => s.family);
   const currentChildId = useModeStore(s => s.currentChildId);
@@ -207,12 +207,14 @@ export function DictationTaskCreatePage() {
 
   return (
     <div className="max-w-6xl mx-auto py-4 px-4">
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-amber-500" />新建家默任务</h1>
-      </div>
+      {!embedded && (
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-amber-500" />新建家默任务</h1>
+        </div>
+      )}
 
       {/* 基础配置 */}
       <Card className="p-4 mb-4">

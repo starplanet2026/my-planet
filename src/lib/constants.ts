@@ -79,9 +79,8 @@ export const ROUTES = {
   PARENT_MEMBERS: '/parent/members',
   PARENT_CHALLENGES: '/parent/challenges',
   PARENT_PETS: '/parent/pets',
-  PARENT_DICTATION_WORDS: '/parent/dictation-words',
-  PARENT_DICTATION_ERROR_WORDS: '/parent/dictation-error-words',
-  PARENT_DICTATION_TASKS: '/parent/dictation-tasks',
+  // 家默管理（一级板块，内含词条库/错词库/任务三个 Tab）
+  PARENT_DICTATION: '/parent/dictation',
   PET: '/pet',
 } as const;
 
