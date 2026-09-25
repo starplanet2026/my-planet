@@ -92,9 +92,9 @@ export function DictationPlayPage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden px-2 sm:px-4 py-2">
-      {/* 所有词条一屏展示：行高均分 + 容器查询单位实现词多缩小、词少放大 */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
+    <div className="h-[100dvh] flex flex-col justify-center overflow-hidden px-2 sm:px-4 py-2">
+      {/* 所有词条一屏展示：网格占可用高的72%，行高均分、卡片占满行不留缝隙 */}
+      <div className="flex-[0_0_72%] min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
         {words.map((w, i) => {
           const isCorrect = correct.has(w.id);
           const prompt = subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-');
@@ -103,17 +103,17 @@ export function DictationPlayPage() {
               key={w.id}
               onClick={() => grading && toggleCorrect(w.id)}
               className={cn(
-                'place-self-center h-3/4 w-full p-2 flex flex-col justify-center items-center text-center [container-type:size] min-h-0 overflow-hidden transition-colors',
+                'w-full p-2 flex flex-col justify-center items-center text-center [container-type:size] min-h-0 overflow-hidden transition-colors',
                 grading && 'cursor-pointer',
                 grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
               )}
             >
               <div className="text-[10px] text-slate-400">{i + 1}</div>
-              <div className="font-bold text-slate-800 leading-tight [font-size:clamp(1.1rem,8cqh,3rem)] break-all">
+              <div className="font-bold text-slate-800 leading-tight [font-size:clamp(1.2rem,12cqh,4.5rem)] break-all">
                 {prompt}
               </div>
               {grading && (
-                <div className="text-red-600 font-extrabold leading-tight mt-1 [font-size:clamp(1rem,7cqh,2.6rem)] break-all">
+                <div className="text-red-600 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
                   {w.answer}
                 </div>
               )}
