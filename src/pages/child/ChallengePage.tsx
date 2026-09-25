@@ -416,8 +416,10 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   onViewLevelQuestions: (levelId: string, title: string) => void;
 }) {
   const [wrongSet, setWrongSet] = useState<{ id: string; title: string; levelId?: string } | null>(null);
+  const navigate = useNavigate();
 
-  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle') return null;
+  // 今日复习板块始终渲染（用于展示家默入口）
+  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && boardType !== 'today_review') return null;
 
   return (
     <div>
