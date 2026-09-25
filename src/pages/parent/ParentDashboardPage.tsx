@@ -15,7 +15,7 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { ListTodo, ShoppingBag, Ticket, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, AlertCircle, Sparkles } from 'lucide-react';
+import { ListTodo, ShoppingBag, Ticket, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
