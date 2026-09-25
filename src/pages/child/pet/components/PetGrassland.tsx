@@ -73,8 +73,11 @@ const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food', clean: 'clean', play: 'toy', heal: 'medicine',
 };
 
-// 宠物默认出现位置：底部菜单栏上方一点点，水平居中
-const DEFAULT_PET_POSITION = { x: 50, y: 68 };
+// 宠物默认出现位置：底部菜单栏上方居中（留出间距避免与菜单栏重叠）
+const DEFAULT_PET_POSITION = { x: 50, y: 55 };
+
+// 每个用户独立存储宠物坐标，切换用户时不互相覆盖
+const positionsKey = (cid: string) => `pet-positions-${cid}`;
 
 export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionResetPetId, onPositionResetDone }: {
   pets: Pet[];
@@ -100,7 +103,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     try { return new Set(JSON.parse(localStorage.getItem('pet-collapsed-chats') || '[]')); } catch { return new Set(); }
   });
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() => {
-    try { return JSON.parse(localStorage.getItem('pet-positions') || '{}'); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { return {}; }
   });
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
@@ -110,9 +113,12 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     const map: Record<string, Pet> = {};
     pets.forEach(p => { map[p.id] = p; });
     setPetStates(map);
+    // 从当前用户的 localStorage 读取已保存坐标（切换用户时读对应用户的坐标，不重置）
+    let saved: Record<string, { x: number; y: number }> = {};
+    try { saved = JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { saved = {}; }
     const fixed: Record<string, { x: number; y: number }> = {};
     pets.forEach((p) => {
-      const cur = positions[p.id];
+      const cur = saved[p.id];
       if (cur) {
         fixed[p.id] = {
           x: Math.max(5, Math.min(95, cur.x)),
@@ -127,7 +133,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     // 问题2: 购买用品后刷新背包
     loadInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pets]);
+  }, [pets, childId]);
 
   // 加载背包
   const loadInventory = useCallback(async () => {
@@ -140,10 +146,10 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
 
   useEffect(() => { loadInventory(); }, [loadInventory]);
 
-  // 保存位置
+  // 保存位置到当前用户的独立 storage，切换用户不互相覆盖
   useEffect(() => {
-    localStorage.setItem('pet-positions', JSON.stringify(positions));
-  }, [positions]);
+    localStorage.setItem(positionsKey(childId), JSON.stringify(positions));
+  }, [positions, childId]);
 
   // "出来玩" 时重置指定宠物位置到底部居中默认位置
   useEffect(() => {
