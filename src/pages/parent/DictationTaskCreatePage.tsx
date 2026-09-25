@@ -339,17 +339,17 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500">课本名称</label>
-              <Input value={tempForm.textbook_name} onChange={e => setTempForm({ ...tempForm, textbook_name: e.target.value })} />
+              <label className="text-xs text-slate-500">课本名称（选填）</label>
+              <Input value={tempForm.textbook_name} onChange={e => setTempForm({ ...tempForm, textbook_name: e.target.value })} placeholder="可不填" />
             </div>
             <div>
-              <label className="text-xs text-slate-500">单元序号</label>
-              <Input type="number" value={tempForm.unit_no} onChange={e => setTempForm({ ...tempForm, unit_no: Number(e.target.value) })} />
+              <label className="text-xs text-slate-500">单元序号（选填）</label>
+              <Input type="number" value={tempForm.unit_no === 0 ? '' : tempForm.unit_no} onChange={e => setTempForm({ ...tempForm, unit_no: e.target.value === '' ? 0 : Number(e.target.value) })} placeholder="可不填" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-500">单元名字</label>
-            <Input value={tempForm.unit_name} onChange={e => setTempForm({ ...tempForm, unit_name: e.target.value })} />
+            <label className="text-xs text-slate-500">单元名称（选填）</label>
+            <Input value={tempForm.unit_name} onChange={e => setTempForm({ ...tempForm, unit_name: e.target.value })} placeholder="可不填" />
           </div>
           {subject === 'english' ? (
             <>
