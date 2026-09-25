@@ -92,7 +92,7 @@ export function DictationPlayPage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col justify-center overflow-hidden px-2 sm:px-4 py-2">
+    <div className="h-[100dvh] flex flex-col overflow-hidden px-2 sm:px-4 py-2">
       {/* 所有词条一屏展示：网格占可用高的72%，行高均分、卡片占满行不留缝隙 */}
       <div className="flex-[0_0_72%] min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
         {words.map((w, i) => {
@@ -113,7 +113,7 @@ export function DictationPlayPage() {
                 {prompt}
               </div>
               {grading && (
-                <div className="text-red-600 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
+                <div className="text-blue-600 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
                   {w.answer}
                 </div>
               )}
@@ -123,7 +123,7 @@ export function DictationPlayPage() {
       </div>
 
       {/* 底部操作栏 */}
-      <div className="flex-shrink-0 py-2 flex items-center gap-3">
+      <div className="flex-shrink-0 mt-auto py-2 flex items-center gap-3">
         {!grading ? (
           <Button className="w-full" size="lg" onClick={() => setGrading(true)}>
             <CheckCircle className="w-5 h-5" />去批改
