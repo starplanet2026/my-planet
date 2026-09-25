@@ -113,7 +113,7 @@ export function DictationPlayPage() {
                 {prompt}
               </div>
               {grading && (
-                <div className="text-blue-600 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
+                <div className="text-emerald-500 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
                   {w.answer}
                 </div>
               )}
