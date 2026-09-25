@@ -141,68 +141,19 @@ drop trigger if exists trg_dictation_tasks_updated on public.dictation_tasks;
 create trigger trg_dictation_tasks_updated before update on public.dictation_tasks
   for each row execute function public.touch_updated_at();
 
--- ====== RPC 1: 发放家默星光值 ======
-drop function if exists public.grant_dictation_starlight(uuid, uuid, int);
-create or replace function public.grant_dictation_starlight(
-  p_member_id uuid,
-  p_task_id uuid,
-  p_correct_count int
-)
-returns table(success boolean, message text, total_star int, new_star int)
-language plpgsql security definer as $$
-declare
-  v_member record;
-  v_task record;
-  v_total int;
-  v_new_star int;
-  v_family_id uuid;
-begin
-  select * into v_member from public.members where id = p_member_id for update;
-  if not found then
-    return query select false, '用户不存在', 0, 0;
-    return;
-  end if;
-  v_family_id := v_member.family_id;
-
-  select * into v_task from public.dictation_tasks where id = p_task_id;
-  if not found then
-    return query select false, '任务不存在', 0, v_member.star_value;
-    return;
-  end if;
-
-  v_total := p_correct_count * coalesce(v_task.star_per_word, 1);
-  if v_total <= 0 then
-    return query select true, '无奖励', 0, v_member.star_value;
-    return;
-  end if;
-
-  v_new_star := v_member.star_value + v_total;
-  update public.members set star_value = v_new_star, updated_at = now() where id = p_member_id;
-
-  insert into public.coin_records
-    (family_id, member_id, amount, balance_after, reason, category, ref_type, ref_id, created_by, balance_type)
-  values
-    (v_family_id, p_member_id, v_total, v_new_star,
-     '家默批改获得星光值', 'dictation', 'dictation_task', p_task_id::text, p_member_id::text, 'star');
-
-  return query select true, '获得 ' || v_total || ' 星光值', v_total, v_new_star;
-end;
-$$;
-grant execute on function public.grant_dictation_starlight(uuid, uuid, int) to anon, authenticated;
-
--- ====== RPC 2: 提交家默批改结果（处理艾宾浩斯） ======
--- 节点间隔映射
--- 节点 1->2: I=1, 2->4: I=2, 4->7: I=3, 7->15: I=8
+-- ====== RPC 1: 提交家默批改结果（处理艾宾浩斯 + 发放星光值，原子事务） ======
+-- 节点间隔映射：1->2: I=1, 2->4: I=2, 4->7: I=3, 7->15: I=8
 drop function if exists public.submit_dictation_result(uuid, uuid, jsonb);
 create or replace function public.submit_dictation_result(
   p_task_id uuid,
   p_member_id uuid,
   p_results jsonb
 )
-returns table(success boolean, message text, correct_count int, error_count int)
+returns table(success boolean, message text, correct_count int, error_count int, total_star int, new_star int)
 language plpgsql security definer as $$
 declare
   v_task record;
+  v_member record;
   v_item jsonb;
   v_word_id uuid;
   v_error_word_id uuid;
@@ -221,21 +172,34 @@ declare
   v_today date := current_date;
   v_textbook text; v_unit_no int; v_unit_name text; v_page_no int;
   v_chinese text; v_pos text; v_pinyin text;
+  v_family_id uuid;
+  v_total int;
+  v_new_star int;
 begin
-  select * into v_task from public.dictation_tasks where id = p_task_id and member_id = p_member_id;
+  -- 校验任务归属且状态为 active
+  select * into v_task from public.dictation_tasks
+  where id = p_task_id and member_id = p_member_id and status = 'active';
   if not found then
-    return query select false, '任务不存在或无权操作', 0, 0;
+    return query select false, '任务不存在、无权操作或已完成', 0, 0, 0, 0;
     return;
   end if;
   v_subject := v_task.subject;
 
-  -- 同一任务单日仅允许完成一次校验：若今日已有记录则拒绝
+  -- 锁定成员行，准备发放星光值
+  select * into v_member from public.members where id = p_member_id for update;
+  if not found then
+    return query select false, '用户不存在', 0, 0, 0, 0;
+    return;
+  end if;
+  v_family_id := v_member.family_id;
+
+  -- 同一任务单日仅允许完成一次校验
   select exists(
     select 1 from public.dictation_records
     where task_id = p_task_id and date_trunc('day', created_at) = v_today
   ) into v_exists;
   if v_exists then
-    return query select false, '该任务今日已完成批改', 0, 0;
+    return query select false, '该任务今日已完成批改', 0, 0, 0, v_member.star_value;
     return;
   end if;
 
@@ -257,20 +221,21 @@ begin
       v_error := v_error + 1;
     end if;
 
-    -- 获取词条字段副本（用于错词库）
+    -- 获取词条字段副本（用于错词库）；若词条已删除，回退使用入参 answer
     if v_word_id is not null then
       select textbook_name, unit_no, unit_name, page_no, chinese_meaning, part_of_speech, pinyin, answer
         into v_textbook, v_unit_no, v_unit_name, v_page_no, v_chinese, v_pos, v_pinyin, v_answer
       from public.dictation_words where id = v_word_id;
+      if not found then v_answer := v_item->>'answer'; end if;
     elsif v_error_word_id is not null then
       select textbook_name, unit_no, unit_name, page_no, chinese_meaning, part_of_speech, pinyin, answer
         into v_textbook, v_unit_no, v_unit_name, v_page_no, v_chinese, v_pos, v_pinyin, v_answer
       from public.dictation_error_words where id = v_error_word_id;
+      if not found then v_answer := v_item->>'answer'; end if;
     end if;
 
     -- 处理错词库：错误 → 新建或重置；正确 → 推进节点
     if not v_is_correct then
-      -- 错误：查找是否已存在错词（按 member+answer+subject），有则重置，无则新建
       select * into v_ew from public.dictation_error_words
       where member_id = p_member_id and answer = v_answer and subject = v_subject
       limit 1;
@@ -295,41 +260,28 @@ begin
            jsonb_build_array(jsonb_build_object('date', v_today::text, 'correct', false, 'action', 'new')));
       end if;
     else
-      -- 正确：若存在错词记录则推进节点
       select * into v_ew from public.dictation_error_words
       where member_id = p_member_id and answer = v_answer and subject = v_subject
       limit 1;
 
       if found and v_ew.status = 'in_progress' then
         if v_ew.current_node = 15 then
-          -- 第15天正确 → 完成
           update public.dictation_error_words set
             status = 'completed',
             last_review_date = v_today,
             review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'completed')
           where id = v_ew.id;
         else
-          -- 计算原始间隔 I
           v_i := case v_ew.current_node
-            when 1 then 1
-            when 2 then 2
-            when 4 then 3
-            when 7 then 8
-            else 1
+            when 1 then 1 when 2 then 2 when 4 then 3 when 7 then 8 else 1
           end;
           v_next_node := case v_ew.current_node
-            when 1 then 2
-            when 2 then 4
-            when 4 then 7
-            when 7 then 15
-            else 15
+            when 1 then 2 when 2 then 4 when 4 then 7 when 7 then 15 else 15
           end;
-          -- 逾期天数 = 今日 - 原计划家默日（今日早于计划日则为0）
           v_overdue := (v_today - v_ew.next_review_date)::int;
           if v_overdue < 0 then v_overdue := 0; end if;
 
           if v_overdue > 2 * v_i or v_overdue > 7 then
-            -- 重度滞后：重置
             update public.dictation_error_words set
               cycle_start_date = v_today,
               current_node = 1,
@@ -339,7 +291,6 @@ begin
               review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'reset_severe')
             where id = v_ew.id;
           elsif v_overdue > v_i then
-            -- 中度滞后：间隔=ceil(I/2)，最小1
             v_next_date := v_today + greatest(1, ceil(v_i::numeric / 2)::int);
             update public.dictation_error_words set
               current_node = v_next_node,
@@ -348,7 +299,6 @@ begin
               review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'moderate')
             where id = v_ew.id;
           else
-            -- 轻度滞后：间隔=I
             v_next_date := v_today + v_i;
             update public.dictation_error_words set
               current_node = v_next_node,
@@ -362,10 +312,22 @@ begin
     end if;
   end loop;
 
+  -- 发放星光值（与批改同一事务，原子性保证）
+  v_total := v_correct * coalesce(v_task.star_per_word, 1);
+  v_new_star := v_member.star_value + v_total;
+  if v_total > 0 then
+    update public.members set star_value = v_new_star, updated_at = now() where id = p_member_id;
+    insert into public.coin_records
+      (family_id, member_id, amount, balance_after, reason, category, ref_type, ref_id, created_by, balance_type)
+    values
+      (v_family_id, p_member_id, v_total, v_new_star,
+       '家默批改获得星光值', 'dictation', 'dictation_task', p_task_id::text, p_member_id::text, 'star');
+  end if;
+
   -- 标记任务完成
   update public.dictation_tasks set status = 'completed', updated_at = now() where id = p_task_id;
 
-  return query select true, '批改完成', v_correct, v_error;
+  return query select true, '批改完成', v_correct, v_error, v_total, v_new_star;
 end;
 $$;
 grant execute on function public.submit_dictation_result(uuid, uuid, jsonb) to anon, authenticated;

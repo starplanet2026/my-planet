@@ -905,4 +905,6 @@ export interface SubmitDictationResult {
   message: string;
   correct_count: number;
   error_count: number;
+  total_star: number;
+  new_star: number;
 }
