@@ -83,8 +83,12 @@ export function PetPage() {
     } catch { return new Set(); }
   });
 
+  // 出来玩时重置位置的信号（传递给 PetGrassland）
+  const [positionResetPetId, setPositionResetPetId] = useState<string | null>(null);
+
   // 切换宠物"出来玩/回家"
   const togglePetVisible = (petId: string) => {
+    const wasHidden = hiddenPetIds.has(petId);
     setHiddenPetIds(prev => {
       const next = new Set(prev);
       if (next.has(petId)) next.delete(petId);
@@ -92,6 +96,10 @@ export function PetPage() {
       localStorage.setItem('pet-hidden-ids', JSON.stringify([...next]));
       return next;
     });
+    // 出来玩：重置宠物位置到底部菜单栏上方居中
+    if (wasHidden) {
+      setPositionResetPetId(petId);
+    }
   };
 
   // 进化宠物
@@ -295,6 +303,8 @@ export function PetPage() {
         onPetClick={(pet) => setActivePet(pet)}
         bgImage={bgImage}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? updated : p))}
+        positionResetPetId={positionResetPetId}
+        onPositionResetDone={() => setPositionResetPetId(null)}
       />
 
       {/* 左上角功能按钮组：图鉴 / 我的宠物 / 签到（弹窗时隐藏，往中间靠） */}
