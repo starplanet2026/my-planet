@@ -92,9 +92,9 @@ export function DictationPlayPage() {
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden px-2 sm:px-4 py-2">
-      {/* 所有词条一屏展示：网格占可用高的72%，行高均分、卡片占满行不留缝隙 */}
-      <div className="flex-[0_0_72%] min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
+    <div className="h-[calc(100dvh-4rem-4rem-env(safe-area-inset-bottom))] -mt-6 -mb-24 -mx-4 sm:-mx-6 lg:-mx-8 px-2 sm:px-4 flex flex-col overflow-hidden">
+      {/* 网格 flex-1 填满到按钮，行高均分；词条多则行矮字小、少则行高字大，全部一屏无滚动 */}
+      <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
         {words.map((w, i) => {
           const isCorrect = correct.has(w.id);
           const prompt = subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-');
@@ -123,7 +123,7 @@ export function DictationPlayPage() {
       </div>
 
       {/* 底部操作栏 */}
-      <div className="flex-shrink-0 mt-auto py-2 flex items-center gap-3">
+      <div className="flex-shrink-0 pt-2 flex items-center gap-3">
         {!grading ? (
           <Button className="w-full" size="lg" onClick={() => setGrading(true)}>
             <CheckCircle className="w-5 h-5" />去批改
