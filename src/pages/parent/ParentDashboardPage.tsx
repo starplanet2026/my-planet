@@ -149,13 +149,13 @@ export function ParentDashboardPage() {
   };
 
   const actions = [
+    { label: '家默管理', icon: BookOpen, route: ROUTES.PARENT_DICTATION, color: 'blue' },
     { label: '任务管理', icon: ListTodo, route: ROUTES.PARENT_TASKS, color: 'blue' },
     { label: '验证申请', icon: CheckCircle, route: ROUTES.PARENT_VERIFICATION, color: 'green' },
     { label: '特权管理', icon: ShoppingBag, route: ROUTES.PARENT_SHOP, color: 'purple' },
     { label: '特权记录', icon: Ticket, route: ROUTES.PARENT_REDEEM, color: 'emerald' },
     { label: '智慧星战', icon: BookOpen, route: ROUTES.PARENT_CHALLENGES, color: 'star' },
     { label: '萌宠星球', icon: PawPrint, route: ROUTES.PARENT_PETS, color: 'amber' },
-    { label: '家默管理', icon: BookOpen, route: ROUTES.PARENT_DICTATION, color: 'blue' },
   ];
 
   return (
