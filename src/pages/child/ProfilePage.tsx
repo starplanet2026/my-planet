@@ -259,20 +259,20 @@ export function ProfilePage() {
           {/* 双货币并列 */}
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
             {/* 金币 */}
-            <div className="bg-white/15 rounded-2xl p-2 sm:p-3 flex flex-col items-center">
-              <img src={COIN_ICON_SM} alt="金币" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1" />
-              <span className="text-2xl sm:text-3xl font-bold tabular-nums animate-coin-pop leading-tight">
+            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-10 sm:pt-14 flex flex-col items-center relative">
+              <img src={COIN_ICON_SM} alt="金币" className="w-28 h-28 sm:w-36 sm:h-36 object-contain absolute -top-10 sm:-top-14 left-1/2 -translate-x-1/2" />
+              <span className="text-2xl sm:text-3xl font-bold tabular-nums animate-coin-pop leading-tight relative">
                 {formatCoins(child?.coin_balance ?? 0)}
               </span>
-              <p className="text-white/70 text-[11px] sm:text-sm mt-0.5">金币</p>
+              <p className="text-white/70 text-[11px] sm:text-sm mt-0.5 relative">金币</p>
             </div>
             {/* 星光值 */}
-            <div className="bg-white/15 rounded-2xl p-2 sm:p-3 flex flex-col items-center">
-              <img src={STAR_ICON_SM} alt="星光值" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1" />
-              <span className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight">
+            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-10 sm:pt-14 flex flex-col items-center relative">
+              <img src={STAR_ICON_SM} alt="星光值" className="w-28 h-28 sm:w-36 sm:h-36 object-contain absolute -top-10 sm:-top-14 left-1/2 -translate-x-1/2" />
+              <span className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight relative">
                 {child?.star_value ?? 0}
               </span>
-              <p className="text-white/70 text-[11px] sm:text-sm mt-0.5">星光值</p>
+              <p className="text-white/70 text-[11px] sm:text-sm mt-0.5 relative">星光值</p>
             </div>
           </div>
         </div>
