@@ -101,14 +101,25 @@ export function DictationGradePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-4 px-4 pb-24">
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold">{task.title} - 批改</h1>
-          <p className="text-xs text-slate-400">逐条对照标准答案，勾选正确的词条</p>
+    <div className="max-w-4xl mx-auto py-4 px-4">
+      {/* 标题栏：左侧返回+标题，右侧星光值+提交批改按钮 */}
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-lg shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold truncate">{task.title} - 批改</h1>
+            <p className="text-xs text-slate-400">逐条对照标准答案，勾选正确的词条</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-sm text-slate-600 whitespace-nowrap">
+            预计 <span className="text-amber-500 font-bold">{totalStar}</span> 星光
+          </span>
+          <Button onClick={submit} disabled={submitting} size="lg">
+            {submitting ? '提交中...' : '提交批改'}
+          </Button>
         </div>
       </div>
 
@@ -145,18 +156,6 @@ export function DictationGradePage() {
             </Card>
           );
         })}
-      </div>
-
-      {/* 底部提交 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 z-30">
-        <div className="max-w-4xl mx-auto flex gap-3">
-          <div className="flex-1 flex items-center justify-center text-sm text-slate-600">
-            预计获得 <span className="text-amber-500 font-bold mx-1">{totalStar}</span> 星光值
-          </div>
-          <Button onClick={submit} disabled={submitting} size="lg">
-            {submitting ? '提交中...' : '提交批改'}
-          </Button>
-        </div>
       </div>
 
       {/* 结果弹窗 */}

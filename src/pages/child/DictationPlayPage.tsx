@@ -48,47 +48,41 @@ export function DictationPlayPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-4 px-4 pb-24">
-      <div className="flex items-center gap-3 mb-4">
+    <div className="h-[100dvh] flex flex-col overflow-hidden px-2 sm:px-4">
+      <div className="flex items-center gap-3 py-2 flex-shrink-0">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
-          <h1 className="text-xl font-bold">{task.title}</h1>
-          <p className="text-xs text-slate-400">共 {words.length} 条 · 单条答对 {task.star_per_word} 星光值</p>
+          <h1 className="text-lg font-bold">{task.title}</h1>
+          <p className="text-[11px] text-slate-400">共 {words.length} 条 · 单条答对 {task.star_per_word} 星光值</p>
         </div>
       </div>
 
-      <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
-        <p className="text-sm text-amber-800">
+      <Card className="p-2 mb-2 bg-amber-50 border-amber-200 flex-shrink-0">
+        <p className="text-xs text-amber-800">
           {subject === 'english'
             ? '请根据中文释义在纸上写出英文单词，完成后点击「去批改」。'
             : '请根据拼音在纸上写出汉字词语，完成后点击「去批改」。'}
         </p>
       </Card>
 
-      {/* 所有词条一次性展示，自适应排版 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+      {/* 所有词条一屏展示：行高均分 + 容器查询单位实现词多缩小、词少放大 */}
+      <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
         {words.map((w, i) => (
-          <Card key={w.id} className="p-4 flex flex-col">
-            <div className="text-xs text-slate-400 mb-1">第 {i + 1} 题</div>
-            <div className="text-2xl font-bold text-slate-800 min-h-[3rem] flex items-center">
+          <Card key={w.id} className="p-2 flex flex-col justify-center [container-type:size] min-h-0 overflow-hidden">
+            <div className="text-[10px] text-slate-400">第 {i + 1} 题</div>
+            <div className="font-bold text-slate-800 leading-tight [font-size:clamp(0.75rem,4.2cqh,2.25rem)] break-all">
               {subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-')}
             </div>
-            {w.textbook_name && (
-              <div className="text-[10px] text-slate-400 mt-2">{w.textbook_name} · 第{w.unit_no}单元</div>
-            )}
           </Card>
         ))}
       </div>
 
-      {/* 底部固定按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 z-30">
-        <div className="max-w-4xl mx-auto">
-          <Button className="w-full" size="lg" onClick={() => navigate(`/challenge/dictation/${subject}/grade`)}>
-            <CheckCircle className="w-5 h-5" />完成默写，去批改
-          </Button>
-        </div>
+      <div className="flex-shrink-0 py-2">
+        <Button className="w-full" size="lg" onClick={() => navigate(`/challenge/dictation/${subject}/grade`)}>
+          <CheckCircle className="w-5 h-5" />完成默写，去批改
+        </Button>
       </div>
     </div>
   );
