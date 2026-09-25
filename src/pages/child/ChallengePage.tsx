@@ -27,6 +27,7 @@ import {
   fetchSetQuestionsAll,
   startChallengeSession, flushChallengeSession,
 } from '../../api/challenges';
+import { listTasks as listDictationTasks } from '../../api/dictation';
 import type {
   ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, SetWithLevels, LevelWithProgress,
@@ -111,6 +112,8 @@ export function ChallengePage() {
 
   const [boards, setBoards] = useState<ChallengeBoard[]>([]);
   const [activeBoard, setActiveBoard] = useState<ChallengeBoardType>('today_review');
+  // 有 active 家默任务的学科集合（用于控制今日复习入口卡片展示）
+  const [activeDictationSubjects, setActiveDictationSubjects] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [wrongRetry, setWrongRetry] = useState<{ setId: string; setTitle: string; questionIds: string[] } | null>(null);
   const [viewOnly, setViewOnly] = useState<{ questions: Question[]; title: string } | null>(null);
