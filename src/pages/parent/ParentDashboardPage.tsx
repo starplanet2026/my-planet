@@ -155,9 +155,7 @@ export function ParentDashboardPage() {
     { label: '特权记录', icon: Ticket, route: ROUTES.PARENT_REDEEM, color: 'emerald' },
     { label: '智慧星战', icon: BookOpen, route: ROUTES.PARENT_CHALLENGES, color: 'star' },
     { label: '萌宠星球', icon: PawPrint, route: ROUTES.PARENT_PETS, color: 'amber' },
-    { label: '家默词条库', icon: BookOpen, route: ROUTES.PARENT_DICTATION_WORDS, color: 'blue' },
-    { label: '家默错词库', icon: AlertCircle, route: ROUTES.PARENT_DICTATION_ERROR_WORDS, color: 'rose' },
-    { label: '家默任务', icon: Sparkles, route: ROUTES.PARENT_DICTATION_TASKS, color: 'amber' },
+    { label: '家默管理', icon: BookOpen, route: ROUTES.PARENT_DICTATION, color: 'blue' },
   ];
 
   return (

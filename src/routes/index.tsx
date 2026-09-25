@@ -16,9 +16,7 @@ import { ShopManagePage } from '../pages/parent/ShopManagePage';
 import { PurchaseRedeemPage } from '../pages/parent/PurchaseRedeemPage';
 import { ChallengeManagePage } from '../pages/parent/ChallengeManagePage';
 import { PetManagePage } from '../pages/parent/PetManagePage';
-import { DictationWordManagePage } from '../pages/parent/DictationWordManagePage';
-import { DictationErrorWordPage } from '../pages/parent/DictationErrorWordPage';
-import { DictationTaskCreatePage } from '../pages/parent/DictationTaskCreatePage';
+import { DictationManagePage } from '../pages/parent/DictationManagePage';
 import { ROUTES } from '../lib/constants';
 
 function ParentLayout() {
@@ -55,9 +53,7 @@ export function AppRoutes() {
           <Route path="redeem" element={<PurchaseRedeemPage />} />
           <Route path="challenges" element={<ChallengeManagePage />} />
           <Route path="pets" element={<PetManagePage />} />
-          <Route path="dictation-words" element={<DictationWordManagePage />} />
-          <Route path="dictation-error-words" element={<DictationErrorWordPage />} />
-          <Route path="dictation-tasks" element={<DictationTaskCreatePage />} />
+          <Route path="dictation" element={<DictationManagePage />} />
         </Route>
       </Route>
 
