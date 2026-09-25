@@ -79,6 +79,9 @@ export const ROUTES = {
   PARENT_MEMBERS: '/parent/members',
   PARENT_CHALLENGES: '/parent/challenges',
   PARENT_PETS: '/parent/pets',
+  PARENT_DICTATION_WORDS: '/parent/dictation-words',
+  PARENT_DICTATION_ERROR_WORDS: '/parent/dictation-error-words',
+  PARENT_DICTATION_TASKS: '/parent/dictation-tasks',
   PET: '/pet',
 } as const;
 

@@ -7,6 +7,8 @@ import { ShopPage } from '../pages/child/ShopPage';
 import { ProfilePage } from '../pages/child/ProfilePage';
 import { ChallengePage } from '../pages/child/ChallengePage';
 import { PetPage } from '../pages/child/pet/PetPage';
+import { DictationPlayPage } from '../pages/child/DictationPlayPage';
+import { DictationGradePage } from '../pages/child/DictationGradePage';
 import { ParentDashboardPage } from '../pages/parent/ParentDashboardPage';
 import { TaskManagePage } from '../pages/parent/TaskManagePage';
 import { VerificationPage } from '../pages/parent/VerificationPage';
@@ -14,6 +16,9 @@ import { ShopManagePage } from '../pages/parent/ShopManagePage';
 import { PurchaseRedeemPage } from '../pages/parent/PurchaseRedeemPage';
 import { ChallengeManagePage } from '../pages/parent/ChallengeManagePage';
 import { PetManagePage } from '../pages/parent/PetManagePage';
+import { DictationWordManagePage } from '../pages/parent/DictationWordManagePage';
+import { DictationErrorWordPage } from '../pages/parent/DictationErrorWordPage';
+import { DictationTaskCreatePage } from '../pages/parent/DictationTaskCreatePage';
 import { ROUTES } from '../lib/constants';
 
 function ParentLayout() {
@@ -36,6 +41,8 @@ export function AppRoutes() {
         <Route path="shop" element={<ShopPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="challenge" element={<ChallengePage />} />
+        <Route path="challenge/dictation/:subject" element={<DictationPlayPage />} />
+        <Route path="challenge/dictation/:subject/grade" element={<DictationGradePage />} />
         <Route path="pet" element={<PetPage />} />
 
         {/* 家长端 */}
@@ -48,6 +55,9 @@ export function AppRoutes() {
           <Route path="redeem" element={<PurchaseRedeemPage />} />
           <Route path="challenges" element={<ChallengeManagePage />} />
           <Route path="pets" element={<PetManagePage />} />
+          <Route path="dictation-words" element={<DictationWordManagePage />} />
+          <Route path="dictation-error-words" element={<DictationErrorWordPage />} />
+          <Route path="dictation-tasks" element={<DictationTaskCreatePage />} />
         </Route>
       </Route>
 

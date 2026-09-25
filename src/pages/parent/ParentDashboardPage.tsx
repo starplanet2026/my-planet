@@ -15,7 +15,7 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { ListTodo, ShoppingBag, Ticket, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint } from 'lucide-react';
+import { ListTodo, ShoppingBag, Ticket, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, AlertCircle, Sparkles } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -155,6 +155,9 @@ export function ParentDashboardPage() {
     { label: '特权记录', icon: Ticket, route: ROUTES.PARENT_REDEEM, color: 'emerald' },
     { label: '智慧星战', icon: BookOpen, route: ROUTES.PARENT_CHALLENGES, color: 'star' },
     { label: '萌宠星球', icon: PawPrint, route: ROUTES.PARENT_PETS, color: 'amber' },
+    { label: '家默词条库', icon: BookOpen, route: ROUTES.PARENT_DICTATION_WORDS, color: 'blue' },
+    { label: '家默错词库', icon: AlertCircle, route: ROUTES.PARENT_DICTATION_ERROR_WORDS, color: 'rose' },
+    { label: '家默任务', icon: Sparkles, route: ROUTES.PARENT_DICTATION_TASKS, color: 'amber' },
   ];
 
   return (

@@ -78,7 +78,6 @@ export function DictationGradePage() {
       setResultInfo({ correct: submitRes.correct_count, total: words.length, star: grantRes.total_star });
       setShowResult(true);
       // 刷新成员星光值
-      const refreshMembers = useFamilyStore.getState().refreshMembers;
       await refreshMembers();
     } catch (e: any) {
       toast.error('提交失败：' + e.message);
