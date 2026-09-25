@@ -1,7 +1,7 @@
 import { supabase } from './client';
 import type {
   DictationSubject, DictationWord, DictationErrorWord, DictationTask,
-  DictationTaskWord, GrantDictationResult, SubmitDictationResult,
+  DictationTaskWord, SubmitDictationResult,
 } from './types';
 
 // ==================== 词条库 ====================
@@ -278,6 +278,11 @@ export interface TaskWordInput {
   answer: string;
   is_temporary: boolean;
   save_to_library: boolean;
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  const { error } = await supabase.from('dictation_tasks').delete().eq('id', taskId);
+  if (error) throw error;
 }
 
 export async function addTaskWords(taskId: string, words: TaskWordInput[]): Promise<void> {

@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils';
 import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Sparkles } from 'lucide-react';
 import {
   listWords, listWordTextbooks, listWordUnits, createWord,
-  listDueErrorWords, createTask, addTaskWords,
+  listDueErrorWords, createTask, addTaskWords, deleteTask,
 } from '../../api/dictation';
 import type { DictationSubject, DictationWord, DictationErrorWord } from '../../api/types';
 
@@ -181,13 +181,19 @@ export function DictationTaskCreatePage() {
         family_id: family.id, member_id: childId, subject, title,
         star_per_word: starPerWord,
       });
-      await addTaskWords(task.id, added.map(a => ({
-        word_id: a.word_id ?? null, error_word_id: a.error_word_id ?? null,
-        textbook_name: a.textbook_name, unit_no: a.unit_no, unit_name: a.unit_name,
-        page_no: a.page_no ?? null, chinese_meaning: a.chinese_meaning ?? null,
-        part_of_speech: a.part_of_speech ?? null, pinyin: a.pinyin ?? null,
-        answer: a.answer, is_temporary: a.is_temporary, save_to_library: a.save_to_library,
-      })));
+      try {
+        await addTaskWords(task.id, added.map(a => ({
+          word_id: a.word_id ?? null, error_word_id: a.error_word_id ?? null,
+          textbook_name: a.textbook_name, unit_no: a.unit_no, unit_name: a.unit_name,
+          page_no: a.page_no ?? null, chinese_meaning: a.chinese_meaning ?? null,
+          part_of_speech: a.part_of_speech ?? null, pinyin: a.pinyin ?? null,
+          answer: a.answer, is_temporary: a.is_temporary, save_to_library: a.save_to_library,
+        })));
+      } catch (err) {
+        // 词条关联失败时清理已创建的空任务
+        await deleteTask(task.id);
+        throw err;
+      }
       toast.success('任务已发布');
       navigate(ROUTES.PARENT_DASHBOARD);
     } catch (e: any) {
