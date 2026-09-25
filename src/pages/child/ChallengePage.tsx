@@ -445,7 +445,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
       </div>
 
       {/* 题集卡片网格 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* 家默入口卡片（仅今日复习板块、且该学科有 active 任务时展示，置于最前） */}
         {boardType === 'today_review' && activeDictationSubjects.has('english') && (
           <div
