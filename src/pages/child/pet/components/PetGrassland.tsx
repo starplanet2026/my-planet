@@ -453,55 +453,38 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
                 </div>
               )}
 
-              {/* 默认态第二行：Lv.X + 经验条（同一行） */}
-              {!isInteracting && (
-                <div className="flex items-center gap-1 mb-0.5">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 shadow-sm whitespace-nowrap">
-                    Lv.{pet.level}
+              {/* 信息板块：名字/性别/稀有度/等级/经验条（内外层页面完全一致，紧贴宠物头顶） */}
+              <div className="mb-1 max-w-[180px] text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap">
+                  <span className="text-xs font-bold text-slate-700 truncate max-w-[80px]">{pet.name}</span>
+                  <span className="text-[10px]">
+                    {pet.gender === 'male' ? '♂' : pet.gender === 'female' ? '♀' : ''}
                   </span>
-                  <div className="w-14 h-1 bg-slate-200/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-[8px] font-medium text-slate-500 whitespace-nowrap">
-                    {pet.level < pet.max_level ? `${pet.exp}/${expNeeded(pet.level, pet.rarity as PetRarity)}` : 'MAX'}
+                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                    {rarityLabel(pet.rarity)}
+                  </span>
+                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
+                    Lv.{pet.level}/{pet.max_level}
                   </span>
                 </div>
-              )}
-
-              {/* 互动态：宠物名 + 稀有度 + 详细经验条（去掉会话内容） */}
-              {isInteracting && (
-                <div className="mb-1 max-w-[180px] text-center">
-                  <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap">
-                    <span className="text-xs font-bold text-slate-700 truncate max-w-[80px]">{pet.name}</span>
-                    <span className="text-[8px] px-1 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
-                      {rarityLabel(pet.rarity)}
-                    </span>
-                    <span className="text-[8px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
-                      Lv.{pet.level}/{pet.max_level}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {pet.level < pet.max_level ? (
-                      <>
-                        <div className="flex-1 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
-                            style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-[8px] font-medium text-slate-500">
-                          {pet.exp}/{expNeeded(pet.level, pet.rarity as PetRarity)}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-[8px] font-bold text-amber-500">已满级</span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-1">
+                  {pet.level < pet.max_level ? (
+                    <>
+                      <div className="flex-1 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[8px] font-medium text-slate-500">
+                        {pet.exp}/{expNeeded(pet.level, pet.rarity as PetRarity)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[8px] font-bold text-amber-500">已满级</span>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* 宠物形象 */}
               {pet.image_url ? (
