@@ -18,6 +18,19 @@ function rarityLabel(rarity: string | undefined | null): string {
   return '普通';
 }
 
+// 稀有度配色（与图鉴、商店保持统一）
+const RARITY_STYLE: Record<string, string> = {
+  common: 'bg-slate-100 text-slate-500',
+  rare: 'bg-blue-100 text-blue-600',
+  epic: 'bg-purple-100 text-purple-600',
+};
+
+// 性别图标配色：雄性蓝、雌性粉
+const GENDER_STYLE: Record<string, string> = {
+  male: 'bg-blue-100 text-blue-600',
+  female: 'bg-pink-100 text-pink-600',
+};
+
 // 心情状态：统一 emoji 和文案的对应关系
 // 与 moodEmoji / petMessage 共用同一套阈值，确保表情和会话内容一致
 function moodState(pet: Pet): { emoji: string; text: string } {
@@ -453,35 +466,42 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
                 </div>
               )}
 
-              {/* 信息板块：名字/性别/稀有度/等级/经验条（内外层页面完全一致，紧贴宠物头顶） */}
-              <div className="mb-1 max-w-[180px] text-center">
-                <div className="flex items-center justify-center gap-1.5 mb-0.5 flex-wrap">
-                  <span className="text-xs font-bold text-slate-700 truncate max-w-[80px]">{pet.name}</span>
-                  <span className="text-[10px]">
-                    {pet.gender === 'male' ? '♂' : pet.gender === 'female' ? '♀' : ''}
-                  </span>
-                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
-                    {rarityLabel(pet.rarity)}
-                  </span>
-                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
-                    Lv.{pet.level}/{pet.max_level}
-                  </span>
-                </div>
+              {/* 信息板块（内外层页面完全一致） */}
+              <div className="mb-1 flex flex-col items-center gap-0.5">
+                {/* 上一行：等级数字（左）+ 经验条（缩短）+ 经验数值 */}
                 <div className="flex items-center gap-1">
+                  <span className="text-[9px] font-bold px-1 py-0.5 rounded-full bg-emerald-100 text-emerald-600 whitespace-nowrap">
+                    Lv.{pet.level}
+                  </span>
                   {pet.level < pet.max_level ? (
                     <>
-                      <div className="flex-1 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                      <div className="w-10 h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
                           style={{ width: `${Math.min(100, (pet.exp / expNeeded(pet.level, pet.rarity as PetRarity)) * 100)}%` }}
                         />
                       </div>
-                      <span className="text-[8px] font-medium text-slate-500">
+                      <span className="text-[8px] font-medium text-slate-500 whitespace-nowrap">
                         {pet.exp}/{expNeeded(pet.level, pet.rarity as PetRarity)}
                       </span>
                     </>
                   ) : (
                     <span className="text-[8px] font-bold text-amber-500">已满级</span>
+                  )}
+                </div>
+                {/* 下一行（紧贴宠物头顶）：【稀有度小图标】【名字】【性别小图标】 */}
+                <div className="flex items-center justify-center gap-1">
+                  <span className={cn('px-1.5 py-0.5 rounded-full text-[9px] font-bold', RARITY_STYLE[pet.rarity ?? 'common'])}>
+                    {rarityLabel(pet.rarity)}
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.name}</span>
+                  {pet.gender && (
+                    <span className={cn(
+                      'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',
+                      GENDER_STYLE[pet.gender]
+                    )}>
+                      {pet.gender === 'male' ? '♂' : '♀'}
+                    </span>
                   )}
                 </div>
               </div>
