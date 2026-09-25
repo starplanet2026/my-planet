@@ -329,24 +329,6 @@ export async function submitDictationResult(
     message: row?.message ?? '',
     correct_count: row?.correct_count ?? 0,
     error_count: row?.error_count ?? 0,
-  };
-}
-
-export async function grantDictationStarlight(
-  memberId: string,
-  taskId: string,
-  correctCount: number,
-): Promise<GrantDictationResult> {
-  const { data, error } = await supabase.rpc('grant_dictation_starlight', {
-    p_member_id: memberId,
-    p_task_id: taskId,
-    p_correct_count: correctCount,
-  });
-  if (error) throw error;
-  const row = (data as any[])?.[0];
-  return {
-    success: row?.success ?? false,
-    message: row?.message ?? '',
     total_star: row?.total_star ?? 0,
     new_star: row?.new_star ?? 0,
   };

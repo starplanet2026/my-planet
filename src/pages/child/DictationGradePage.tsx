@@ -10,7 +10,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, CheckSquare, Square, CheckCircle } from 'lucide-react';
-import { getActiveTask, listTaskWords, submitDictationResult, grantDictationStarlight } from '../../api/dictation';
+import { getActiveTask, listTaskWords, submitDictationResult } from '../../api/dictation';
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
 
 export function DictationGradePage() {
@@ -68,14 +68,13 @@ export function DictationGradePage() {
         answer: w.answer,
         is_correct: correct.has(w.id),
       }));
+      // 提交批改 + 发放星光值（同一数据库事务，原子性保证）
       const submitRes = await submitDictationResult(task.id, childId, results);
       if (!submitRes.success) {
         toast.error(submitRes.message);
         return;
       }
-      // 发放星光值
-      const grantRes = await grantDictationStarlight(childId, task.id, submitRes.correct_count);
-      setResultInfo({ correct: submitRes.correct_count, total: words.length, star: grantRes.total_star });
+      setResultInfo({ correct: submitRes.correct_count, total: words.length, star: submitRes.total_star });
       setShowResult(true);
       // 刷新成员星光值
       await refreshMembers();
