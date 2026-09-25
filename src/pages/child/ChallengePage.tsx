@@ -413,7 +413,7 @@ export function ChallengePage() {
 // ================================================================
 // 板块组件：标题 + 题集卡片网格
 // ================================================================
-function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
+function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, activeDictationSubjects, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
   boardType: ChallengeBoardType;
   label: string;
   icon: string;
@@ -422,6 +422,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   onSelectSet: (s: ChallengeSet) => void;
   onSelectLevel: (lv: LevelWithProgress) => void;
   childId: string;
+  activeDictationSubjects: Set<string>;
   onWrongRetry: (setId: string, setTitle: string, questionIds: string[]) => void;
   onStartBattle: () => void;
   onViewSetQuestions: (setId: string, setTitle: string) => void;
@@ -430,8 +431,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   const [wrongSet, setWrongSet] = useState<{ id: string; title: string; levelId?: string } | null>(null);
   const navigate = useNavigate();
 
-  // 今日复习板块始终渲染（用于展示家默入口）
-  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && boardType !== 'today_review') return null;
+  const hasDictationEntry = boardType === 'today_review' && activeDictationSubjects.size > 0;
+  // 今日复习板块：有题集或有 active 家默任务时才渲染
+  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && !hasDictationEntry) return null;
 
   return (
     <div>
@@ -444,26 +446,26 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
 
       {/* 题集卡片网格 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
-        {/* 家默入口卡片（仅今日复习板块显示，置于最前） */}
-        {boardType === 'today_review' && (
-          <>
-            <div
-              onClick={() => navigate('/challenge/dictation/english')}
-              className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
-            >
-              <span className="text-3xl mb-1">📝</span>
-              <span className="text-sm font-bold">英语家默</span>
-              <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
-            </div>
-            <div
-              onClick={() => navigate('/challenge/dictation/chinese')}
-              className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
-            >
-              <span className="text-3xl mb-1">✍️</span>
-              <span className="text-sm font-bold">语文家默</span>
-              <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
-            </div>
-          </>
+        {/* 家默入口卡片（仅今日复习板块、且该学科有 active 任务时展示，置于最前） */}
+        {boardType === 'today_review' && activeDictationSubjects.has('english') && (
+          <div
+            onClick={() => navigate('/challenge/dictation/english')}
+            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+          >
+            <span className="text-3xl mb-1">📝</span>
+            <span className="text-sm font-bold">英语家默</span>
+            <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+          </div>
+        )}
+        {boardType === 'today_review' && activeDictationSubjects.has('chinese') && (
+          <div
+            onClick={() => navigate('/challenge/dictation/chinese')}
+            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+          >
+            <span className="text-3xl mb-1">✍️</span>
+            <span className="text-sm font-bold">语文家默</span>
+            <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+          </div>
         )}
         {/* 错题混战池入口（仅错题大混战板块显示） */}
         {boardType === 'wrong_battle' && (
