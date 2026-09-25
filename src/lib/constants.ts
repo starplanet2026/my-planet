@@ -1,10 +1,10 @@
 import type { TaskCategory, TaskStatus, PurchaseStatus, CoinRecordCategory, TaskCategoryItem } from '../api/types';
 
 // 双货币图标（金币 / 星光值）
-import coinIconUrl from '../assets/icons/coin-icon-sm.jpg';
-import coinIconLgUrl from '../assets/icons/coin-icon.jpg';
-import starIconUrl from '../assets/icons/star-icon-sm.jpg';
-import starIconLgUrl from '../assets/icons/star-icon.jpg';
+import coinIconUrl from '../assets/icons/coin-icon-sm.png';
+import coinIconLgUrl from '../assets/icons/coin-icon.png';
+import starIconUrl from '../assets/icons/star-icon-sm.png';
+import starIconLgUrl from '../assets/icons/star-icon.png';
 
 export const COIN_ICON_SM = coinIconUrl;
 export const COIN_ICON_LG = coinIconLgUrl;

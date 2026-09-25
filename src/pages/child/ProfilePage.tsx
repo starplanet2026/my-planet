@@ -235,7 +235,7 @@ export function ProfilePage() {
   const sellRefund = (p: Purchase) => Math.floor(p.price_paid * p.quantity * 0.9);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
       {/* 双货币 Hero */}
       <Card className="bg-gradient-to-br from-amber-500 to-star-600 text-white border-0">
         <div className="p-6 sm:p-8 text-center relative">
