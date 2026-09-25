@@ -65,13 +65,18 @@ const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food', clean: 'clean', play: 'toy', heal: 'medicine',
 };
 
-export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
+// 宠物默认出现位置：底部菜单栏上方一点点，水平居中
+const DEFAULT_PET_POSITION = { x: 50, y: 68 };
+
+export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionResetPetId, onPositionResetDone }: {
   pets: Pet[];
   dogHouse: DogHouse | null;
   onPetClick?: (pet: Pet) => void;
   onDogHouseUpgraded?: () => void;
   bgImage?: string;
   onPetUpdate?: (updated: Pet) => void;
+  positionResetPetId?: string | null;
+  onPositionResetDone?: () => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -98,7 +103,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     pets.forEach(p => { map[p.id] = p; });
     setPetStates(map);
     const fixed: Record<string, { x: number; y: number }> = {};
-    pets.forEach((p, i) => {
+    pets.forEach((p) => {
       const cur = positions[p.id];
       if (cur) {
         fixed[p.id] = {
@@ -106,12 +111,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
           y: Math.max(10, Math.min(70, cur.y)),
         };
       } else {
-        const col = i % 5;
-        const row = Math.floor(i / 5);
-        fixed[p.id] = {
-          x: 15 + col * 18,
-          y: 25 + row * 25,
-        };
+        // 首次领养 / 无历史位置：底部菜单栏上方居中
+        fixed[p.id] = { ...DEFAULT_PET_POSITION };
       }
     });
     setPositions(fixed);
@@ -135,6 +136,16 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   useEffect(() => {
     localStorage.setItem('pet-positions', JSON.stringify(positions));
   }, [positions]);
+
+  // "出来玩" 时重置指定宠物位置到底部居中默认位置
+  useEffect(() => {
+    if (!positionResetPetId) return;
+    setPositions(prev => ({
+      ...prev,
+      [positionResetPetId]: { ...DEFAULT_PET_POSITION },
+    }));
+    onPositionResetDone?.();
+  }, [positionResetPetId, onPositionResetDone]);
 
   // 保存折叠状态
   useEffect(() => {
@@ -333,7 +344,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
 
       {/* 宠物们 */}
       {Object.values(petStates).map(pet => {
-        const pos = positions[pet.id] || { x: 50, y: 50 };
+        const pos = positions[pet.id] || { ...DEFAULT_PET_POSITION };
         const isInteracting = interactingPetId === pet.id;
         return (
           <div
