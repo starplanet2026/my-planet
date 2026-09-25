@@ -10,8 +10,8 @@ export function AppShell() {
   return (
     <div className="min-h-screen flex flex-col bg-star-50">
       <TopBar />
-      <div className="flex flex-1 w-full">
-        <main className="flex-1 px-4 sm:px-6 lg:px-6 py-6 pb-24">
+      <div className="flex flex-1 max-w-7xl w-full mx-auto">
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 pb-24">
           <Outlet />
         </main>
       </div>

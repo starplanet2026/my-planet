@@ -235,7 +235,7 @@ export function ProfilePage() {
   const sellRefund = (p: Purchase) => Math.floor(p.price_paid * p.quantity * 0.9);
 
   return (
-    <div className="w-full space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       {/* 双货币 Hero */}
       <Card className="bg-gradient-to-br from-amber-500 to-star-600 text-white border-0">
         <div className="p-6 sm:p-8 text-center relative">
@@ -260,7 +260,7 @@ export function ProfilePage() {
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
             {/* 金币 */}
             <div className="bg-white/15 rounded-2xl p-2 sm:p-3 flex flex-col items-center">
-              <img src={COIN_ICON_SM} alt="金币" className="w-8 h-8 sm:w-10 sm:h-10 object-contain mb-1" />
+              <img src={COIN_ICON_SM} alt="金币" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1" />
               <span className="text-2xl sm:text-3xl font-bold tabular-nums animate-coin-pop leading-tight">
                 {formatCoins(child?.coin_balance ?? 0)}
               </span>
@@ -268,7 +268,7 @@ export function ProfilePage() {
             </div>
             {/* 星光值 */}
             <div className="bg-white/15 rounded-2xl p-2 sm:p-3 flex flex-col items-center">
-              <img src={STAR_ICON_SM} alt="星光值" className="w-8 h-8 sm:w-10 sm:h-10 object-contain mb-1" />
+              <img src={STAR_ICON_SM} alt="星光值" className="w-16 h-16 sm:w-20 sm:h-20 object-contain mb-1" />
               <span className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight">
                 {child?.star_value ?? 0}
               </span>
