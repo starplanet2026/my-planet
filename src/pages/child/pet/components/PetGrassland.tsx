@@ -478,17 +478,43 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
                 </div>
               </div>
 
-              {/* 宠物形象 */}
-              {pet.image_url ? (
-                <img
-                  src={pet.image_url}
-                  alt=""
-                  draggable={false}
-                  className="w-[98px] h-[119px] sm:w-[126px] sm:h-[154px] md:w-[168px] md:h-[196px] object-contain drop-shadow-lg"
-                />
-              ) : (
-                <span className="text-5xl sm:text-6xl md:text-7xl drop-shadow-lg">{pet.emoji || '🐾'}</span>
-              )}
+              {/* 宠物形象 + 会话框（会话框常驻显示，位于宠物头部右侧） */}
+              <div className="relative">
+                {pet.image_url ? (
+                  <img
+                    src={pet.image_url}
+                    alt=""
+                    draggable={false}
+                    className="w-[98px] h-[119px] sm:w-[126px] sm:h-[154px] md:w-[168px] md:h-[196px] object-contain drop-shadow-lg"
+                  />
+                ) : (
+                  <span className="text-5xl sm:text-6xl md:text-7xl drop-shadow-lg">{pet.emoji || '🐾'}</span>
+                )}
+                {/* 会话框：宠物头部右侧，内外层常驻显示 */}
+                {petMessage(pet) && (
+                  <div className="absolute top-0 left-full ml-1">
+                    {collapsedChats.has(pet.id) ? (
+                      <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
+                        className="text-lg drop-shadow-md hover:scale-110 transition-transform"
+                      >
+                        💬
+                      </button>
+                    ) : (
+                      <div
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
+                        className="max-w-[90px] cursor-pointer relative"
+                      >
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[9px] text-slate-600 leading-tight border border-slate-100">
+                          {petMessage(pet)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* 金币提示 */}
               {pet.coin_balance >= 1 && (
