@@ -17,7 +17,7 @@ import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
 const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
 
-export function DictationErrorWordPage() {
+export function DictationErrorWordPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? '';
@@ -115,12 +115,14 @@ export function DictationErrorWordPage() {
 
   return (
     <div className="max-w-6xl mx-auto py-4 px-4">
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold flex items-center gap-2"><AlertCircle className="w-6 h-6 text-rose-500" />家默错词库</h1>
-      </div>
+      {!embedded && (
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold flex items-center gap-2"><AlertCircle className="w-6 h-6 text-rose-500" />家默错词库</h1>
+        </div>
+      )}
 
       <Card className="p-4 mb-4">
         <div className="flex flex-wrap gap-2 items-center">

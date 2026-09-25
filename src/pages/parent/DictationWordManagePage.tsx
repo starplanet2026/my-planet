@@ -22,7 +22,7 @@ import type { DictationWord, DictationSubject } from '../../api/types';
 const ENGLISH_COLUMNS = ['课本名称', '单元序号', '单元名字', '页码', '中文释义', '词性', '英文答案'];
 const CHINESE_COLUMNS = ['课本名称', '单元序号', '单元名字', '拼音', '汉字答案'];
 
-export function DictationWordManagePage() {
+export function DictationWordManagePage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const family = useFamilyStore(s => s.family);
   const currentChildId = useModeStore(s => s.currentChildId);
@@ -206,12 +206,14 @@ export function DictationWordManagePage() {
 
   return (
     <div className="max-w-6xl mx-auto py-4 px-4">
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-emerald-500" />家默词条库管理</h1>
-      </div>
+      {!embedded && (
+        <div className="flex items-center gap-3 mb-4">
+          <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold flex items-center gap-2"><BookOpen className="w-6 h-6 text-emerald-500" />家默词条库管理</h1>
+        </div>
+      )}
 
       {/* 学科切换 */}
       <div className="flex gap-2 mb-4">
