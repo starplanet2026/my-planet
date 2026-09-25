@@ -103,17 +103,17 @@ export function DictationPlayPage() {
               key={w.id}
               onClick={() => grading && toggleCorrect(w.id)}
               className={cn(
-                'p-2 flex flex-col justify-center [container-type:size] min-h-0 overflow-hidden transition-colors',
+                'place-self-center h-3/4 w-full p-2 flex flex-col justify-center items-center text-center [container-type:size] min-h-0 overflow-hidden transition-colors',
                 grading && 'cursor-pointer',
                 grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
               )}
             >
               <div className="text-[10px] text-slate-400">{i + 1}</div>
-              <div className="font-bold text-slate-800 leading-tight [font-size:clamp(1.1rem,7cqh,3rem)] break-all">
+              <div className="font-bold text-slate-800 leading-tight [font-size:clamp(1.1rem,8cqh,3rem)] break-all">
                 {prompt}
               </div>
               {grading && (
-                <div className="text-red-600 font-extrabold leading-tight mt-1 [font-size:clamp(1rem,6cqh,2.6rem)] break-all">
+                <div className="text-red-600 font-extrabold leading-tight mt-1 [font-size:clamp(1rem,7cqh,2.6rem)] break-all">
                   {w.answer}
                 </div>
               )}
