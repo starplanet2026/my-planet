@@ -259,7 +259,7 @@ export function ProfilePage() {
           {/* 双货币并列 */}
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
             {/* 金币 */}
-            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-10 sm:pt-14 flex flex-col items-center relative">
+            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-20 sm:pt-24 flex flex-col items-center relative">
               <img src={COIN_ICON_SM} alt="金币" className="w-28 h-28 sm:w-36 sm:h-36 object-contain absolute -top-10 sm:-top-14 left-1/2 -translate-x-1/2" />
               <span className="text-2xl sm:text-3xl font-bold tabular-nums animate-coin-pop leading-tight relative">
                 {formatCoins(child?.coin_balance ?? 0)}
@@ -267,7 +267,7 @@ export function ProfilePage() {
               <p className="text-white/70 text-[11px] sm:text-sm mt-0.5 relative">金币</p>
             </div>
             {/* 星光值 */}
-            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-10 sm:pt-14 flex flex-col items-center relative">
+            <div className="bg-white/15 rounded-2xl px-2 pb-2 sm:px-3 sm:pb-3 pt-20 sm:pt-24 flex flex-col items-center relative">
               <img src={STAR_ICON_SM} alt="星光值" className="w-28 h-28 sm:w-36 sm:h-36 object-contain absolute -top-10 sm:-top-14 left-1/2 -translate-x-1/2" />
               <span className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight relative">
                 {child?.star_value ?? 0}
@@ -286,7 +286,7 @@ export function ProfilePage() {
         ) : pendingPurchases.length === 0 ? (
           <EmptyState icon="🎒" title="背包是空的" description="去兑换特权获取奖励吧！" />
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
             {pendingPurchases.map(p => {
               const overdue = p.expires_at && isExpired(p.expires_at);
               const totalPaid = p.price_paid * p.quantity;
