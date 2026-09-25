@@ -1,13 +1,14 @@
 import { supabase } from './client';
 import type {
   PetShopItem, Pet, PetShopItemType, PetSubcategory, PetRarity,
-  PetInventory, PetCheckin, DogHouse, PetWord, PetWordProgress,
+  PetInventory, PetCheckin, DogHouse, PetWord, PetWordProgress, PetWordBook,
   BuyPetItemResult, ClaimPetCoinsResult,
   CheckinResult, UpgradeDogHouseResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
   PetBackground,
   GameLevelResult, GameWordStat, FinishGameLevelResult,
-  BoardingStatus, StudyPet, BoardingCardType,
-  BuyBoardingCardResult, BoardPetsResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
+  BoardingStatus, StudyPet,
+  BuyBoardingCardResult, SetBoardingSelectionResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
+  PetMessage,
 } from './types';
 
 // ====== 商店商品 ======
@@ -46,6 +47,7 @@ export async function createPetShopItem(data: {
   daily_decay_base?: number;
   upgrade_coin_reward?: number;
   upgrade_percent?: number;
+  valid_days?: number;
 }): Promise<PetShopItem> {
   const { data: result, error } = await supabase
     .from('pet_shop_items')
@@ -186,41 +188,61 @@ export async function evolvePet(petId: string, targetRarity: 'rare' | 'epic'): P
 
 // ====== 单词消消乐 ======
 
-export async function fetchPetWords(): Promise<PetWord[]> {
-  const { data, error } = await supabase
+export async function fetchPetWords(bookId?: string): Promise<PetWord[]> {
+  let q = supabase
     .from('pet_words')
     .select('*')
-    .eq('status', 'active')
+    .eq('status', 'active');
+  if (bookId) q = q.eq('book_id', bookId);
+  const { data, error } = await q
     .order('display_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
   if (error) throw error;
   return (data ?? []) as PetWord[];
 }
 
-export async function createPetWord(wordEn: string, wordCn: string, partOfSpeech?: string): Promise<PetWord> {
-  // 取当前最大 display_order，新词排到队尾
+export async function createPetWord(
+  bookId: string,
+  wordEn: string,
+  wordCn: string,
+  partOfSpeech?: string,
+  partOfSpeech2?: string,
+): Promise<PetWord> {
+  // 取当前词书内最大 display_order，新词排到队尾
   const { data: maxRow } = await supabase
     .from('pet_words')
     .select('display_order')
+    .eq('book_id', bookId)
     .order('display_order', { ascending: false })
     .limit(1)
     .maybeSingle();
   const nextOrder = (maxRow?.display_order ?? 0) + 1;
   const { data, error } = await supabase
     .from('pet_words')
-    .insert({ word_en: wordEn, word_cn: wordCn, part_of_speech: partOfSpeech || null, display_order: nextOrder })
+    .insert({
+      word_en: wordEn,
+      word_cn: wordCn,
+      part_of_speech: partOfSpeech || null,
+      part_of_speech_2: partOfSpeech2 || null,
+      display_order: nextOrder,
+      book_id: bookId,
+    })
     .select()
     .single();
   if (error) throw error;
   return data as PetWord;
 }
 
-export async function createPetWordsBatch(words: { en: string; cn: string; pos?: string }[]): Promise<void> {
+export async function createPetWordsBatch(
+  bookId: string,
+  words: { en: string; cn: string; pos?: string; pos2?: string }[],
+): Promise<void> {
   if (words.length === 0) return;
-  // 取当前最大 display_order，按 Excel 顺序追加
+  // 取当前词书内最大 display_order，按顺序追加
   const { data: maxRow } = await supabase
     .from('pet_words')
     .select('display_order')
+    .eq('book_id', bookId)
     .order('display_order', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -229,10 +251,27 @@ export async function createPetWordsBatch(words: { en: string; cn: string; pos?:
     word_en: w.en,
     word_cn: w.cn,
     part_of_speech: w.pos || null,
+    part_of_speech_2: w.pos2 || null,
     display_order: startOrder + i,
+    book_id: bookId,
   }));
   const { error } = await supabase.from('pet_words').insert(rows);
   if (error) throw error;
+}
+
+// 编辑单个单词（支持单独修改词性 / 词性2）
+export async function updatePetWord(
+  id: string,
+  patch: { word_en?: string; word_cn?: string; part_of_speech?: string | null; part_of_speech_2?: string | null },
+): Promise<PetWord> {
+  const { data, error } = await supabase
+    .from('pet_words')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as PetWord;
 }
 
 export async function deletePetWord(id: string): Promise<void> {
@@ -306,6 +345,94 @@ export async function fetchPetWordProgress(memberId: string): Promise<PetWordPro
     .maybeSingle();
   if (error) throw error;
   return data as PetWordProgress | null;
+}
+
+// 更新用户当前游玩的词书
+export async function updatePetWordProgressBookId(memberId: string, bookId: string): Promise<void> {
+  const { error } = await supabase
+    .from('pet_word_progress')
+    .update({ current_book_id: bookId })
+    .eq('member_id', memberId);
+  if (error && !error.message.includes('current_book_id')) throw error;
+}
+
+// ====== 词书管理 ======
+
+export async function fetchWordBooks(): Promise<PetWordBook[]> {
+  const { data, error } = await supabase
+    .from('pet_word_books')
+    .select('*')
+    .order('display_order', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as PetWordBook[];
+}
+
+export async function createWordBook(title: string): Promise<PetWordBook> {
+  const { data: maxRow } = await supabase
+    .from('pet_word_books')
+    .select('display_order')
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextOrder = (maxRow?.display_order ?? 0) + 1;
+  const { data, error } = await supabase
+    .from('pet_word_books')
+    .insert({ title, display_order: nextOrder, status: 'active' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as PetWordBook;
+}
+
+export async function updateWordBook(id: string, patch: Partial<PetWordBook>): Promise<void> {
+  const { error } = await supabase.from('pet_word_books').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteWordBook(id: string): Promise<void> {
+  const { error } = await supabase.from('pet_word_books').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function reorderWordBooks(orderedIds: string[]): Promise<void> {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase
+      .from('pet_word_books')
+      .update({ display_order: i + 1 })
+      .eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
+// 拖拽排序词书内单词
+export async function reorderWordsInBook(orderedIds: string[]): Promise<void> {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase
+      .from('pet_words')
+      .update({ display_order: i + 1 })
+      .eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
+// 批量转移单词到其他词书
+export async function batchMoveWordsToBook(wordIds: string[], bookId: string): Promise<void> {
+  if (wordIds.length === 0) return;
+  const { data: maxRow } = await supabase
+    .from('pet_words')
+    .select('display_order')
+    .eq('book_id', bookId)
+    .order('display_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let startOrder = (maxRow?.display_order ?? 0) + 1;
+  for (const id of wordIds) {
+    const { error } = await supabase
+      .from('pet_words')
+      .update({ book_id: bookId, display_order: startOrder++ })
+      .eq('id', id);
+    if (error) throw error;
+  }
 }
 
 export async function finishWordMatch(memberId: string, matchedCount: number): Promise<FinishWordMatchResult> {
@@ -582,24 +709,24 @@ export async function fetchStudyRecords(memberId: string, limit = 50): Promise<S
 
 // ====== 托管系统 ======
 
-export async function buyBoardingCard(memberId: string, cardType: BoardingCardType): Promise<BuyBoardingCardResult> {
+export async function buyBoardingCard(memberId: string, itemId: string): Promise<BuyBoardingCardResult> {
   const { data, error } = await supabase.rpc('buy_boarding_card', {
     p_member_id: memberId,
-    p_card_type: cardType,
+    p_item_id: itemId,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as BuyBoardingCardResult;
 }
 
-export async function boardPets(memberId: string, petIds: string[]): Promise<BoardPetsResult> {
-  const { data, error } = await supabase.rpc('board_pets', {
+export async function setBoardingSelection(memberId: string, petIds: string[]): Promise<SetBoardingSelectionResult> {
+  const { data, error } = await supabase.rpc('set_boarding_selection', {
     p_member_id: memberId,
     p_pet_ids: petIds,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
-  return row as BoardPetsResult;
+  return row as SetBoardingSelectionResult;
 }
 
 export async function getBoardingStatus(memberId: string): Promise<BoardingStatus> {
@@ -607,6 +734,14 @@ export async function getBoardingStatus(memberId: string): Promise<BoardingStatu
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as BoardingStatus;
+}
+
+// 触发当日托管养护（懒加载兜底，cron 每日0点也会执行）
+export async function runBoardingCare(memberId?: string): Promise<void> {
+  const { error } = await supabase.rpc('run_daily_boarding_care', {
+    p_member_id: memberId ?? null,
+  });
+  if (error) throw error;
 }
 
 // ====== 重症治疗 ======
@@ -644,4 +779,20 @@ export async function claimStudyStarlight(memberId: string): Promise<ClaimStudyR
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as ClaimStudyResult;
+}
+
+// ====== 宠物消息 ======
+export async function fetchPetMessages(memberId: string, limit = 50, offset = 0): Promise<PetMessage[]> {
+  const { data, error } = await supabase.rpc('get_pet_messages', {
+    p_member_id: memberId,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw error;
+  return (data ?? []) as PetMessage[];
+}
+
+export async function clearPetMessages(memberId: string): Promise<void> {
+  const { error } = await supabase.rpc('clear_pet_messages', { p_member_id: memberId });
+  if (error) throw error;
 }

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useRealtimeTable } from './useRealtimeTable';
 import { useFamilyStore } from '../store/familyStore';
-import { fetchTasks, createTask, updateTask, deleteTask, publishTasks, completeTask, requestCompleteTask, approveTask, rejectTask, publishTask, offlineTask, refreshAndExpireTasks, fetchTaskTemplates, saveTaskTemplate, deleteTaskTemplate } from '../api/tasks';
-import type { Task, TaskTemplate, TaskCategory, CompleteTaskResult } from '../api/types';
+import { fetchTasks, createTask, updateTask, deleteTask, publishTasks, completeTask, requestCompleteTask, approveTask, rejectTask, publishTask, offlineTask, refreshAndExpireTasks, fetchTaskTemplates, saveTaskTemplate, deleteTaskTemplate, fetchTaskCategories, createTaskCategory, updateTaskCategory, deleteTaskCategory, updateTaskPriority } from '../api/tasks';
+import type { Task, TaskTemplate, TaskCategory, TaskCategoryItem, CompleteTaskResult } from '../api/types';
 
 export function useTasks(category?: TaskCategory) {
   const familyId = useFamilyStore(s => s.family?.id);
@@ -45,6 +45,29 @@ export function useTasks(category?: TaskCategory) {
     publishTask: (taskId: string): Promise<void> => publishTask(taskId),
     offlineTask: (taskId: string): Promise<void> => offlineTask(taskId),
     refreshAndExpireTasks: (fid: string): Promise<void> => refreshAndExpireTasks(fid),
+    updateTaskPriority: (id: string, priority: number) => updateTaskPriority(id, priority),
+  };
+}
+
+// 任务分类管理
+export function useTaskCategories() {
+  const familyId = useFamilyStore(s => s.family?.id);
+  const { rows: categories, loading, refresh } = useRealtimeTable<TaskCategoryItem>({
+    table: 'task_categories',
+    fetchFn: async () => {
+      if (!familyId) return [];
+      return fetchTaskCategories(familyId);
+    },
+    enabled: !!familyId,
+  });
+
+  return {
+    categories,
+    loading,
+    refresh,
+    createCategory: (name: string) => familyId ? createTaskCategory(familyId, name) : Promise.reject(new Error('no family')),
+    renameCategory: (id: string, name: string) => updateTaskCategory(id, name),
+    deleteCategory: (id: string) => deleteTaskCategory(id),
   };
 }
 

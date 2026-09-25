@@ -13,23 +13,25 @@ import { cn } from '../../lib/utils';
 import {
   Plus, Trash2, ArrowLeft, Dog, ShoppingBag, Star, Upload,
   Image as ImageIcon, Pencil, BookOpen, Package, CheckSquare, Square, Send, Power,
-  ChevronUp, ChevronDown,
+  GripVertical,
 } from 'lucide-react';
 import {
   fetchPetShopItems, createPetShopItem, deletePetShopItem, updatePetShopItem,
   batchUpdatePetShopStatus, batchDeletePetShopItems,
-  fetchPetWords, createPetWord, createPetWordsBatch, deletePetWord,
-  batchDeletePetWords, batchMovePetWordsTop, batchMovePetWordsBottom,
+  fetchPetWords, createPetWord, createPetWordsBatch, deletePetWord, updatePetWord,
+  batchDeletePetWords,
   fetchAllPets, deletePet,
   fetchBackgrounds, createBackground, deleteBackground,
   migrateBase64ToStorage,
   fetchGameWordStats,
+  fetchWordBooks, createWordBook, deleteWordBook,
+  reorderWordBooks, reorderWordsInBook,
 } from '../../api/pets';
 import type {
-  PetShopItem, PetShopItemType, PetSubcategory, PetRarity, PetWord, Pet,
+  PetShopItem, PetShopItemType, PetSubcategory, PetRarity, PetWord, PetWordBook, Pet,
   PetBackground, GameWordStat,
 } from '../../api/types';
-import { uploadImageToStorage, deleteImageFromStorage, type ImageCategory } from '../../lib/storage';
+import { uploadImageToStorage, type ImageCategory } from '../../lib/storage';
 
 // 一级分类配置：宠物 / 用品
 const TYPE_CONFIG: Record<PetShopItemType, { label: string; icon: React.ReactNode; color: string }> = {
@@ -90,8 +92,8 @@ const PET_EMOJIS: Record<'dog' | 'cat', string[]> = {
   cat: ['🐱', '🐈', '😺', '😻', '🐾'],
 };
 
-// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 药品 / 住所
-type CategoryFilter = 'all' | 'pet' | 'food' | 'clean' | 'toy' | 'medicine' | 'doghouse';
+// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 药品 / 寄养 / 住所
+type CategoryFilter = 'all' | 'pet' | 'food' | 'clean' | 'toy' | 'medicine' | 'foster' | 'doghouse';
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'pet', label: '宠物' },
@@ -99,6 +101,7 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
   { id: 'medicine', label: '药品' },
+  { id: 'foster', label: '寄养' },
   { id: 'doghouse', label: '住所' },
 ];
 
@@ -135,7 +138,6 @@ export function PetManagePage() {
 
   const [activeTab, setActiveTab] = useState<PageTab>('shop');
   const [items, setItems] = useState<PetShopItem[]>([]);
-  const [words, setWords] = useState<PetWord[]>([]);
   const [userPets, setUserPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -151,15 +153,6 @@ export function PetManagePage() {
       toast.error(e?.message ?? '加载商品失败');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadWords = async () => {
-    if (!family) return;
-    try {
-      setWords(await fetchPetWords());
-    } catch (e: any) {
-      toast.error(e?.message ?? '加载单词失败');
     }
   };
 
@@ -188,7 +181,6 @@ export function PetManagePage() {
   useEffect(() => {
     if (family?.id) {
       loadItems();
-      loadWords();
     }
   }, [family?.id]);
 
@@ -268,146 +260,6 @@ export function PetManagePage() {
       loadItems();
     } catch (e: any) {
       toast.error(e?.message ?? '批量删除失败');
-    }
-  };
-
-  const handleDeleteWord = async (id: string) => {
-    try {
-      await deletePetWord(id);
-      toast.success('已删除');
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '删除失败');
-    }
-  };
-
-  // 单词批量操作（传递给 WordManageTab）
-  const handleBatchDeleteWords = async (ids: string[]) => {
-    if (ids.length === 0) return;
-    try {
-      await batchDeletePetWords(ids);
-      toast.success(`已删除 ${ids.length} 个单词`);
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '批量删除失败');
-    }
-  };
-  const handleBatchMoveWordsTop = async (ids: string[]) => {
-    if (ids.length === 0 || !family) return;
-    try {
-      await batchMovePetWordsTop(ids);
-      toast.success(`已置顶 ${ids.length} 个单词`);
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '置顶失败');
-    }
-  };
-  const handleBatchMoveWordsBottom = async (ids: string[]) => {
-    if (ids.length === 0 || !family) return;
-    try {
-      await batchMovePetWordsBottom(ids);
-      toast.success(`已置底 ${ids.length} 个单词`);
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '置底失败');
-    }
-  };
-
-  const handleAddWord = async (en: string, cn: string, pos: string) => {
-    if (!family) return;
-    if (!en.trim() || !cn.trim()) {
-      toast.warning('请填写英文和中文');
-      return;
-    }
-    try {
-      await createPetWord(en.trim(), cn.trim(), pos.trim() || undefined);
-      toast.success('已添加');
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '添加失败');
-    }
-  };
-
-  const handleBatchImport = async (text: string) => {
-    if (!family) return;
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) {
-      toast.warning('请输入单词，每行格式：英文,词性,中文');
-      return;
-    }
-    const parsed: { en: string; cn: string; pos?: string }[] = [];
-    for (const line of lines) {
-      const parts = line.split(/[,，\t]/).map(s => s.trim());
-      if (parts.length >= 3 && parts[0] && parts[2]) {
-        parsed.push({ en: parts[0], pos: parts[1], cn: parts[2] });
-      } else if (parts.length >= 2 && parts[0] && parts[1]) {
-        parsed.push({ en: parts[0], cn: parts[1] });
-      }
-    }
-    if (parsed.length === 0) {
-      toast.warning('未解析到有效单词，每行格式：英文,词性,中文');
-      return;
-    }
-    try {
-      await createPetWordsBatch(parsed);
-      toast.success(`已导入 ${parsed.length} 个单词`);
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? '导入失败');
-    }
-  };
-
-  // Excel 导入
-  const [excelImporting, setExcelImporting] = useState(false);
-  const excelFileRef = useRef<HTMLInputElement>(null);
-
-  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !family) return;
-    setExcelImporting(true);
-    try {
-      const mod = await import('xlsx');
-      const XLSX = (mod as any).default ?? mod;
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      if (!ws) throw new Error('Excel 中未找到工作表');
-      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      if (rows.length === 0) throw new Error('Excel 中无数据');
-
-      // 检测表头：第一行如果包含"英文"/"english"等关键词则跳过
-      const firstRow = rows[0].map(c => String(c).toLowerCase().trim());
-      const hasHeader = firstRow.some(c =>
-        c.includes('英文') || c.includes('english') || c.includes('词性') || c.includes('pos') || c.includes('中文') || c.includes('chinese')
-      );
-      const dataRows = hasHeader ? rows.slice(1) : rows;
-
-      const parsed: { en: string; cn: string; pos?: string }[] = [];
-      for (const row of dataRows) {
-        const en = String(row[0] ?? '').trim();
-        const pos = String(row[1] ?? '').trim();
-        const cn = String(row[2] ?? '').trim();
-        if (en && cn) {
-          parsed.push({ en, cn, pos: pos || undefined });
-        } else if (en && pos && !cn) {
-          // 2列情况：英文,中文
-          parsed.push({ en, cn: pos });
-        }
-      }
-
-      if (parsed.length === 0) {
-        toast.warning('未解析到有效单词，Excel 格式：英文 | 词性 | 中文');
-        return;
-      }
-
-      await createPetWordsBatch(parsed);
-      toast.success(`Excel 导入成功：${parsed.length} 个单词`);
-      loadWords();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Excel 导入失败');
-    } finally {
-      setExcelImporting(false);
-      if (excelFileRef.current) excelFileRef.current.value = '';
     }
   };
 
@@ -589,18 +441,7 @@ export function PetManagePage() {
 
       {/* 单词管理 tab */}
       {activeTab === 'word' && (
-        <WordManageTab
-          words={words}
-          onAdd={handleAddWord}
-          onBatchImport={handleBatchImport}
-          onDelete={handleDeleteWord}
-          onExcelImport={handleExcelImport}
-          excelImporting={excelImporting}
-          excelFileRef={excelFileRef}
-          onBatchDelete={handleBatchDeleteWords}
-          onBatchMoveTop={handleBatchMoveWordsTop}
-          onBatchMoveBottom={handleBatchMoveWordsBottom}
-        />
+        <WordManageTab />
       )}
 
       {/* 用户数据 tab */}
@@ -640,23 +481,30 @@ function ItemCard({
   const toast = useToastStore();
   const [starPrice, setStarPrice] = useState(item.price_star);
   const [recovery, setRecovery] = useState(item.recovery_value ?? 0);
+  const [validDays, setValidDays] = useState(item.valid_days ?? 1);
   const [saving, setSaving] = useState(false);
+  const isFoster = item.type === 'supply' && item.subcategory === 'foster';
 
-  // 用品外层直接修改价格和恢复值
+  // 用品外层直接修改价格（寄养还可改有效天数）
   const handleQuickSave = async () => {
     setSaving(true);
     try {
-      await updatePetShopItem(item.id, {
+      const patch: any = {
         price_star: starPrice,
-        recovery_value: recovery,
-        price_coin: 0, // 用品只用星光值
-      });
+        price_coin: 0,
+      };
+      if (isFoster) {
+        patch.valid_days = validDays;
+      } else {
+        patch.recovery_value = recovery;
+      }
+      await updatePetShopItem(item.id, patch);
       toast.success('已保存');
     } catch (e: any) {
       toast.error(e?.message ?? '保存失败');
-      // 回退
       setStarPrice(item.price_star);
       setRecovery(item.recovery_value ?? 0);
+      setValidDays(item.valid_days ?? 1);
     } finally {
       setSaving(false);
     }
@@ -715,7 +563,7 @@ function ItemCard({
               <span className="text-xs text-slate-400">产金{item.base_coin_per_day}/天</span>
             </div>
           )}
-          {/* 用品外层直接编辑星光值和恢复值 */}
+          {/* 用品外层直接编辑星光值（寄养还可改有效天数） */}
           {item.type === 'supply' && item.subcategory !== 'doghouse' && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <label className="flex items-center gap-1 text-xs text-slate-500">
@@ -729,21 +577,35 @@ function ItemCard({
                   className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-300"
                 />
               </label>
-              <label className="flex items-center gap-1 text-xs text-slate-500">
-                <span className="text-slate-400">恢复</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={10}
-                  value={recovery}
-                  onChange={e => setRecovery(Math.max(0, parseInt(e.target.value) || 0))}
-                  disabled={saving}
-                  className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-300"
-                />
-              </label>
+              {isFoster ? (
+                <label className="flex items-center gap-1 text-xs text-slate-500">
+                  <span className="text-slate-400">天数</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={validDays}
+                    onChange={e => setValidDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    disabled={saving}
+                    className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-300"
+                  />
+                </label>
+              ) : (
+                <label className="flex items-center gap-1 text-xs text-slate-500">
+                  <span className="text-slate-400">恢复</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10}
+                    value={recovery}
+                    onChange={e => setRecovery(Math.max(0, parseInt(e.target.value) || 0))}
+                    disabled={saving}
+                    className="w-12 text-center text-sm font-bold rounded border border-slate-200 px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-300"
+                  />
+                </label>
+              )}
               <button
                 onClick={handleQuickSave}
-                disabled={saving || (starPrice === item.price_star && recovery === item.recovery_value)}
+                disabled={saving || (starPrice === item.price_star && (isFoster ? validDays === (item.valid_days ?? 1) : recovery === item.recovery_value))}
                 className="px-2 py-0.5 rounded text-xs font-bold bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? '保存中' : '保存'}
@@ -796,21 +658,10 @@ function UserDataTab({
 }) {
   const members = useFamilyStore(s => s.members);
   const children = members.filter(m => m.role === 'child');
-  const toast = useToastStore();
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [wordStats, setWordStats] = useState<GameWordStat[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedChildId) {
-      if (children.length > 0) setSelectedChildId(children[0].id);
-      return;
-    }
-    setStatsLoading(true);
-    fetchGameWordStats(selectedChildId)
-      .then(setWordStats)
-      .catch(e => toast.error(e?.message ?? '加载单词统计失败'))
-      .finally(() => setStatsLoading(false));
+    if (!selectedChildId && children.length > 0) setSelectedChildId(children[0].id);
   }, [selectedChildId, children.length]);
 
   // 问题14: 按选中的孩子过滤宠物列表，区分不同孩子的宠物
@@ -821,70 +672,25 @@ function UserDataTab({
   if (loading) return <Loading />;
   return (
     <div className="space-y-6">
-      {/* 单词挑战统计 */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen className="w-4 h-4 text-purple-500" />
-          <h2 className="text-sm font-semibold text-slate-700">单词挑战统计</h2>
+      {/* 用户筛选 */}
+      {children.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {children.map(c => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedChildId(c.id)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
+                selectedChildId === c.id
+                  ? 'bg-purple-400 text-white shadow-sm'
+                  : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+              )}
+            >
+              {c.avatar_emoji} {c.name}
+            </button>
+          ))}
         </div>
-        {children.length === 0 ? (
-          <EmptyState icon="👶" title="暂无孩子" description="先添加孩子账号" />
-        ) : (
-          <>
-            <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-              {children.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedChildId(c.id)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors',
-                    selectedChildId === c.id
-                      ? 'bg-purple-400 text-white shadow-sm'
-                      : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
-                  )}
-                >
-                  {c.avatar_emoji} {c.name}
-                </button>
-              ))}
-            </div>
-            {statsLoading ? (
-              <Loading />
-            ) : wordStats.length === 0 ? (
-              <EmptyState icon="📊" title="暂无挑战记录" description="孩子还未闯关" />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {wordStats.map(s => (
-                  <Card key={s.id} className="p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-slate-800 truncate">
-                            {s.word?.word_en ?? '—'}
-                          </span>
-                          {s.word?.part_of_speech && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
-                              {s.word.part_of_speech}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {s.word?.word_cn ?? '—'}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 text-xs">
-                        <span className="text-slate-500">挑战 {s.challenge_count}</span>
-                        {s.wrong_count > 0 && (
-                          <span className="text-red-500 font-medium">错误 {s.wrong_count}</span>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      )}
 
       {/* 用户宠物 */}
       <div>
@@ -940,30 +746,280 @@ function UserDataTab({
   );
 }
 
-// ====== 单词管理 tab ======
-function WordManageTab({
-  words, onAdd, onBatchImport, onDelete, onExcelImport, excelImporting, excelFileRef,
-  onBatchDelete, onBatchMoveTop, onBatchMoveBottom,
-}: {
-  words: PetWord[];
-  onAdd: (en: string, cn: string, pos: string) => void | Promise<void>;
-  onBatchImport: (text: string) => void | Promise<void>;
-  onDelete: (id: string) => void | Promise<void>;
-  onExcelImport: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
-  excelImporting: boolean;
-  excelFileRef: React.RefObject<HTMLInputElement>;
-  onBatchDelete: (ids: string[]) => void | Promise<void>;
-  onBatchMoveTop: (ids: string[]) => void | Promise<void>;
-  onBatchMoveBottom: (ids: string[]) => void | Promise<void>;
-}) {
+// ====== 单词管理 tab（自包含：词书列表 + 词书详情二级结构） ======
+function WordManageTab() {
+  const toast = useToastStore();
+  const members = useFamilyStore(s => s.members);
+  const children = members.filter(m => m.role === 'child');
+
+  // 词书列表 + 选中词书
+  const [books, setBooks] = useState<PetWordBook[]>([]);
+  const [selectedBook, setSelectedBook] = useState<PetWordBook | null>(null);
+  const [words, setWords] = useState<PetWord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 新建词书
+  const [newBookTitle, setNewBookTitle] = useState('');
+  const [creatingBook, setCreatingBook] = useState(false);
+
+  // 新增单词（词书详情内）
   const [en, setEn] = useState('');
-  const [cn, setCn] = useState('');
+  const [cnVal, setCnVal] = useState('');
   const [pos, setPos] = useState('');
-  const [batchText, setBatchText] = useState('');
+  const [pos2, setPos2] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // 编辑单词（支持单独修改词性/词性2）
+  const [editingWord, setEditingWord] = useState<PetWord | null>(null);
+  const [editEn, setEditEn] = useState('');
+  const [editCn, setEditCn] = useState('');
+  const [editPos, setEditPos] = useState('');
+  const [editPos2, setEditPos2] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Excel 导入
+  const [excelImporting, setExcelImporting] = useState(false);
+  const excelFileRef = useRef<HTMLInputElement>(null);
+
+  // 批量选择
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
 
+  // 用户数据-单词挑战统计
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [wordStats, setWordStats] = useState<Record<string, GameWordStat>>({});
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [wrongFilter, setWrongFilter] = useState<number>(0);
+
+  // 拖拽排序（词书 / 词书内单词）
+  const [draggedBookIdx, setDraggedBookIdx] = useState<number | null>(null);
+  const [draggedWordIdx, setDraggedWordIdx] = useState<number | null>(null);
+
+  // ===== 加载 =====
+  const loadBooks = async () => {
+    try {
+      setLoading(true);
+      setBooks(await fetchWordBooks());
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载词书失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadWords = async (bookId: string) => {
+    try {
+      setWords(await fetchPetWords(bookId));
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载单词失败');
+    }
+  };
+
+  useEffect(() => {
+    loadBooks();
+  }, []);
+
+  // 当选中词书时，加载词书内单词
+  useEffect(() => {
+    if (selectedBook) {
+      loadWords(selectedBook.id);
+      setSelectedIds(new Set());
+    } else {
+      setWords([]);
+    }
+  }, [selectedBook?.id]);
+
+  // 加载单词统计
+  useEffect(() => {
+    if (!selectedChildId) {
+      if (children.length > 0) setSelectedChildId(children[0].id);
+      return;
+    }
+    setStatsLoading(true);
+    fetchGameWordStats(selectedChildId)
+      .then(arr => {
+        const map: Record<string, GameWordStat> = {};
+        for (const s of arr) map[s.word_id] = s;
+        setWordStats(map);
+      })
+      .catch(e => toast.error(e?.message ?? '加载单词统计失败'))
+      .finally(() => setStatsLoading(false));
+  }, [selectedChildId, children.length]);
+
+  // ===== 词书操作 =====
+  const handleCreateBook = async () => {
+    if (!newBookTitle.trim()) {
+      toast.warning('请输入词书名称');
+      return;
+    }
+    setCreatingBook(true);
+    try {
+      await createWordBook(newBookTitle.trim());
+      toast.success('词书已创建');
+      setNewBookTitle('');
+      loadBooks();
+    } catch (e: any) {
+      toast.error(e?.message ?? '创建失败');
+    } finally {
+      setCreatingBook(false);
+    }
+  };
+
+  const handleDeleteBook = async (book: PetWordBook) => {
+    if (!confirm(`确定删除词书「${book.title}」吗？词书内的单词将一并删除。`)) return;
+    try {
+      await deleteWordBook(book.id);
+      toast.success('词书已删除');
+      loadBooks();
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+    }
+  };
+
+  // 词书拖拽排序
+  const handleBookDragStart = (idx: number) => setDraggedBookIdx(idx);
+  const handleBookDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (draggedBookIdx === null || draggedBookIdx === idx) return;
+    const next = [...books];
+    const [moved] = next.splice(draggedBookIdx, 1);
+    next.splice(idx, 0, moved);
+    setBooks(next);
+    setDraggedBookIdx(idx);
+  };
+  const handleBookDragEnd = async () => {
+    if (draggedBookIdx !== null) {
+      try {
+        await reorderWordBooks(books.map(b => b.id));
+      } catch (e: any) {
+        toast.error(e?.message ?? '排序保存失败');
+        loadBooks();
+      }
+    }
+    setDraggedBookIdx(null);
+  };
+
+  // ===== 单词操作 =====
+  const handleAddWord = async () => {
+    if (!selectedBook) return;
+    if (!en.trim() || !cnVal.trim()) {
+      toast.warning('请填写英文和中文');
+      return;
+    }
+    setAdding(true);
+    try {
+      await createPetWord(
+        selectedBook.id, en.trim(), cnVal.trim(),
+        pos.trim() || undefined, pos2.trim() || undefined,
+      );
+      toast.success('已添加');
+      setEn('');
+      setCnVal('');
+      setPos('');
+      setPos2('');
+      loadWords(selectedBook.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? '添加失败');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // 打开编辑弹窗：回填当前值
+  const openEditWord = (w: PetWord) => {
+    setEditingWord(w);
+    setEditEn(w.word_en);
+    setEditCn(w.word_cn);
+    setEditPos(w.part_of_speech ?? '');
+    setEditPos2(w.part_of_speech_2 ?? '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWord) return;
+    if (!editEn.trim() || !editCn.trim()) {
+      toast.warning('请填写英文和中文');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await updatePetWord(editingWord.id, {
+        word_en: editEn.trim(),
+        word_cn: editCn.trim(),
+        part_of_speech: editPos.trim() || null,
+        part_of_speech_2: editPos2.trim() || null,
+      });
+      toast.success('已保存');
+      setEditingWord(null);
+      if (selectedBook) loadWords(selectedBook.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? '保存失败');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDeleteWord = async (id: string) => {
+    if (!selectedBook) return;
+    try {
+      await deletePetWord(id);
+      toast.success('已删除');
+      loadWords(selectedBook.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+    }
+  };
+
+  // Excel 导入
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedBook) return;
+    setExcelImporting(true);
+    try {
+      const mod = await import('xlsx');
+      const XLSX = (mod as any).default ?? mod;
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) throw new Error('Excel 中未找到工作表');
+      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length === 0) throw new Error('Excel 中无数据');
+
+      // 检测表头：第一行如果包含"英文"/"english"等关键词则跳过
+      const firstRow = rows[0].map(c => String(c).toLowerCase().trim());
+      const hasHeader = firstRow.some(c =>
+        c.includes('英文') || c.includes('english') || c.includes('词性') || c.includes('pos') || c.includes('中文') || c.includes('chinese')
+      );
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+
+      // 格式：第1列英文 | 第2列词性 | 第3列词性2 | 第4列中文
+      const parsed: { en: string; cn: string; pos?: string; pos2?: string }[] = [];
+      for (const row of dataRows) {
+        const en = String(row[0] ?? '').trim();
+        const pos = String(row[1] ?? '').trim();
+        const pos2 = String(row[2] ?? '').trim();
+        const cn = String(row[3] ?? '').trim();
+        if (en && cn) {
+          parsed.push({ en, cn, pos: pos || undefined, pos2: pos2 || undefined });
+        }
+      }
+
+      if (parsed.length === 0) {
+        toast.warning('未解析到有效单词，Excel 格式：英文 | 词性 | 词性2 | 中文');
+        return;
+      }
+
+      await createPetWordsBatch(selectedBook.id, parsed);
+      toast.success(`Excel 导入成功：${parsed.length} 个单词`);
+      loadWords(selectedBook.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Excel 导入失败');
+    } finally {
+      setExcelImporting(false);
+      if (excelFileRef.current) excelFileRef.current.value = '';
+    }
+  };
+
+  // 批量选择
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -971,218 +1027,378 @@ function WordManageTab({
       return next;
     });
   };
+
+  // 错误次数筛选
+  const filteredWords = wrongFilter > 0
+    ? words.filter(w => (wordStats[w.id]?.wrong_count ?? 0) >= wrongFilter)
+    : words;
+
   const toggleSelectAll = () => {
-    if (words.length > 0 && words.every(w => selectedIds.has(w.id))) {
+    if (filteredWords.length > 0 && filteredWords.every(w => selectedIds.has(w.id))) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(words.map(w => w.id)));
+      setSelectedIds(new Set(filteredWords.map(w => w.id)));
     }
   };
+
   const handleBatchDelete = async () => {
     const ids = [...selectedIds];
-    if (ids.length === 0) return;
+    if (ids.length === 0 || !selectedBook) return;
     setBatchLoading(true);
     try {
-      await onBatchDelete(ids);
+      await batchDeletePetWords(ids);
+      toast.success(`已删除 ${ids.length} 个单词`);
       setSelectedIds(new Set());
+      loadWords(selectedBook.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? '批量删除失败');
     } finally {
       setBatchLoading(false);
     }
   };
-  const handleBatchMoveTop = async () => {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
-    setBatchLoading(true);
-    try {
-      await onBatchMoveTop(ids);
-      setSelectedIds(new Set());
-    } finally {
-      setBatchLoading(false);
-    }
-  };
-  const handleBatchMoveBottom = async () => {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
-    setBatchLoading(true);
-    try {
-      await onBatchMoveBottom(ids);
-      setSelectedIds(new Set());
-    } finally {
-      setBatchLoading(false);
-    }
-  };
-  const [importing, setImporting] = useState(false);
 
-  const handleAdd = async () => {
-    setAdding(true);
-    try {
-      await onAdd(en, cn, pos);
-      setEn('');
-      setCn('');
-      setPos('');
-    } finally {
-      setAdding(false);
+  // 单词拖拽排序（词书内）
+  const handleWordDragStart = (idx: number) => setDraggedWordIdx(idx);
+  const handleWordDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (draggedWordIdx === null || draggedWordIdx === idx) return;
+    const next = [...words];
+    const [moved] = next.splice(draggedWordIdx, 1);
+    next.splice(idx, 0, moved);
+    setWords(next);
+    setDraggedWordIdx(idx);
+  };
+  const handleWordDragEnd = async () => {
+    if (draggedWordIdx !== null) {
+      try {
+        await reorderWordsInBook(words.map(w => w.id));
+      } catch (e: any) {
+        toast.error(e?.message ?? '排序保存失败');
+        if (selectedBook) loadWords(selectedBook.id);
+      }
     }
+    setDraggedWordIdx(null);
   };
 
-  const handleBatch = async () => {
-    setImporting(true);
-    try {
-      await onBatchImport(batchText);
-      setBatchText('');
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* 新增单词 */}
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-3">新增单词</h3>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Input
-            value={en}
-            onChange={e => setEn(e.target.value)}
-            placeholder="英文，如 apple"
-            className="flex-1"
-          />
-          <Input
-            value={pos}
-            onChange={e => setPos(e.target.value)}
-            placeholder="词性，如 n."
-            className="sm:w-24"
-          />
-          <Input
-            value={cn}
-            onChange={e => setCn(e.target.value)}
-            placeholder="中文，如 苹果"
-            className="flex-1"
-          />
-          <Button onClick={handleAdd} loading={adding} className="sm:w-auto">
-            <Plus className="w-4 h-4" /> 添加
-          </Button>
+  // ===== 渲染：词书详情 =====
+  if (selectedBook) {
+    return (
+      <div className="space-y-4">
+        {/* 返回 + 标题 */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => setSelectedBook(null)} className="p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-lg font-bold text-slate-800">{selectedBook.title}</h2>
+          <span className="text-xs text-slate-400">{words.length} 词</span>
         </div>
-      </Card>
 
-      {/* Excel 导入 */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-slate-700">Excel 导入</h3>
-          <input ref={excelFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onExcelImport} className="hidden" />
-          <Button
-            onClick={() => excelFileRef.current?.click()}
-            loading={excelImporting}
-            size="sm"
-            variant="secondary"
-          >
-            <Upload className="w-4 h-4" /> 选择 Excel 文件
-          </Button>
-        </div>
-        <p className="text-xs text-slate-400">
-          格式：第1列英文 | 第2列词性 | 第3列中文（支持表头行自动跳过）
-        </p>
-      </Card>
-
-      {/* 批量文本导入 */}
-      <Card className="p-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-1">批量文本导入</h3>
-        <p className="text-xs text-slate-400 mb-3">每行格式：英文,词性,中文（支持中英文逗号、Tab）</p>
-        <Textarea
-          value={batchText}
-          onChange={e => setBatchText(e.target.value)}
-          placeholder={'apple,n.,苹果\nbanana,n.,香蕉\ncat,n.,猫'}
-          rows={5}
-        />
-        <div className="mt-3 flex justify-end">
-          <Button onClick={handleBatch} loading={importing} variant="secondary">
-            <Upload className="w-4 h-4" /> 批量导入
-          </Button>
-        </div>
-      </Card>
-
-      {/* 单词列表 */}
-      <div>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={words.length > 0 && words.every(w => selectedIds.has(w.id))}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
-              />
-              <span className="text-sm font-semibold text-slate-700">
-                单词列表（{words.length}）
-              </span>
-              {selectedIds.size > 0 && (
-                <span className="text-xs text-amber-600">已选 {selectedIds.size}</span>
-              )}
-            </label>
+        {/* 新增单词 */}
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">新增单词</h3>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              value={en}
+              onChange={e => setEn(e.target.value)}
+              placeholder="英文，如 apple"
+              className="flex-1"
+            />
+            <Input
+              value={pos}
+              onChange={e => setPos(e.target.value)}
+              placeholder="词性，如 n."
+              className="sm:w-24"
+            />
+            <Input
+              value={pos2}
+              onChange={e => setPos2(e.target.value)}
+              placeholder="词性2，如 v."
+              className="sm:w-24"
+            />
+            <Input
+              value={cnVal}
+              onChange={e => setCnVal(e.target.value)}
+              placeholder="中文，如 苹果"
+              className="flex-1"
+            />
+            <Button onClick={handleAddWord} loading={adding} className="sm:w-auto">
+              <Plus className="w-4 h-4" /> 添加
+            </Button>
           </div>
-          {selectedIds.size > 0 && (
-            <div className={`flex items-center gap-2 flex-wrap ${batchLoading ? 'opacity-50 pointer-events-none' : ''}`}>
-              <Button variant="ghost" size="sm" onClick={handleBatchMoveTop} disabled={batchLoading}
-                title="把选中的单词移到列表最前（游戏最先出现）">
-                <ChevronUp className="w-4 h-4" /> 置顶({selectedIds.size})
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleBatchMoveBottom} disabled={batchLoading}
-                title="把选中的单词移到列表最后（游戏最后出现）">
-                <ChevronDown className="w-4 h-4" /> 置底({selectedIds.size})
-              </Button>
-              <Button variant="ghost" size="sm" danger onClick={handleBatchDelete} disabled={batchLoading}>
-                <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
-              </Button>
+        </Card>
+
+        {/* Excel 导入 */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-slate-700">Excel 导入</h3>
+            <input ref={excelFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleExcelImport} className="hidden" />
+            <Button
+              onClick={() => excelFileRef.current?.click()}
+              loading={excelImporting}
+              size="sm"
+              variant="secondary"
+            >
+              <Upload className="w-4 h-4" /> 选择 Excel 文件
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400">
+            格式：第1列英文 | 第2列词性 | 第3列词性2 | 第4列中文（支持表头行自动跳过；无词性的列留空）
+          </p>
+        </Card>
+
+        {/* 用户筛选 + 错误次数筛选 */}
+        {children.length > 0 && (
+          <Card className="p-4">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium flex-shrink-0">选择用户</span>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {children.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => setSelectedChildId(c.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                        selectedChildId === c.id
+                          ? 'bg-purple-400 text-white shadow-sm'
+                          : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                      }`}
+                    >
+                      {c.avatar_emoji} {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium flex-shrink-0">错误次数 ≥</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={wrongFilter || ''}
+                  onChange={e => setWrongFilter(Math.max(0, parseInt(e.target.value) || 0))}
+                  placeholder="0"
+                  className="w-20"
+                />
+                {wrongFilter > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setWrongFilter(0)}>
+                    清除筛选
+                  </Button>
+                )}
+                {statsLoading && <span className="text-xs text-slate-400">加载中...</span>}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* 单词列表 */}
+        <div>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filteredWords.length > 0 && filteredWords.every(w => selectedIds.has(w.id))}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+                />
+                <span className="text-sm font-semibold text-slate-700">
+                  单词列表（{filteredWords.length}{wrongFilter > 0 ? `/${words.length}` : ''}）
+                </span>
+                {selectedIds.size > 0 && (
+                  <span className="text-xs text-amber-600">已选 {selectedIds.size}</span>
+                )}
+              </label>
+            </div>
+            {selectedIds.size > 0 && (
+              <div className={`flex items-center gap-2 flex-wrap ${batchLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Button variant="ghost" size="sm" danger onClick={handleBatchDelete} disabled={batchLoading}>
+                  <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
+                </Button>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mb-2">提示：拖动单词卡片可调整顺序</p>
+          {filteredWords.length === 0 ? (
+            <EmptyState icon="📚" title={wrongFilter > 0 ? "无符合条件的单词" : "暂无单词"} description={wrongFilter > 0 ? "尝试降低错误次数筛选值" : "新增或批量导入单词"} />
+          ) : (
+            <div className="space-y-2">
+              {filteredWords.map((w, idx) => {
+                const checked = selectedIds.has(w.id);
+                const stat = selectedChildId ? wordStats[w.id] : undefined;
+                return (
+                  <div
+                    key={w.id}
+                    draggable
+                    onDragStart={() => handleWordDragStart(idx)}
+                    onDragOver={(e: React.DragEvent) => handleWordDragOver(e, idx)}
+                    onDragEnd={handleWordDragEnd}
+                    className={`bg-white rounded-cute shadow-sm border p-3 transition-colors cursor-move ${checked ? 'border-amber-400 bg-amber-50/50' : 'border-star-100'} ${draggedWordIdx === idx ? 'opacity-40' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <GripVertical className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleSelect(w.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 flex-shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-400 font-mono flex-shrink-0" title="排序编号">
+                              #{w.display_order ?? 0}
+                            </span>
+                            <span className="font-medium text-slate-800 truncate">{w.word_en}</span>
+                            {w.part_of_speech && (
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
+                                {w.part_of_speech}
+                              </span>
+                            )}
+                            {w.part_of_speech_2 && (
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-600 flex-shrink-0">
+                                {w.part_of_speech_2}
+                              </span>
+                            )}
+                            {w.needs_review && (
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0" title="待复习">
+                                复习
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">{w.word_cn}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {stat && (
+                          <div className="flex items-center gap-1 text-[10px]">
+                            <span className="text-slate-400">挑战{stat.challenge_count}</span>
+                            {stat.wrong_count > 0 && (
+                              <span className="text-red-500 font-medium">错{stat.wrong_count}</span>
+                            )}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => openEditWord(w)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors flex-shrink-0"
+                          aria-label="编辑"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteWord(w.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
+                          aria-label="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-        {words.length === 0 ? (
-          <EmptyState icon="📚" title="暂无单词" description="新增或批量导入单词" />
+
+      {/* 编辑单词弹窗：单独编辑英文/中文/词性/词性2 */}
+      <Modal
+        open={!!editingWord}
+        onClose={() => setEditingWord(null)}
+        title="编辑单词"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-slate-500 font-medium">英文</label>
+            <Input value={editEn} onChange={e => setEditEn(e.target.value)} placeholder="英文" />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-slate-500 font-medium">词性</label>
+              <Input value={editPos} onChange={e => setEditPos(e.target.value)} placeholder="词性，如 n.（无则留空）" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-slate-500 font-medium">词性2</label>
+              <Input value={editPos2} onChange={e => setEditPos2(e.target.value)} placeholder="词性2，如 v.（无则留空）" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 font-medium">中文</label>
+            <Input value={editCn} onChange={e => setEditCn(e.target.value)} placeholder="中文" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setEditingWord(null)} className="flex-1">取消</Button>
+            <Button onClick={handleSaveEdit} loading={editSaving} className="flex-1">保存</Button>
+          </div>
+        </div>
+      </Modal>
+      </div>
+    );
+  }
+
+  // ===== 渲染：词书列表 =====
+  if (loading) return <Loading />;
+  return (
+    <div className="space-y-4">
+      {/* 新建词书 */}
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">新建词书</h3>
+        <div className="flex gap-2">
+          <Input
+            value={newBookTitle}
+            onChange={e => setNewBookTitle(e.target.value)}
+            placeholder="词书名称，如：五年级下册书后词表"
+            className="flex-1"
+            onKeyDown={e => { if (e.key === 'Enter') handleCreateBook(); }}
+          />
+          <Button onClick={handleCreateBook} loading={creatingBook} className="sm:w-auto">
+            <Plus className="w-4 h-4" /> 新建
+          </Button>
+        </div>
+        <p className="text-xs text-slate-400 mt-2">新增词书默认追加在列表末尾</p>
+      </Card>
+
+      {/* 词书列表 */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-slate-700">词书列表（{books.length}）</h3>
+          <span className="text-xs text-slate-400">拖拽调整先后顺序</span>
+        </div>
+        {books.length === 0 ? (
+          <EmptyState icon="📖" title="暂无词书" description="新建第一本词书开始管理单词" />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {words.map(w => {
-              const checked = selectedIds.has(w.id);
-              return (
-                <Card key={w.id} className={`p-3 transition-colors ${checked ? 'border-amber-400 bg-amber-50/50' : ''}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSelect(w.id)}
-                        className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 flex-shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-slate-400 font-mono flex-shrink-0" title="排序编号">
-                            #{w.display_order ?? 0}
-                          </span>
-                          <span className="font-medium text-slate-800 truncate">{w.word_en}</span>
-                          {w.part_of_speech && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-purple-100 text-purple-600 flex-shrink-0">
-                              {w.part_of_speech}
-                            </span>
-                          )}
-                          {w.needs_review && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0" title="待复习">
-                              复习
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 truncate">{w.word_cn}</div>
-                      </div>
+          <div className="space-y-2">
+            {books.map((book, idx) => (
+              <div
+                key={book.id}
+                draggable
+                onDragStart={() => handleBookDragStart(idx)}
+                onDragOver={(e: React.DragEvent) => handleBookDragOver(e, idx)}
+                onDragEnd={handleBookDragEnd}
+                className={`bg-white rounded-cute shadow-sm border border-star-100 p-4 transition-colors cursor-move ${draggedBookIdx === idx ? 'opacity-40' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <GripVertical className="w-5 h-5 text-slate-300 flex-shrink-0" />
+                  <button onClick={() => setSelectedBook(book)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white flex-shrink-0">
+                      <BookOpen className="w-5 h-5" />
                     </div>
-                    <button
-                      onClick={() => onDelete(w.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
-                      aria-label="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </Card>
-              );
-            })}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800 truncate">{book.title}</span>
+                        <span className="text-xs text-slate-400 flex-shrink-0">第 {idx + 1} 本</span>
+                      </div>
+                      <p className="text-xs text-slate-500">点击进入单词管理</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBook(book)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
+                    aria-label="删除词书"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1245,6 +1461,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [dailyDecayBase, setDailyDecayBase] = useState(4);
   const [doghouseLevel, setDoghouseLevel] = useState<number>(1);
   const [recoveryValue, setRecoveryValue] = useState<number>(20);
+  const [validDays, setValidDays] = useState<number>(1);
   const [saving, setSaving] = useState(false);
 
   const emojiOptions = getEmojiOptions(type, subcategory);
@@ -1310,6 +1527,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
         gender: type === 'pet' ? gender : undefined,
         doghouse_level: (type === 'supply' && subcategory === 'doghouse') ? doghouseLevel : undefined,
         recovery_value: type === 'supply' ? recoveryValue : undefined,
+        valid_days: (type === 'supply' && subcategory === 'foster') ? validDays : undefined,
         max_level: type === 'pet' ? maxLevel : undefined,
         max_blood_bar: type === 'pet' ? maxBloodBar : undefined,
         upgrade_coin_reward: type === 'pet' ? upgradeCoinReward : undefined,
@@ -1548,7 +1766,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </div>
 
         {/* 用品恢复值（非住所用品） */}
-        {type === 'supply' && subcategory !== 'doghouse' && (
+        {type === 'supply' && subcategory !== 'doghouse' && subcategory !== 'foster' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               恢复值（使用时恢复对应血条值）
@@ -1559,6 +1777,19 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
               max={100}
               value={recoveryValue}
               onChange={e => setRecoveryValue(Number(e.target.value))}
+            />
+          </div>
+        )}
+
+        {/* 托管卡有效天数（寄养用品） */}
+        {type === 'supply' && subcategory === 'foster' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">有效天数</label>
+            <Input
+              type="number"
+              min={1}
+              value={validDays}
+              onChange={e => setValidDays(Math.max(1, Number(e.target.value) || 1))}
             />
           </div>
         )}
@@ -1607,6 +1838,7 @@ function EditItemModal({
   const [baseCoinPerDay, setBaseCoinPerDay] = useState(item.base_coin_per_day);
   const [rarity, setRarity] = useState<PetRarity>(item.rarity);
   const [recoveryValue, setRecoveryValue] = useState<number>(item.recovery_value ?? 20);
+  const [validDays, setValidDays] = useState<number>(item.valid_days ?? 1);
   const [saving, setSaving] = useState(false);
 
   const emojiOptions = getEmojiOptions(item.type, subcategory);
@@ -1634,6 +1866,7 @@ function EditItemModal({
         rarity: item.type === 'pet' ? rarity : undefined,
         gender: item.type === 'pet' ? gender : undefined,
         recovery_value: item.type === 'supply' ? recoveryValue : undefined,
+        valid_days: (item.type === 'supply' && subcategory === 'foster') ? validDays : undefined,
       });
       toast.success('已更新');
       onUpdated();
@@ -1796,8 +2029,8 @@ function EditItemModal({
           />
         </div>
 
-        {/* 用品恢复值（非住所用品） */}
-        {item.type === 'supply' && subcategory !== 'doghouse' && (
+        {/* 用品恢复值（非住所、非寄养用品） */}
+        {item.type === 'supply' && subcategory !== 'doghouse' && subcategory !== 'foster' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               恢复值（使用时恢复对应血条值）
@@ -1808,6 +2041,19 @@ function EditItemModal({
               max={100}
               value={recoveryValue}
               onChange={e => setRecoveryValue(Number(e.target.value))}
+            />
+          </div>
+        )}
+
+        {/* 托管卡有效天数（寄养用品） */}
+        {item.type === 'supply' && subcategory === 'foster' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">有效天数</label>
+            <Input
+              type="number"
+              min={1}
+              value={validDays}
+              onChange={e => setValidDays(Math.max(1, Number(e.target.value) || 1))}
             />
           </div>
         )}

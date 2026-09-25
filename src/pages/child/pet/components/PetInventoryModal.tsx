@@ -8,17 +8,17 @@ import { fetchPetInventory } from '../../../../api/pets';
 import type { PetInventory, PetSubcategory } from '../../../../api/types';
 
 // 分组标签
+// 注：寄养(foster)不进背包，托管卡仅在托管板块内购买使用
 const SUB_LABEL: Record<string, string> = {
   doghouse: '住所',
   food: '食品',
   clean: '清洁',
   toy: '玩具',
   medicine: '药品',
-  foster: '寄养',
 };
 
 // 分组顺序
-const SUB_ORDER: PetSubcategory[] = ['doghouse', 'food', 'clean', 'toy', 'medicine', 'foster'];
+const SUB_ORDER: PetSubcategory[] = ['doghouse', 'food', 'clean', 'toy', 'medicine'];
 
 // 单个物品卡片：图标 + 名字 + 数量
 function InventoryItemCard({ item }: { item: PetInventory }) {

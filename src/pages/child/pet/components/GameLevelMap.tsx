@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { cn } from '../../../../lib/utils';
 import { getLevelConfig } from '../../../../api/types';
 
@@ -6,6 +6,7 @@ export interface GameLevelMapProps {
   unlockedLevel: number;
   levelResults: Map<number, { stars: number; rewardStar: number }>;
   onSelectLevel: (level: number) => void;
+  focusLevel?: number;
 }
 
 const TOTAL_LEVELS = 100;
@@ -15,15 +16,29 @@ const GameLevelMap = ({
   unlockedLevel,
   levelResults,
   onSelectLevel,
-}) => {
+  focusLevel,
+}: GameLevelMapProps) => {
   const levels = useMemo(
     () => Array.from({ length: TOTAL_LEVELS }, (_, i) => i + 1),
     []
   );
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const levelRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+
+  // 自动滚动到最新未通关关卡
+  useEffect(() => {
+    if (focusLevel == null) return;
+    const el = levelRefs.current[focusLevel];
+    const container = scrollRef.current;
+    if (!el || !container) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [focusLevel]);
 
   return (
     <div className="w-full">
-      <div className="mx-auto grid max-h-[70vh] grid-cols-5 gap-3 overflow-y-auto p-2">
+      <div ref={scrollRef} className="mx-auto grid max-h-[70vh] grid-cols-5 gap-3 overflow-y-auto p-2">
         {levels.map((level) => {
           const config = getLevelConfig(level);
           const rewardStar = config?.baseReward ?? 0;
@@ -38,6 +53,7 @@ const GameLevelMap = ({
           return (
             <button
               key={level}
+              ref={el => { levelRefs.current[level] = el; }}
               type="button"
               onClick={handleClick}
               disabled={isLocked}

@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
-import { useTasks } from '../../hooks/useTasks';
+import { useTasks, useTaskCategories } from '../../hooks/useTasks';
 import { Card } from '../../components/common/Card';
 import { Loading } from '../../components/common/Loading';
 import { Modal } from '../../components/common/Modal';
 import { useToastStore } from '../../store/toastStore';
-import { TASK_CATEGORIES, TASK_CATEGORY_LIST, getTaskIconUrl } from '../../lib/constants';
+import { getTaskIconUrl, getCategoryMeta } from '../../lib/constants';
 import { formatSignedCoins, formatDate, isExpired, isToday } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import type { Task, TaskCategory } from '../../api/types';
@@ -73,9 +73,16 @@ export function TasksPage() {
     ?? members.find(m => m.role === 'child');
 
   const { tasks, loading, requestCompleteTask, refresh } = useTasks();
+  const { categories } = useTaskCategories();
   const toast = useToastStore();
 
   useEffect(() => { setLocalTasks(tasks); }, [tasks]);
+
+  // 分类选项（内置4 + 自定义），用于分类标签与列表渲染
+  const categoryTabs = useMemo(() =>
+    categories.map(c => ({ key: c.key as TaskCategory, name: c.name, meta: getCategoryMeta(c.key, categories) })),
+    [categories]
+  );
 
   const getCategoryTasks = useMemo(() => {
     return (cat: TaskCategory) => {
@@ -93,6 +100,9 @@ export function TasksPage() {
           const order: Record<string, number> = { active: 0, pending_approval: 1, draft: 2 };
           const diff = (order[getEffectiveStatus(a)] ?? 9) - (order[getEffectiveStatus(b)] ?? 9);
           if (diff !== 0) return diff;
+          // 优先级降序（数值越大越靠前），相同则按 sort_order 稳定排序
+          const pDiff = (b.priority ?? 0) - (a.priority ?? 0);
+          if (pDiff !== 0) return pDiff;
           return (a.sort_order ?? 0) - (b.sort_order ?? 0);
         });
     };
@@ -113,9 +123,9 @@ export function TasksPage() {
     const reordered = [...catTasks];
     const [moved] = reordered.splice(dragIdx, 1);
     reordered.splice(overIdx, 0, moved);
-    // 更新 localTasks 中的 sort_order
-    const orderMap = new Map(reordered.map((t, i) => [t.id, i + 1]));
-    setLocalTasks(prev => prev.map(t => orderMap.has(t.id) ? { ...t, sort_order: orderMap.get(t.id)! } : t));
+    // 更新 localTasks 中的 priority（与 API 一致：越靠前 priority 越大）
+    const priorityMap = new Map(reordered.map((t, i) => [t.id, (reordered.length - i) * 10]));
+    setLocalTasks(prev => prev.map(t => priorityMap.has(t.id) ? { ...t, priority: priorityMap.get(t.id)! } : t));
     setDragId(null);
     setOverId(null);
     try {
@@ -160,8 +170,8 @@ export function TasksPage() {
           {/* 顶部快速定位菜单 - sticky 固定在 TopBar 下方 */}
           <div className="sticky top-16 z-20 bg-white/80 backdrop-blur-sm border-b border-star-100 shadow-sm mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 pb-2">
             <div className="grid grid-cols-4 gap-1">
-              {TASK_CATEGORY_LIST.map(([cat, cfg]) => {
-                const iconUrl = getTaskIconUrl(cfg.iconKey);
+              {categoryTabs.map(({ key: cat, name, meta }) => {
+                const iconUrl = getTaskIconUrl(meta.iconKey);
                 return (
                   <button
                     key={cat}
@@ -171,11 +181,11 @@ export function TasksPage() {
                     {iconUrl && (
                       <img
                         src={iconUrl}
-                        alt={cfg.label}
+                        alt={name}
                         className="w-14 h-14 sm:w-16 sm:h-16 object-contain -mt-1"
                       />
                     )}
-                    <span className="text-[11px] font-medium text-slate-600">{cfg.label}</span>
+                    <span className="text-[11px] font-medium text-slate-600">{name}</span>
                   </button>
                 );
               })}
@@ -183,7 +193,7 @@ export function TasksPage() {
           </div>
 
           {/* 各分类板块 */}
-          {TASK_CATEGORY_LIST.map(([cat, cfg]) => {
+          {categoryTabs.map(({ key: cat, name, meta }) => {
             const catTasks = getCategoryTasks(cat);
             return (
               <section key={cat} id={`section-${cat}`} className="pt-6 first:pt-0 border-t border-star-100 first:border-t-0 scroll-mt-36 lg:scroll-mt-40">
@@ -191,8 +201,8 @@ export function TasksPage() {
                 <div className="flex items-center justify-center gap-3 mb-4">
                   <div className="w-20 h-1.5 rounded-full bg-gradient-to-r from-transparent to-star-300" />
                   <div className="text-center">
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800">{cfg.label}</h2>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{cfg.subtitle}</p>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800">{name}</h2>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{meta.subtitle}</p>
                   </div>
                   <div className="w-20 h-1.5 rounded-full bg-gradient-to-l from-transparent to-star-300" />
                 </div>
@@ -234,7 +244,7 @@ export function TasksPage() {
                           {taskIconUrl ? (
                             <img src={taskIconUrl} alt={task.title} className="w-full h-full object-contain" />
                           ) : (
-                            <span className="text-xl sm:text-2xl">{TASK_CATEGORIES[task.category].emoji}</span>
+                            <span className="text-xl sm:text-2xl">{getCategoryMeta(task.category, categories).emoji}</span>
                           )}
                         </div>
                         <h3 className={cn(
@@ -291,7 +301,7 @@ export function TasksPage() {
                 {getTaskIconUrl(detailTask.icon) ? (
                   <img src={getTaskIconUrl(detailTask.icon)!} alt={detailTask.title} className="w-full h-full object-contain" />
                 ) : (
-                  <span className="text-5xl">{TASK_CATEGORIES[detailTask.category].emoji}</span>
+                  <span className="text-5xl">{getCategoryMeta(detailTask.category, categories).emoji}</span>
                 )}
               </div>
             </div>

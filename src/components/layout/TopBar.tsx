@@ -124,7 +124,7 @@ export function TopBar() {
           .from('question_records')
           .select('*', { count: 'exact', head: true })
           .eq('member_id', currentChild.id)
-          .gte('created_at', startOfDay.toISOString());
+          .gte('answered_at', startOfDay.toISOString());
         if (!cancelled) setTodayAnswerCount(count ?? 0);
       } catch {
         if (!cancelled) setTodayAnswerCount(0);

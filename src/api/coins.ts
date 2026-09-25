@@ -1,6 +1,8 @@
 import { supabase } from './client';
 import type { CoinRecord, CoinRecordCategory, AdjustCoinsResult } from './types';
 
+export type BalanceType = 'coin' | 'star';
+
 // 查询金币流水
 export async function fetchCoinRecords(
   familyId: string,
@@ -64,6 +66,32 @@ export async function replyMessage(recordId: string, reply: string): Promise<voi
   const { error } = await supabase.rpc('reply_message', {
     p_record_id: recordId,
     p_reply: reply,
+  });
+  if (error) throw error;
+}
+
+// ====== 资产明细日志（星光值 / 金币，分页 + 近 30 天） ======
+export async function fetchAssetLogs(
+  memberId: string,
+  balanceType: BalanceType,
+  limit = 20,
+  offset = 0,
+): Promise<CoinRecord[]> {
+  const { data, error } = await supabase.rpc('get_asset_logs', {
+    p_member_id: memberId,
+    p_balance_type: balanceType,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw error;
+  return (data ?? []) as CoinRecord[];
+}
+
+// 清空资产日志
+export async function clearAssetLogs(memberId: string, balanceType: BalanceType): Promise<void> {
+  const { error } = await supabase.rpc('clear_asset_logs', {
+    p_member_id: memberId,
+    p_balance_type: balanceType,
   });
   if (error) throw error;
 }

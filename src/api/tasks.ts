@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Task, TaskTemplate, TaskCategory, CompleteTaskResult } from './types';
+import type { Task, TaskTemplate, TaskCategory, TaskCategoryItem, CompleteTaskResult } from './types';
 
 // 查询任务
 export async function fetchTasks(familyId: string, category?: TaskCategory): Promise<Task[]> {
@@ -11,18 +11,80 @@ export async function fetchTasks(familyId: string, category?: TaskCategory): Pro
   if (category) q = q.eq('category', category);
   const { data, error } = await q;
   if (error) throw error;
-  // 前端按 sort_order 排序（迁移未执行时字段为 undefined，不影响）
-  return ((data ?? []) as Task[]).sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+  // 按优先级降序排列（数值越大越靠前），优先级相同时按 sort_order 升序
+  return ((data ?? []) as Task[]).sort((a, b) =>
+    (b.priority ?? 0) - (a.priority ?? 0) || (a.sort_order ?? 999) - (b.sort_order ?? 999)
+  );
 }
 
-// 批量更新任务排序
+// 批量更新任务排序（拖拽后按新顺序写入 priority，数值越大越靠前）
 export async function updateTaskOrder(taskIds: string[]): Promise<void> {
-  const updates = taskIds.map((id, idx) => ({ id, sort_order: idx + 1 }));
+  const total = taskIds.length;
+  const updates = taskIds.map((id, idx) => ({ id, priority: (total - idx) * 10 }));
   const { error } = await supabase
     .from('tasks')
     .upsert(updates, { onConflict: 'id' });
-  // 列不存在时静默失败（迁移未执行）
-  if (error && !error.message.includes('sort_order')) throw error;
+  if (error) throw error;
+}
+
+// 更新单个任务优先级
+export async function updateTaskPriority(id: string, priority: number): Promise<Task> {
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({ priority })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Task;
+}
+
+// ====== 任务分类 ======
+
+// 查询分类（默认分类 + 该家庭自定义分类）
+export async function fetchTaskCategories(familyId: string): Promise<TaskCategoryItem[]> {
+  const { data, error } = await supabase
+    .from('task_categories')
+    .select('*')
+    .or(`family_id.is.null,family_id.eq.${familyId}`)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TaskCategoryItem[];
+}
+
+// 新建自定义分类（key 自动生成 UUID）
+export async function createTaskCategory(familyId: string, name: string): Promise<TaskCategoryItem> {
+  const key = `custom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const { data, error } = await supabase
+    .from('task_categories')
+    .insert({ family_id: familyId, key, name, is_default: false, sort_order: 100 })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TaskCategoryItem;
+}
+
+// 重命名分类（默认分类也可改名）
+export async function updateTaskCategory(id: string, name: string): Promise<TaskCategoryItem> {
+  const { data, error } = await supabase
+    .from('task_categories')
+    .update({ name })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TaskCategoryItem;
+}
+
+// 删除分类（仅非默认分类可删；删除后该分类下任务需家长手动迁移，这里仅限制 is_default=false）
+export async function deleteTaskCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('task_categories')
+    .delete()
+    .eq('id', id)
+    .eq('is_default', false);
+  if (error) throw error;
 }
 
 // 创建任务
@@ -76,7 +138,7 @@ export async function offlineTasks(ids: string[]): Promise<void> {
 // 批量删除任务（默认任务除外）
 export async function deleteTasks(ids: string[]): Promise<void> {
   const { error } = await supabase
-    .from('tasks').update({ status: 'deleted' }).in('id', ids).ne('is_default', true);
+    .from('tasks').update({ status: 'deleted' }).neq('is_default', true).in('id', ids);
   if (error) throw error;
 }
 

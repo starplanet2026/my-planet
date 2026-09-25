@@ -1,4 +1,4 @@
-import type { TaskCategory, TaskStatus, PurchaseStatus, CoinRecordCategory } from '../api/types';
+import type { TaskCategory, TaskStatus, PurchaseStatus, CoinRecordCategory, TaskCategoryItem } from '../api/types';
 
 // 双货币图标（金币 / 星光值）
 import coinIconUrl from '../assets/icons/coin-icon-sm.jpg';
@@ -12,14 +12,28 @@ export const STAR_ICON_SM = starIconUrl;
 export const STAR_ICON_LG = starIconLgUrl;
 
 // 任务类别配置
-export const TASK_CATEGORIES: Record<TaskCategory, { label: string; subtitle: string; emoji: string; color: string; iconKey: string }> = {
+export const TASK_CATEGORIES: Record<string, { label: string; subtitle: string; emoji: string; color: string; iconKey: string }> = {
   daily: { label: '每日成就', subtitle: '每天刷新，达成即得星！', emoji: '☀️', color: 'blue', iconKey: '每日成就' },
   stage: { label: '里程碑成就', subtitle: '中长期目标，达成超有成就感！', emoji: '🎯', color: 'purple', iconKey: '里程碑成就' },
   super: { label: '高光时刻', subtitle: '学霸级成就，达成超酷！', emoji: '⭐', color: 'amber', iconKey: '高光时刻' },
   black: { label: '成长挑战', subtitle: '不小心触发会扣星，注意规避！', emoji: '⚡', color: 'red', iconKey: '成长挑战' },
 };
 
-export const TASK_CATEGORY_LIST = Object.entries(TASK_CATEGORIES) as [TaskCategory, typeof TASK_CATEGORIES[TaskCategory]][];
+export const TASK_CATEGORY_LIST = Object.entries(TASK_CATEGORIES) as [TaskCategory, typeof TASK_CATEGORIES[string]][];
+
+// 根据数据库分类列表 + 默认配置，解析某分类的展示名称
+export function getCategoryLabel(key: TaskCategory, categories: TaskCategoryItem[] = []): string {
+  const dbCat = categories.find(c => c.key === key);
+  if (dbCat) return dbCat.name;
+  return TASK_CATEGORIES[key]?.label ?? key;
+}
+
+// 获取分类元数据（emoji/color 等），自定义分类用 fallback
+export function getCategoryMeta(key: TaskCategory, categories: TaskCategoryItem[] = []) {
+  const fallback = TASK_CATEGORIES[key] ?? { emoji: '📂', color: 'slate', label: key, subtitle: '', iconKey: key };
+  const dbCat = categories.find(c => c.key === key);
+  return { ...fallback, label: dbCat?.name ?? fallback.label };
+}
 
 // 任务状态
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

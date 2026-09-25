@@ -14,7 +14,6 @@ import {
   buyPetItem,
   updatePetInfo,
   buyDoghouseUpgrade,
-  buyBoardingCard,
 } from '../../../../api/pets';
 import type {
   PetShopItem,
@@ -22,7 +21,6 @@ import type {
   PetSubcategory,
   PetRarity,
   Pet,
-  BoardingCardType,
 } from '../../../../api/types';
 import { TRAIT_DESC } from '../../../../api/types';
 
@@ -39,13 +37,13 @@ const PET_SUBS: { id: PetSubcategory; label: string }[] = [
 ];
 
 // 用品子分类（"全部"选项用 'all' 特殊值）
+// 注：寄养(foster)不在用品栏展示，托管卡仅在托管板块内购买
 const SUPPLY_SUBS: { id: string; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'food', label: '食品' },
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
   { id: 'medicine', label: '药品' },
-  { id: 'foster', label: '寄养' },
   { id: 'doghouse', label: '住所' },
 ];
 
@@ -55,7 +53,6 @@ const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string
   clean: { icon: '🧴', label: '清洁', color: 'text-blue-600', badgeCls: 'bg-blue-100 text-blue-600' },
   toy: { icon: '🎾', label: '玩具', color: 'text-green-600', badgeCls: 'bg-green-100 text-green-600' },
   medicine: { icon: '💊', label: '药品', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
-  foster: { icon: '🏠', label: '寄养', color: 'text-purple-600', badgeCls: 'bg-purple-100 text-purple-600' },
   doghouse: { icon: '🏠', label: '住所', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
 };
 
@@ -167,7 +164,8 @@ export function PetShopModal({
         fetchPetShopItems(activeMain, fetchSub),
         fetchPets(childId),
       ]);
-      setItems(data);
+      // 寄养(foster)商品不在用品栏展示，托管卡仅在托管板块内购买
+      setItems(data.filter(i => i.subcategory !== 'foster'));
       setOwnedPets(myPets);
     } catch (e: any) {
       toast.error(e?.message ?? '加载商品失败');
@@ -205,28 +203,9 @@ export function PetShopModal({
         return;
       }
 
-      // 托管卡：按时间生效，不进背包
-      if (item.type === 'foster') {
-        const cardMap: Record<string, BoardingCardType> = {
-          '托管日卡': 'daily',
-          '托管周卡': 'weekly',
-          '托管月卡': 'monthly',
-        };
-        const cardType = cardMap[item.name];
-        if (!cardType) {
-          toast.error('未知的托管卡类型');
-          return;
-        }
-        const result = await buyBoardingCard(childId, cardType);
-        if (!result.success) {
-          toast.error(result.message || '购买失败');
-          return;
-        }
-        await refreshMembers();
-        loadItems();
-        toast.success(result.message || '托管卡购买成功');
-        setDetail(null);
-        onBought();
+      // 寄养商品不在用品栏出售，托管卡请前往托管板块购买
+      if (item.subcategory === 'foster') {
+        toast.warning('托管卡请前往托管板块购买');
         return;
       }
 

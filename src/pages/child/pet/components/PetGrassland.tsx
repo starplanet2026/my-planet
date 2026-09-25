@@ -3,6 +3,7 @@ import { cn } from '../../../../lib/utils';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
+import { playPetClick, playCoin, playDogBark } from '../../../../lib/audio';
 import type { Pet, DogHouse, PetInventory, PetSubcategory, PetRarity } from '../../../../api/types';
 import { expNeeded } from '../../../../api/types';
 import {
@@ -90,21 +91,12 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   });
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
 
-  // 初始化宠物状态（合并：保留已有状态中可能更新的数据）
+  // 初始化宠物状态：直接使用 props 数据
   useEffect(() => {
-    setPetStates(prev => {
-      const map: Record<string, Pet> = {};
-      pets.forEach((p, i) => {
-        // 如果已有状态，比较 exp/hunger 等决定用哪个
-        const existing = prev[p.id];
-        if (existing && existing.exp >= p.exp) {
-          map[p.id] = existing;
-        } else {
-          map[p.id] = p;
-        }
-      });
-      return map;
-    });
+    console.log('[PetGrassland] pets prop updated:', pets.map(p => ({ id: p.id, name: p.name, hunger: p.hunger, clean: p.clean, happiness: p.happiness })));
+    const map: Record<string, Pet> = {};
+    pets.forEach(p => { map[p.id] = p; });
+    setPetStates(map);
     const fixed: Record<string, { x: number; y: number }> = {};
     pets.forEach((p, i) => {
       const cur = positions[p.id];
@@ -174,6 +166,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     const actionCfg = ACTIONS.find(a => a.key === action);
     if (actionCfg) {
       const statVal = pet[actionCfg.stat] ?? 0;
+      console.log('[handleInteract]', { action, petId, petName: pet.name, stat: actionCfg.stat, statVal });
       if (statVal >= 100) {
         const fullMsg: Record<string, string> = {
           feed: '我已经饱啦 🍖',
@@ -201,6 +194,11 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
       const coinEarned = Math.max(0, newCoin - oldCoin);
       const expEarned = Math.max(0, (updated.exp ?? 0) - oldExp);
       const isLevelUp = (updated.level ?? 1) > oldLevel;
+
+      // 升级/状态条满时播放小狗叫声（预留：素材确认后生效）
+      if (isLevelUp || (updated.pending_levelup && !pet.pending_levelup)) {
+        playDogBark();
+      }
 
       if (updated.pending_levelup && !pet.pending_levelup) {
         toast.success('经验已满！点击宠物上方的「升级挑战」完成升级');
@@ -256,6 +254,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     try {
       const result = await claimPetCoins(childId, pet.id);
       if (result.success) {
+        playCoin(); // 金币音效
         toast.success(result.message);
         refreshMembers();
         const updated = await checkPet(pet.id);
@@ -307,7 +306,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     if (!dragRef.current) return;
     const { petId, moved } = dragRef.current;
     if (!moved) {
-      // 点击：切换互动面板
+      // 点击：切换互动面板 + 互动音效
+      playPetClick();
       setInteractingPetId(prev => prev === petId ? null : petId);
     }
     dragRef.current = null;

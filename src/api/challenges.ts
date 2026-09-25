@@ -5,8 +5,29 @@ import type {
   ChallengeSetType, QuestionType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, LevelSnapshot, FinishLevelResult,
   WrongBattlePoolItem, WrongQuestionStat,
-  ChallengeLevel,
+  ChallengeLevel, ChallengeSubject, LevelTargetSection,
 } from './types';
+
+// 上传知识点图片到 storage bucket，返回 public URL
+export async function uploadKnowledgeImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'png';
+  const fileName = `kp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage
+    .from('knowledge-points')
+    .upload(fileName, file, { upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from('knowledge-points').getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
+// 删除知识点图片
+export async function deleteKnowledgeImage(url: string): Promise<void> {
+  // 从 URL 提取文件名
+  const parts = url.split('/knowledge-points/');
+  if (parts.length < 2) return;
+  const fileName = parts[parts.length - 1];
+  await supabase.storage.from('knowledge-points').remove([fileName]);
+}
 
 // ====== ChallengeSet 题集 ======
 
@@ -23,14 +44,25 @@ export async function createChallengeSet(data: {
   description?: string;
   type: ChallengeSetType;
   board?: ChallengeBoardType;
+  subject?: ChallengeSubject | null;
   reward_easy: number;
   reward_medium: number;
   reward_hard: number;
   knowledge_points?: string;
+  knowledge_points_images?: string[];
 }): Promise<ChallengeSet> {
+  // Only include migration-dependent optional fields when they have values,
+  // so insert works even if migration 0102/0103 hasn't been applied yet.
+  const { subject, knowledge_points, knowledge_points_images, ...rest } = data;
+  const payload: Record<string, any> = { ...rest, status: 'draft' };
+  if (subject) payload.subject = subject;
+  if (knowledge_points) payload.knowledge_points = knowledge_points;
+  if (knowledge_points_images && knowledge_points_images.length > 0) {
+    payload.knowledge_points_images = knowledge_points_images;
+  }
   const { data: result, error } = await supabase
     .from('challenge_sets')
-    .insert({ ...data, status: 'draft' })
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
@@ -38,9 +70,17 @@ export async function createChallengeSet(data: {
 }
 
 export async function updateChallengeSet(id: string, patch: Partial<ChallengeSet>): Promise<ChallengeSet> {
+  // Strip null/empty for migration-dependent columns (avoid "column not found" if migration not applied)
+  const cleanPatch: Record<string, any> = { ...patch };
+  if (!cleanPatch.subject) delete cleanPatch.subject;
+  if (!cleanPatch.knowledge_points) delete cleanPatch.knowledge_points;
+  if (!cleanPatch.knowledge_points_images ||
+      (Array.isArray(cleanPatch.knowledge_points_images) && cleanPatch.knowledge_points_images.length === 0)) {
+    delete cleanPatch.knowledge_points_images;
+  }
   const { data, error } = await supabase
     .from('challenge_sets')
-    .update(patch)
+    .update(cleanPatch)
     .eq('id', id)
     .select()
     .single();
@@ -103,7 +143,7 @@ export async function fetchActiveQuestions(setId: string, memberId: string): Pro
 }
 
 export async function createQuestion(data: {
-  challenge_set_id: string;
+  challenge_set_id?: string | null;
   type: QuestionType;
   question_text: string;
   options?: string[];
@@ -166,7 +206,7 @@ export async function updateQuestion(id: string, patch: Partial<Omit<Question, '
 // 批量创建题目（用于 Excel 导入）
 export async function createQuestionsBatch(
   questions: Array<{
-    challenge_set_id: string;
+    challenge_set_id?: string | null;
     type: QuestionType;
     question_text: string;
     options?: string[];
@@ -384,8 +424,10 @@ export async function fetchChallengeBoards(memberId: string): Promise<ChallengeB
   if (error) throw error;
   const boards = (data ?? []) as ChallengeBoard[];
 
-  // 拉取各题集的难度分布（避免依赖 RPC 迁移）
-  const allLevelIds = boards.flatMap(b => b.sets.flatMap(s => s.levels.map(l => l.id)));
+  // 拉取各关卡的难度分布（避免依赖 RPC 迁移）
+  const setLevelIds = boards.flatMap(b => b.sets.flatMap(s => s.levels.map(l => l.id)));
+  const standaloneLevelIds = boards.flatMap(b => (b.levels ?? []).map(l => l.id));
+  const allLevelIds = [...setLevelIds, ...standaloneLevelIds];
   if (allLevelIds.length > 0) {
     const { data: qData } = await supabase
       .from('questions')
@@ -411,7 +453,7 @@ export async function fetchChallengeBoards(memberId: string): Promise<ChallengeB
         else if (q.difficulty === 'hard') c.hard++;
         counts.set(setId, c);
       }
-      // 写回 boards
+      // 写回 boards - sets
       for (const b of boards) {
         for (const s of b.sets) {
           const c = counts.get(s.id);
@@ -420,19 +462,83 @@ export async function fetchChallengeBoards(memberId: string): Promise<ChallengeB
           s.hard_count = c?.hard ?? 0;
         }
       }
+
+      // 写回 boards - standalone levels
+      const levelCounts = new Map<string, { easy: number; medium: number; hard: number }>();
+      for (const q of qData as { difficulty: string; level_id: string }[]) {
+        const c = levelCounts.get(q.level_id) ?? { easy: 0, medium: 0, hard: 0 };
+        if (q.difficulty === 'easy') c.easy++;
+        else if (q.difficulty === 'medium') c.medium++;
+        else if (q.difficulty === 'hard') c.hard++;
+        levelCounts.set(q.level_id, c);
+      }
+      for (const b of boards) {
+        for (const lv of b.levels ?? []) {
+          const c = levelCounts.get(lv.id);
+          lv.easy_count = c?.easy ?? 0;
+          lv.medium_count = c?.medium ?? 0;
+          lv.hard_count = c?.hard ?? 0;
+        }
+      }
     }
   }
 
   return boards;
 }
 
-// 按关卡 ID 拉取题目（按 display_order 排序）
+// 按关卡 ID 拉取题目（按 display_order 排序，仅活跃题，孩子端用）
+// 获取题集下全部题目（通过关联关卡 + 直接关联，用于只读查看）
+export async function fetchSetQuestionsAll(setId: string): Promise<Question[]> {
+  // 1. 获取题集关联的关卡 ID
+  const { data: rels } = await supabase
+    .from('challenge_set_levels')
+    .select('level_id')
+    .eq('set_id', setId);
+  const levelIds = (rels ?? []).map((r: any) => r.level_id);
+
+  let allQs: Question[] = [];
+
+  // 2. 通过关卡拉取题目
+  if (levelIds.length > 0) {
+    const { data: lvQs, error } = await supabase
+      .from('questions')
+      .select('*')
+      .in('level_id', levelIds)
+      .eq('is_active', true)
+      .order('created_at');
+    if (!error && lvQs) allQs = lvQs as Question[];
+  }
+
+  // 3. 也拉取直接关联题集的旧流程题目
+  const { data: setQs, error: setErr } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('challenge_set_id', setId)
+    .eq('is_active', true)
+    .order('created_at');
+  if (!setErr && setQs) allQs = [...allQs, ...setQs as Question[]];
+
+  return allQs.sort((a, b) => (a.display_order ?? 999) - (b.display_order ?? 999));
+}
+
 export async function fetchLevelQuestions(levelId: string): Promise<Question[]> {
   const { data, error } = await supabase
     .from('questions')
     .select('*')
     .eq('level_id', levelId)
     .eq('is_active', true)
+    .order('created_at');
+  if (error) throw error;
+  return ((data ?? []) as Question[]).sort((a, b) =>
+    (a.display_order ?? 999) - (b.display_order ?? 999));
+}
+
+// 按关卡 ID 拉取全部题目（含下线题，后台管理用）
+export async function fetchLevelQuestionsAll(levelId: string): Promise<Question[]> {
+  const { data, error } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('level_id', levelId)
     .order('created_at');
   if (error) throw error;
   return ((data ?? []) as Question[]).sort((a, b) =>
@@ -550,42 +656,129 @@ export async function fetchWrongQuestionStats(
   return (data ?? []) as WrongQuestionStat[];
 }
 
-// ====== 关卡 CRUD（后台管理） ======
+// 获取指定关卡的错题统计（用于"查看错题"和"挑战错题"）
+export async function fetchLevelWrongQuestionStats(
+  memberId: string,
+  levelId: string,
+): Promise<WrongQuestionStat[]> {
+  // 1. 获取该关卡所有题目 ID
+  const { data: questions, error: qErr } = await supabase
+    .from('questions')
+    .select('id, question_text, difficulty, type')
+    .eq('level_id', levelId);
+  if (qErr) throw qErr;
+  if (!questions || questions.length === 0) return [];
 
-// 获取题集下所有关卡（按 level_no 排序）
-export async function fetchChallengeLevels(setId: string): Promise<ChallengeLevel[]> {
-  const { data, error } = await supabase
-    .from('challenge_levels')
-    .select('*')
-    .eq('challenge_set_id', setId)
-    .order('level_no', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as ChallengeLevel[];
+  const qIds = questions.map(q => q.id);
+  const qMap = new Map(questions.map(q => [q.id, q]));
+
+  // 2. 查询该成员对这些题目的错题记录（仅活跃错题，已掌握的不显示）
+  const { data: wrongRecords, error: wErr } = await supabase
+    .from('wrong_questions')
+    .select('question_id, wrong_count, correct_count, status')
+    .eq('member_id', memberId)
+    .eq('status', 'active')
+    .in('question_id', qIds);
+  if (wErr) throw wErr;
+
+  // 3. 查询答题记录统计
+  const { data: records, error: rErr } = await supabase
+    .from('question_records')
+    .select('question_id, is_correct')
+    .eq('member_id', memberId)
+    .in('question_id', qIds);
+  if (rErr) throw rErr;
+
+  const attemptMap = new Map<string, { attempt: number; correct: number }>();
+  for (const r of (records ?? []) as { question_id: string; is_correct: boolean }[]) {
+    const cur = attemptMap.get(r.question_id) ?? { attempt: 0, correct: 0 };
+    cur.attempt++;
+    if (r.is_correct) cur.correct++;
+    attemptMap.set(r.question_id, cur);
+  }
+
+  return ((wrongRecords ?? []) as any[])
+    .filter(w => w.wrong_count > 0)
+    .map(w => {
+      const q = qMap.get(w.question_id);
+      const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
+      const total = stats.attempt;
+      return {
+        question_id: w.question_id,
+        challenge_set_id: null,
+        question_text: q?.question_text ?? '',
+        type: q?.type ?? 'choice',
+        difficulty: q?.difficulty ?? 'medium',
+        display_order: 0,
+        attempt_count: total,
+        correct_count: stats.correct,
+        wrong_count: w.wrong_count as number,
+        error_rate: total > 0 ? (w.wrong_count / total) * 100 : 0,
+        is_mastered: w.status === 'mastered',
+        member_id: memberId,
+        member_name: null,
+      } as unknown as WrongQuestionStat;
+    });
 }
 
-// 创建关卡
+// ====== 关卡 CRUD（后台管理） ======
+
+// 获取题集下所有关卡（通过关联表，按 sort_order 排序）
+export async function fetchChallengeLevels(setId: string): Promise<(ChallengeLevel & { sort_order: number })[]> {
+  const { data, error } = await supabase
+    .from('challenge_set_levels')
+    .select('sort_order, level:challenge_levels(*)')
+    .eq('set_id', setId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({ ...row.level, sort_order: row.sort_order }));
+}
+
+// 创建关卡（独立或题集内）
 export async function createChallengeLevel(data: {
-  challenge_set_id: string;
+  challenge_set_id?: string;
   level_no: number;
   title?: string;
   description?: string;
   pass_reward?: number;
   status?: 'active' | 'inactive';
+  subject?: ChallengeSubject | null;
+  target_section?: LevelTargetSection | null;
+  published?: boolean;
+  knowledge_points?: string | null;
+  knowledge_points_images?: string[] | null;
 }): Promise<ChallengeLevel> {
+  const { challenge_set_id, knowledge_points, knowledge_points_images, ...levelData } = data;
+  const payload: Record<string, any> = { ...levelData };
+  if (knowledge_points) payload.knowledge_points = knowledge_points;
+  if (knowledge_points_images && Array.isArray(knowledge_points_images) && knowledge_points_images.length > 0) {
+    payload.knowledge_points_images = knowledge_points_images;
+  }
   const { data: result, error } = await supabase
     .from('challenge_levels')
-    .insert(data)
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
-  return result as ChallengeLevel;
+  const level = result as ChallengeLevel;
+  // If setId provided, create junction record
+  if (challenge_set_id) {
+    await addLevelToSet(challenge_set_id, level.id, data.level_no);
+  }
+  return level;
 }
 
 // 更新关卡
 export async function updateChallengeLevel(id: string, patch: Partial<Omit<ChallengeLevel, 'id' | 'challenge_set_id' | 'created_at'>>): Promise<ChallengeLevel> {
+  const cleanPatch: Record<string, any> = { ...patch };
+  if (!cleanPatch.knowledge_points) delete cleanPatch.knowledge_points;
+  if (!cleanPatch.knowledge_points_images ||
+      (Array.isArray(cleanPatch.knowledge_points_images) && cleanPatch.knowledge_points_images.length === 0)) {
+    delete cleanPatch.knowledge_points_images;
+  }
   const { data, error } = await supabase
     .from('challenge_levels')
-    .update(patch)
+    .update(cleanPatch)
     .eq('id', id)
     .select()
     .single();
@@ -593,16 +786,103 @@ export async function updateChallengeLevel(id: string, patch: Partial<Omit<Chall
   return data as ChallengeLevel;
 }
 
-// 删除关卡（关联的 questions.level_id 会被 on delete set null）
+// 删除关卡（先删该关卡下所有题目，再删关卡本体，关联表 on delete cascade 自动清理）
 export async function deleteChallengeLevel(id: string): Promise<void> {
+  // Delete questions under this level first
+  const { error: qErr } = await supabase.from('questions').delete().eq('level_id', id);
+  if (qErr) throw qErr;
+  // Then delete the level (junction records auto-cleanup via on delete cascade)
   const { error } = await supabase.from('challenge_levels').delete().eq('id', id);
   if (error) throw error;
 }
 
 // 批量更新题目的所属关卡（用于把题目分配到关卡）
+// 注意：必须用 update 而非 upsert，否则不匹配冲突键时会 INSERT，导致 NOT NULL 列报错
 export async function setQuestionsLevel(updates: { id: string; level_id: string | null }[]): Promise<void> {
   if (updates.length === 0) return;
-  const { error } = await supabase.from('questions').upsert(updates, { onConflict: 'id' });
+  // 按 level_id 分组，每组用一条 update 批量更新，避免逐题请求
+  const groups = new Map<string | null, string[]>();
+  for (const u of updates) {
+    const key = u.level_id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(u.id);
+  }
+  for (const [levelId, ids] of groups) {
+    const { error } = await supabase
+      .from('questions')
+      .update({ level_id: levelId })
+      .in('id', ids);
+    if (error) throw error;
+  }
+}
+
+// ====== 全局关卡库 API ======
+
+// 获取全局关卡列表（可选学科筛选）
+export async function fetchGlobalLevels(subject?: ChallengeSubject | null): Promise<ChallengeLevel[]> {
+  let query = supabase.from('challenge_levels').select('*').order('created_at', { ascending: false });
+  if (subject) query = query.eq('subject', subject);
+  const { data, error } = await query;
   if (error) throw error;
+  return (data ?? []) as ChallengeLevel[];
+}
+
+// ====== 题集-关卡关联表 API ======
+
+// 添加关卡到题集
+export async function addLevelToSet(setId: string, levelId: string, sortOrder: number): Promise<void> {
+  const { error } = await supabase
+    .from('challenge_set_levels')
+    .insert({ set_id: setId, level_id: levelId, sort_order: sortOrder });
+  if (error) throw error;
+}
+
+// 从题集移除关卡引用（不删关卡本体）
+export async function removeLevelFromSet(setId: string, levelId: string): Promise<void> {
+  const { error } = await supabase
+    .from('challenge_set_levels')
+    .delete()
+    .eq('set_id', setId)
+    .eq('level_id', levelId);
+  if (error) throw error;
+}
+
+// 批量更新题集内关卡排序
+export async function updateSetLevelOrder(setId: string, updates: { level_id: string; sort_order: number }[]): Promise<void> {
+  if (updates.length === 0) return;
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('challenge_set_levels')
+      .update({ sort_order: u.sort_order })
+      .eq('set_id', setId)
+      .eq('level_id', u.level_id);
+    if (error) throw error;
+  }
+}
+
+// ====== 挑战会话星光汇总 ======
+// 开始会话：先补录上一轮未汇总的星光（异常关闭兜底），再开启新会话
+export async function startChallengeSession(
+  memberId: string,
+  setId?: string,
+  levelId?: string,
+  setTitle?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('start_challenge_session', {
+    p_member_id: memberId,
+    p_set_id: setId ?? null,
+    p_level_id: levelId ?? null,
+    p_set_title: setTitle ?? '',
+  });
+  if (error) throw error;
+}
+
+// 汇总会话星光：生成单条星光流水，清零累积
+export async function flushChallengeSession(memberId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('flush_challenge_session', {
+    p_member_id: memberId,
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
 }
 

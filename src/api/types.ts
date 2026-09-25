@@ -1,6 +1,10 @@
 // 数据库实体类型定义
 
-export type TaskCategory = 'daily' | 'stage' | 'super' | 'black';
+// 任务分类：4 个内置默认分类 key + 用户自定义分类 key
+export type TaskCategory = string;
+export const DEFAULT_TASK_CATEGORIES = ['daily', 'stage', 'super', 'black'] as const;
+export type DefaultTaskCategory = typeof DEFAULT_TASK_CATEGORIES[number];
+
 export type TaskStatus = 'draft' | 'active' | 'pending_approval' | 'completed' | 'expired' | 'deleted';
 export type MemberRole = 'parent' | 'child';
 export type ItemStatus = 'active' | 'sold_out' | 'expired' | 'deleted';
@@ -57,7 +61,20 @@ export interface Task {
   created_at: string;
   updated_at: string;
   sort_order: number;
+  priority: number;
   is_default?: boolean;
+}
+
+// 任务分类
+export interface TaskCategoryItem {
+  id: string;
+  family_id: string | null;
+  key: string;
+  name: string;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TaskTemplate {
@@ -119,6 +136,18 @@ export interface CoinRecord {
   balance_type: 'coin' | 'star';
 }
 
+// 宠物消息
+export interface PetMessage {
+  id: string;
+  family_id: string;
+  member_id: string;
+  pet_id: string | null;
+  event_type: 'level_up' | 'coin_harvest' | 'sick' | 'new_pet';
+  pet_name: string | null;
+  message: string;
+  created_at: string;
+}
+
 // RPC 返回类型
 export interface CompleteTaskResult {
   new_balance: number;
@@ -159,12 +188,14 @@ export interface ChallengeSet {
   description: string | null;
   type: ChallengeSetType;
   board: ChallengeBoardType;
+  subject: ChallengeSubject | null;
   // 分级别奖励星光值（按题目难度选择对应奖励）
   reward_easy: number;
   reward_medium: number;
   reward_hard: number;
   // 知识点：答题前/答题中可查看
   knowledge_points: string | null;
+  knowledge_points_images: string[] | null;
   status: ChallengeSetStatus;
   created_at: string;
   updated_at: string;
@@ -172,7 +203,7 @@ export interface ChallengeSet {
 
 export interface Question {
   id: string;
-  challenge_set_id: string;
+  challenge_set_id: string | null;
   level_id: string | null;
   type: QuestionType;
   question_text: string;
@@ -188,31 +219,48 @@ export interface Question {
 
 // ====== 关卡 / 板块 / 进度（二次开发新增） ======
 
+export type ChallengeSubject = string;
+export type LevelTargetSection = 'today_review' | 'gap_check' | 'advance';
+
 export interface ChallengeLevel {
   id: string;
-  challenge_set_id: string;
+  challenge_set_id: string | null;
   level_no: number;
   title: string | null;
   description: string | null;
   pass_reward: number;
   status: 'active' | 'inactive';
+  subject: ChallengeSubject | null;
+  target_section: LevelTargetSection | null;
+  published: boolean;
+  knowledge_points: string | null;
+  knowledge_points_images: string[] | null;
   created_at: string;
+  sort_order?: number; // from challenge_set_levels junction
 }
 
 // get_challenge_boards RPC 返回的关卡（含进度统计）
 export interface LevelWithProgress {
   id: string;
   level_no: number;
+  sort_order: number;
   title: string | null;
   description: string | null;
   pass_reward: number;
   status: string;
+  subject?: string | null;
+  target_section?: string | null;
   total: number;
   mastered: number;
   is_cleared: boolean;
   is_paused: boolean;
   cleared_ids: string[];
   current_idx: number;
+  easy_count?: number;
+  medium_count?: number;
+  hard_count?: number;
+  knowledge_points?: string | null;
+  knowledge_points_images?: string[] | null;
 }
 
 // get_challenge_boards RPC 返回的题集（含关卡列表）
@@ -222,10 +270,12 @@ export interface SetWithLevels {
   description: string | null;
   type: string;
   status: string;
+  subject?: string | null;
   reward_easy: number;
   reward_medium: number;
   reward_hard: number;
   knowledge_points: string | null;
+  knowledge_points_images: string[] | null;
   easy_count: number;
   medium_count: number;
   hard_count: number;
@@ -236,6 +286,7 @@ export interface SetWithLevels {
 export interface ChallengeBoard {
   board: ChallengeBoardType;
   sets: SetWithLevels[];
+  levels: LevelWithProgress[]; // standalone published levels for this board
 }
 
 // load_level_snapshot RPC 返回
@@ -261,6 +312,7 @@ export interface WrongBattlePoolItem {
   pool_id: string;
   question_id: string;
   source_challenge_set_id: string | null;
+  source_level_id: string | null;
   added_at: string;
   question_text: string;
   options: string[] | null;
@@ -333,6 +385,7 @@ export interface WrongQuestion {
   question_id: string | null;
   word_id: string | null;
   challenge_set_id: string | null;
+  level_id: string | null;
   wrong_count: number;
   correct_count: number;
   status: 'active' | 'mastered';
@@ -407,6 +460,7 @@ export interface PetShopItem {
   upgrade_coin_reward: number;
   upgrade_percent: number;
   trait: string | null;
+  valid_days: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -451,9 +505,20 @@ export interface PetWord {
   word_en: string;
   word_cn: string;
   part_of_speech: string | null;
+  part_of_speech_2: string | null;
   display_order: number;
   needs_review: boolean;
   original_display_order: number | null;
+  status: 'active' | 'inactive';
+  book_id: string;
+  created_at: string;
+}
+
+// 词书
+export interface PetWordBook {
+  id: string;
+  title: string;
+  display_order: number;
   status: 'active' | 'inactive';
   created_at: string;
 }
@@ -476,6 +541,7 @@ export interface PetWordProgress {
   best_score: number;
   last_played_at: string | null;
   unlocked_level?: number;
+  current_book_id?: string | null;
 }
 
 export interface Pet {
@@ -513,6 +579,12 @@ export interface Pet {
   has_skin_issue: boolean;
   has_severe_illness: boolean;
   happiness_rounds: number;
+  last_hunger_fill_at: string | null;
+  hunger_decay_count: number;
+  last_clean_fill_at: string | null;
+  clean_decay_count: number;
+  last_happiness_fill_at: string | null;
+  happiness_decay_count: number;
   is_studying: boolean;
   study_start_date: string | null;
   study_total_star: number;
@@ -684,6 +756,7 @@ export interface BoardingStatus {
   has_active_card: boolean;
   card_end_date: string | null;
   today_boarded_pet_ids: string[];
+  selected_pet_ids: string[];
 }
 
 // 进修宠物信息
@@ -708,10 +781,10 @@ export interface BuyBoardingCardResult {
   end_date: string | null;
 }
 
-export interface BoardPetsResult {
+export interface SetBoardingSelectionResult {
   success: boolean;
   message: string;
-  boarded_count: number;
+  selected_count: number;
 }
 
 export interface HealSevereResult {

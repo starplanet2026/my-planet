@@ -10,15 +10,20 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { Plus, Trash2, ArrowLeft, BookOpen, Calculator, ListChecks, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square, Swords, Layers, Filter } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, BookOpen, Calculator, ListChecks, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square, Swords, Layers, Filter } from 'lucide-react';
 import {
   fetchChallengeSets, createChallengeSet, deleteChallengeSet, publishChallengeSet, updateChallengeSet,
-  fetchQuestions, createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, setQuestionsActiveBatch, updateQuestionOrder,
+  createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, setQuestionsActiveBatch, updateQuestionOrder,
   fetchWords, createWord, deleteWord, createWordsBatch,
-  fetchChallengeLevels, createChallengeLevel, updateChallengeLevel, deleteChallengeLevel, setQuestionsLevel,
+  fetchChallengeLevels, createChallengeLevel, updateChallengeLevel,
   fetchWrongQuestionStats, fetchWrongBattlePool, addWrongToBattlePool, removeWrongFromBattlePool,
+  fetchGlobalLevels, addLevelToSet, removeLevelFromSet, setQuestionsLevel,
+  fetchLevelQuestionsAll,
+  uploadKnowledgeImage,
 } from '../../api/challenges';
-import type { ChallengeSet, ChallengeSetType, Question, Word, QuestionType, Difficulty, ChallengeLevel, ChallengeBoardType, WrongQuestionStat, WrongBattlePoolItem } from '../../api/types';
+import type { ChallengeSet, ChallengeSetType, Question, Word, QuestionType, Difficulty, ChallengeLevel, ChallengeBoardType, WrongQuestionStat, WrongBattlePoolItem, ChallengeSubject } from '../../api/types';
+import { supabase } from '../../api/client';
+import { LevelManageTab } from './LevelManageTab';
 
 const TYPE_CONFIG: Record<ChallengeSetType, { label: string; icon: React.ReactNode; color: string; desc: string }> = {
   word_vocab: { label: '单词背诵', icon: <BookOpen className="w-5 h-5" />, color: 'from-blue-400 to-blue-500', desc: '英选中/看中选英/听音选中/看中拼写' },
@@ -28,7 +33,7 @@ const TYPE_CONFIG: Record<ChallengeSetType, { label: string; icon: React.ReactNo
 
 const BOARD_CONFIG: Record<ChallengeBoardType, { label: string; color: string }> = {
   today_review: { label: '今日复习', color: 'bg-rose-100 text-rose-600' },
-  gap_check: { label: '查漏补缺', color: 'bg-amber-100 text-amber-600' },
+  gap_check: { label: '疑难杂症', color: 'bg-amber-100 text-amber-600' },
   wrong_battle: { label: '错题大混战', color: 'bg-purple-100 text-purple-600' },
   advance: { label: '超前拓展', color: 'bg-sky-100 text-sky-600' },
 };
@@ -50,11 +55,12 @@ export function ChallengeManagePage() {
   const family = useFamilyStore(s => s.family);
   const toast = useToastStore();
 
-  const [tab, setTab] = useState<'sets' | 'wrong_battle'>('sets');
+  const [tab, setTab] = useState<'sets' | 'levels' | 'wrong_battle'>('sets');
   const [sets, setSets] = useState<ChallengeSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [activeSet, setActiveSet] = useState<ChallengeSet | null>(null);
+  const [activeLevel, setActiveLevel] = useState<ChallengeLevel | null>(null);
 
   const loadSets = async () => {
     if (!family) return;
@@ -103,8 +109,12 @@ export function ChallengeManagePage() {
 
   if (loading) return <Loading />;
 
+  if (activeLevel) {
+    return <LevelDetail level={activeLevel} onBack={() => setActiveLevel(null)} />;
+  }
+
   if (activeSet) {
-    return <SetDetail set={activeSet} onBack={() => { setActiveSet(null); loadSets(); }} />;
+    return <SetDetail set={activeSet} onSelectLevel={(lv) => setActiveLevel(lv)} onBack={() => { setActiveSet(null); loadSets(); }} />;
   }
 
   return (
@@ -126,6 +136,13 @@ export function ChallengeManagePage() {
           <Layers className="w-4 h-4 inline-block mr-1" /> 题集管理
         </button>
         <button
+          onClick={() => setTab('levels')}
+          className={cn('px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            tab === 'levels' ? 'border-star-400 text-star-600' : 'border-transparent text-slate-500 hover:text-slate-700')}
+        >
+          <Layers className="w-4 h-4 inline-block mr-1" /> 关卡管理
+        </button>
+        <button
           onClick={() => setTab('wrong_battle')}
           className={cn('px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
             tab === 'wrong_battle' ? 'border-star-400 text-star-600' : 'border-transparent text-slate-500 hover:text-slate-700')}
@@ -136,6 +153,8 @@ export function ChallengeManagePage() {
 
       {tab === 'wrong_battle' ? (
         <WrongBattleManageTab sets={sets} />
+      ) : tab === 'levels' ? (
+        <LevelManageTab onSelectLevel={(lv) => setActiveLevel(lv)} />
       ) : (
         <>
           <div className="flex items-center justify-between mb-4">
@@ -231,6 +250,7 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [description, setDescription] = useState('');
   const [type, setType] = useState<ChallengeSetType>('word_vocab');
   const [board, setBoard] = useState<ChallengeBoardType>('today_review');
+  const [subject, setSubject] = useState<string>('');
   const [rewardEasy, setRewardEasy] = useState(3);
   const [rewardMedium, setRewardMedium] = useState(5);
   const [rewardHard, setRewardHard] = useState(8);
@@ -248,6 +268,7 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
         description: description.trim() || undefined,
         type,
         board,
+        subject: (subject || null) as ChallengeSubject | null,
         reward_easy: rewardEasy,
         reward_medium: rewardMedium,
         reward_hard: rewardHard,
@@ -288,6 +309,15 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
               );
             })}
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">学科</label>
+          <Select value={subject} onChange={e => setSubject(e.target.value)}>
+            <option value="">未分类</option>
+            <option value="语文">语文</option>
+            <option value="数学">数学</option>
+            <option value="英语">英语</option>
+          </Select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">类型</label>
@@ -349,35 +379,43 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 // ====== 题集详情（添加题目/单词） ======
-function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () => void }) {
+function SetDetail({ set: initialSet, onSelectLevel, onBack }: { set: ChallengeSet; onSelectLevel: (lv: ChallengeLevel) => void; onBack: () => void }) {
   const toast = useToastStore();
   const [set, setSet] = useState<ChallengeSet>(initialSet);
-  const [questions, setQuestions] = useState<Question[]>([]);
   const [words, setWords] = useState<Word[]>([]);
   const [levels, setLevels] = useState<ChallengeLevel[]>([]);
-  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [levelQuestionCounts, setLevelQuestionCounts] = useState<Record<string, number>>({});
   const [showAddWord, setShowAddWord] = useState(false);
   const [showBatchWords, setShowBatchWords] = useState(false);
   const [showEditKnowledge, setShowEditKnowledge] = useState(false);
   const [showEditSet, setShowEditSet] = useState(false);
-  const [showBatchImport, setShowBatchImport] = useState(false);
   const [showLevelModal, setShowLevelModal] = useState(false);
   const [editingLevel, setEditingLevel] = useState<ChallengeLevel | null>(null);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showLevelPicker, setShowLevelPicker] = useState(false);
 
   const load = async () => {
     try {
       // 关卡对所有题集类型都可加载（word_vocab 不展示但加载无副作用）
-      const [qs, ws, lvs] = await Promise.all([
-        set.type === 'word_vocab' ? Promise.resolve([] as Question[]) : fetchQuestions(set.id),
+      const [ws, lvs] = await Promise.all([
         set.type === 'word_vocab' ? fetchWords(set.id) : Promise.resolve([] as Word[]),
         set.type === 'word_vocab' ? Promise.resolve([] as ChallengeLevel[]) : fetchChallengeLevels(set.id),
       ]);
-      setQuestions(qs);
       setWords(ws);
       setLevels(lvs);
-      setSelectedIds(new Set());
+      // 按关卡 ID 拉取题目数量（题目归属关卡，不再依附题集）
+      if (lvs.length > 0) {
+        const { data: qData } = await supabase
+          .from('questions')
+          .select('level_id')
+          .in('level_id', lvs.map(l => l.id));
+        const counts: Record<string, number> = {};
+        for (const q of (qData ?? []) as { level_id: string }[]) {
+          counts[q.level_id] = (counts[q.level_id] ?? 0) + 1;
+        }
+        setLevelQuestionCounts(counts);
+      } else {
+        setLevelQuestionCounts({});
+      }
     } catch (e: any) {
       toast.error(e?.message ?? '加载失败');
     }
@@ -385,139 +423,14 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
 
   useEffect(() => { load(); }, [set.id]);
 
-  const handleDeleteQuestion = async (id: string) => {
-    try { await deleteQuestion(id); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
-  };
-
-  // 切换题目的上线/下线状态（孩子端是否展示）
-  const toggleQuestionActive = async (q: Question) => {
-    const newActive = q.is_active === false ? true : false;
-    try {
-      await updateQuestion(q.id, { is_active: newActive });
-      toast.success(newActive ? '已上线' : '已下线');
-      load();
-    } catch (e: any) {
-      toast.error(e?.message ?? '切换失败（需执行 0052 迁移）');
-    }
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
-    try {
-      await deleteQuestionsBatch([...selectedIds]);
-      toast.success(`已删除 ${selectedIds.size} 题`);
-      load();
-    } catch (e: any) {
-      toast.error(e?.message ?? '批量删除失败');
-    }
-  };
-
-  // 批量上线/下线
-  const handleBatchSetActive = async (isActive: boolean) => {
-    if (selectedIds.size === 0) return;
-    try {
-      await setQuestionsActiveBatch([...selectedIds], isActive);
-      toast.success(`已${isActive ? '上线' : '下线'} ${selectedIds.size} 题`);
-      load();
-    } catch (e: any) {
-      toast.error(e?.message ?? '批量操作失败');
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === questions.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(questions.map(q => q.id)));
-    }
-  };
-
-  // 上移/下移题目
-  const handleMoveQuestion = async (idx: number, dir: 'up' | 'down') => {
-    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= questions.length) return;
-    const reordered = [...questions];
-    [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
-    setQuestions(reordered); // 即时更新 UI
-    try {
-      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
-    } catch (e: any) {
-      toast.error(e?.message ?? '排序失败');
-      load(); // 回滚
-    }
-  };
-
-  // 批量移到顶部：选中的题按原顺序移到最前，其余顺延
-  const handleMoveSelectedToTop = async () => {
-    if (selectedIds.size === 0) return;
-    const selected = questions.filter(q => selectedIds.has(q.id));
-    const others = questions.filter(q => !selectedIds.has(q.id));
-    const reordered = [...selected, ...others];
-    setQuestions(reordered);
-    try {
-      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
-      toast.success('已移到顶部');
-    } catch (e: any) {
-      toast.error(e?.message ?? '移动失败');
-      load();
-    }
-  };
-
-  // 批量移到底部：选中的题按原顺序移到最后，其余前移
-  const handleMoveSelectedToBottom = async () => {
-    if (selectedIds.size === 0) return;
-    const selected = questions.filter(q => selectedIds.has(q.id));
-    const others = questions.filter(q => !selectedIds.has(q.id));
-    const reordered = [...others, ...selected];
-    setQuestions(reordered);
-    try {
-      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
-      toast.success('已移到底部');
-    } catch (e: any) {
-      toast.error(e?.message ?? '移动失败');
-      load();
-    }
-  };
-
-  // 切换题目所属关卡
-  const handleChangeQuestionLevel = async (q: Question, levelId: string | null) => {
-    try {
-      await setQuestionsLevel([{ id: q.id, level_id: levelId }]);
-      toast.success('已修改关卡');
-      load();
-    } catch (e: any) {
-      toast.error(e?.message ?? '修改关卡失败');
-    }
-  };
-
-  // 批量把选中题目移到指定关卡
-  const handleBatchChangeLevel = async (levelId: string) => {
-    if (selectedIds.size === 0) return;
-    try {
-      await setQuestionsLevel([...selectedIds].map(id => ({ id, level_id: levelId })));
-      toast.success(`已将 ${selectedIds.size} 题移到关卡 ${levels.find(l => l.id === levelId)?.level_no ?? '?'}`);
-      load();
-    } catch (e: any) {
-      toast.error(e?.message ?? '批量移动失败');
-    }
-  };
-
-  // 删除关卡
+  // 删除关卡（从题集移除引用，不删全局关卡）
   const handleDeleteLevel = async (id: string) => {
     try {
-      await deleteChallengeLevel(id);
-      toast.success('关卡已删除，其下题目变为"未分配关卡"');
+      await removeLevelFromSet(set.id, id);
+      toast.success('已从题集移除关卡（全局关卡库仍保留）');
       load();
     } catch (e: any) {
-      toast.error(e?.message ?? '删除关卡失败');
+      toast.error(e?.message ?? '移除关卡失败');
     }
   };
 
@@ -606,26 +519,35 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
               <h3 className="font-bold text-slate-800">关卡管理</h3>
               <span className="text-xs text-slate-400">({levels.length} 关)</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { setEditingLevel(null); setShowLevelModal(true); }}>
-              <Plus className="w-4 h-4" /> 新建关卡
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowLevelPicker(true)}>
+                <Layers className="w-4 h-4" /> 从关卡库添加
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setEditingLevel(null); setShowLevelModal(true); }}>
+                <Plus className="w-4 h-4" /> 新建关卡
+              </Button>
+            </div>
           </div>
           {levels.length === 0 ? (
-            <p className="text-xs text-slate-400">暂无关卡，会自动按 level_no=1 顺序解锁。新建关卡后可把题目分配到不同关卡</p>
+            <p className="text-xs text-slate-400">暂无关卡，可从全局关卡库添加或新建。关卡按顺序解锁</p>
           ) : (
             <div className="space-y-2">
-              {levels.map(lv => {
-                const qCount = questions.filter(q => q.level_id === lv.id).length;
+              {levels.map((lv) => {
+                const qCount = levelQuestionCounts[lv.id] ?? 0;
+                const sortOrder = (lv as any).sort_order ?? lv.level_no;
                 return (
-                  <div key={lv.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-star-100 text-star-600 font-medium">第 {lv.level_no} 关</span>
+                  <div key={lv.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors" onClick={() => onSelectLevel(lv)}>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-star-100 text-star-600 font-medium">第 {sortOrder} 关</span>
+                    {lv.subject && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{lv.subject}</span>
+                    )}
                     <span className="text-sm text-slate-700 flex-1 truncate">{lv.title || `关卡 ${lv.level_no}`}</span>
                     <span className="text-xs text-slate-400">{qCount} 题</span>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">通关+{lv.pass_reward}</span>
-                    <button onClick={() => { setEditingLevel(lv); setShowLevelModal(true); }} className="text-slate-400 hover:text-star-600">
+                    <button onClick={(e) => { e.stopPropagation(); setEditingLevel(lv); setShowLevelModal(true); }} className="text-slate-400 hover:text-star-600">
                       <Edit className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDeleteLevel(lv.id)} className="text-red-400 hover:text-red-500">
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteLevel(lv.id); }} className="text-red-400 hover:text-red-500" title="从题集移除">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -636,173 +558,8 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
         </Card>
       )}
 
-      {/* 选择题/数学 */}
-      {(set.type === 'choice' || set.type === 'math') && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button onClick={() => setShowAddQuestion(true)}><Plus className="w-4 h-4" /> 添加题目</Button>
-            {set.type === 'choice' && (
-              <Button variant="ghost" onClick={() => setShowBatchImport(true)}>
-                <Upload className="w-4 h-4" /> 批量导入
-              </Button>
-            )}
-            {questions.length > 0 && (
-              <>
-                <button
-                  onClick={toggleSelectAll}
-                  className="ml-auto text-sm text-slate-600 hover:text-star-600 flex items-center gap-1"
-                >
-                  {selectedIds.size === questions.length
-                    ? <CheckSquare className="w-4 h-4 text-star-500" />
-                    : <Square className="w-4 h-4" />}
-                  {selectedIds.size === questions.length ? '取消全选' : '全选'}
-                </button>
-                {selectedIds.size > 0 && (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(true)}
-                      title="将选中的题目上线（孩子端可见）">
-                      <Eye className="w-4 h-4" /> 上线({selectedIds.size})
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(false)}
-                      title="将选中的题目下线（孩子端不可见）">
-                      <EyeOff className="w-4 h-4" /> 下线({selectedIds.size})
-                    </Button>
-                    {levels.length > 0 && (
-                      <Select
-                        value=""
-                        onChange={e => { if (e.target.value) handleBatchChangeLevel(e.target.value); }}
-                        className="text-xs py-1 px-2 rounded-lg border-slate-200"
-                        title="将选中的题目移到指定关卡"
-                      >
-                        <option value="">移到关卡…</option>
-                        {levels.map(lv => (
-                          <option key={lv.id} value={lv.id}>第 {lv.level_no} 关 · {lv.title || `关卡 ${lv.level_no}`}</option>
-                        ))}
-                      </Select>
-                    )}
-                    <Button variant="ghost" size="sm" onClick={handleMoveSelectedToTop}
-                      title="将选中的题目移到列表顶部">
-                      <ChevronUp className="w-4 h-4" /> 置顶
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={handleMoveSelectedToBottom}
-                      title="将选中的题目移到列表底部">
-                      <ChevronDown className="w-4 h-4" /> 置底
-                    </Button>
-                    <Button variant="ghost" size="sm" danger onClick={handleBatchDelete}>
-                      <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
-                    </Button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-          {questions.length === 0 ? (
-            <EmptyState icon="❓" title="还没有题目" description="添加题目开始挑战" />
-          ) : (
-            <div className="space-y-2">
-              {questions.map((q, i) => {
-                const isSelected = selectedIds.has(q.id);
-                return (
-                  <Card key={q.id} className={cn('p-3 transition-colors', isSelected && 'border-star-300 bg-star-50')}>
-                    <div className="flex items-start gap-3">
-                      <button onClick={() => toggleSelect(q.id)} className="mt-1 flex-shrink-0">
-                        {isSelected
-                          ? <CheckSquare className="w-5 h-5 text-star-500" />
-                          : <Square className="w-5 h-5 text-slate-300" />}
-                      </button>
-                      <span className="text-slate-400 text-sm w-6 mt-0.5">{i + 1}</span>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-slate-800">{q.question_text}</p>
-                          <span className={cn('text-xs px-1.5 py-0.5 rounded',
-                            q.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
-                            q.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
-                            {q.difficulty === 'easy' ? '简单' : q.difficulty === 'hard' ? '困难' : '中等'}
-                          </span>
-                          {q.type === 'multi_choice' && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">多选</span>
-                          )}
-                          {/* 题型徽标（非 choice/multi_choice 时显示） */}
-                          {q.type !== 'choice' && q.type !== 'multi_choice' && q.type !== 'math' && (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
-                              {QUESTION_TYPE_LABEL[q.type]}
-                            </span>
-                          )}
-                          {/* 关卡选择器 */}
-                          {levels.length > 0 && (
-                            <Select
-                              value={q.level_id ?? ''}
-                              onChange={e => handleChangeQuestionLevel(q, e.target.value || null)}
-                              className="text-xs py-0.5 px-1.5 rounded border-slate-200 ml-auto"
-                              title="选择题目所属关卡"
-                            >
-                              <option value="">未分配关卡</option>
-                              {levels.map(lv => (
-                                <option key={lv.id} value={lv.id}>第 {lv.level_no} 关</option>
-                              ))}
-                            </Select>
-                          )}
-                          <button
-                            onClick={() => toggleQuestionActive(q)}
-                            title="下线后孩子端不再出现该题；做对的题会自动下线，可在此手动上线"
-                            className={cn(
-                              'text-xs px-1.5 py-0.5 rounded',
-                              q.is_active === false
-                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                            )}
-                          >
-                            {q.is_active === false ? '已下线' : '在线'}
-                          </button>
-                        </div>
-                        {q.options && (
-                          <div className="mt-1 text-sm text-slate-500">
-                            {q.options.map((opt, j) => {
-                              const letter = String.fromCharCode(65 + j);
-                              const isRight = q.correct_answer.includes(letter);
-                              return (
-                                <span key={j} className={cn('mr-3', isRight && 'text-emerald-600 font-medium')}>
-                                  {letter}. {opt}{isRight ? ' ✓' : ''}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {q.explanation && <p className="text-xs text-slate-400 mt-1">{q.explanation}</p>}
-                      </div>
-                      <div className="flex flex-col gap-1 flex-shrink-0">
-                        <button onClick={() => handleMoveQuestion(i, 'up')} disabled={i === 0}
-                          className="text-slate-400 hover:text-star-600 disabled:opacity-30">
-                          <ChevronUp className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleMoveQuestion(i, 'down')} disabled={i === questions.length - 1}
-                          className="text-slate-400 hover:text-star-600 disabled:opacity-30">
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <button onClick={() => setEditingQuestion(q)} className="text-slate-400 hover:text-star-600">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-400 hover:text-red-500">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {/* 题目管理已移至关卡详情页，点击上方关卡即可管理题目 */}
 
-      {showAddQuestion && (
-        <AddQuestionModal
-          setId={set.id}
-          type={set.type as QuestionType}
-          onClose={() => setShowAddQuestion(false)}
-          onAdded={load}
-        />
-      )}
       {showAddWord && (
         <AddWordModal setId={set.id} onClose={() => setShowAddWord(false)} onAdded={load} />
       )}
@@ -823,15 +580,6 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
           onSaved={(updated) => { setSet(updated); setShowEditSet(false); }}
         />
       )}
-      {showBatchImport && (
-        <BatchImportQuestionsModal
-          setId={set.id}
-          existingCount={questions.length}
-          levels={levels}
-          onClose={() => setShowBatchImport(false)}
-          onImported={load}
-        />
-      )}
       {showLevelModal && (
         <LevelModal
           setId={set.id}
@@ -841,13 +589,325 @@ function SetDetail({ set: initialSet, onBack }: { set: ChallengeSet; onBack: () 
           onSaved={() => { setShowLevelModal(false); setEditingLevel(null); load(); }}
         />
       )}
+      {showLevelPicker && (
+        <LevelPickerModal
+          setId={set.id}
+          existingLevelIds={levels.map(l => l.id)}
+          nextSortOrder={levels.length + 1}
+          onClose={() => setShowLevelPicker(false)}
+          onPicked={() => { setShowLevelPicker(false); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ====== 关卡详情页（管理关卡内题目） ======
+const SECTION_LABEL_FULL: Record<string, string> = {
+  today_review: '今日复习',
+  gap_check: '疑难杂症',
+  advance: '超前拓展',
+};
+
+function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => void }) {
+  const toast = useToastStore();
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [showBatchImport, setShowBatchImport] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveTargetLevelId, setMoveTargetLevelId] = useState('');
+  const [allLevels, setAllLevels] = useState<ChallengeLevel[]>([]);
+
+  // 加载所有全局关卡，供"批量移动到其他关卡"选择目标
+  useEffect(() => {
+    fetchGlobalLevels().then(setAllLevels).catch(() => {/* ignore */});
+  }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchLevelQuestionsAll(level.id);
+      setQuestions(data);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [level.id]);
+
+  const handleDeleteQuestion = async (id: string) => {
+    try { await deleteQuestion(id); toast.success('已删除'); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
+  };
+
+  const toggleQuestionActive = async (q: Question) => {
+    const newActive = q.is_active === false ? true : false;
+    try {
+      await updateQuestion(q.id, { is_active: newActive });
+      toast.success(newActive ? '已上线' : '已下线');
+      load();
+    } catch (e: any) { toast.error(e?.message ?? '切换失败'); }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await deleteQuestionsBatch([...selectedIds]);
+      toast.success(`已删除 ${selectedIds.size} 题`);
+      load();
+    } catch (e: any) { toast.error(e?.message ?? '批量删除失败'); }
+  };
+
+  const handleBatchSetActive = async (isActive: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      await setQuestionsActiveBatch([...selectedIds], isActive);
+      toast.success(`已${isActive ? '上线' : '下线'} ${selectedIds.size} 题`);
+      load();
+    } catch (e: any) { toast.error(e?.message ?? '批量操作失败'); }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === questions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(questions.map(q => q.id)));
+    }
+  };
+
+  const handleBatchMove = async () => {
+    if (selectedIds.size === 0 || !moveTargetLevelId) return;
+    try {
+      await setQuestionsLevel([...selectedIds].map(id => ({ id, level_id: moveTargetLevelId })));
+      toast.success(`已将 ${selectedIds.size} 题移至关卡"${allLevels.find(l => l.id === moveTargetLevelId)?.title ?? '?'}"`);
+      setShowMoveModal(false);
+      setMoveTargetLevelId('');
+      load();
+    } catch (e: any) { toast.error(e?.message ?? '移动失败'); }
+  };
+
+  const handleMoveQuestion = async (idx: number, dir: 'up' | 'down') => {
+    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= questions.length) return;
+    const reordered = [...questions];
+    [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
+    setQuestions(reordered);
+    try {
+      await updateQuestionOrder(reordered.map((q, i) => ({ id: q.id, display_order: i + 1 })));
+    } catch (e: any) {
+      toast.error(e?.message ?? '排序失败');
+      load();
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-800">{level.title || `关卡 ${level.level_no}`}</h2>
+            {level.subject && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{level.subject}</span>
+            )}
+            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+              level.published ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400')}>
+              {level.published ? '已发布' : '未发布'}
+            </span>
+            {level.target_section && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-600">
+                {SECTION_LABEL_FULL[level.target_section] ?? level.target_section}
+              </span>
+            )}
+            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">通关+{level.pass_reward}</span>
+          </div>
+          {level.description && <p className="text-xs text-slate-400 mt-0.5">{level.description}</p>}
+        </div>
+      </div>
+
+      <Card className="p-4 mb-4 border-slate-200">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => setShowAddQuestion(true)}><Plus className="w-4 h-4" /> 添加题目</Button>
+          <Button variant="ghost" onClick={() => setShowBatchImport(true)}>
+            <Upload className="w-4 h-4" /> 批量导入
+          </Button>
+          {questions.length > 0 && (
+            <>
+              <button
+                onClick={toggleSelectAll}
+                className="ml-auto text-sm text-slate-600 hover:text-star-600 flex items-center gap-1"
+              >
+                {selectedIds.size === questions.length
+                  ? <CheckSquare className="w-4 h-4 text-star-500" />
+                  : <Square className="w-4 h-4" />}
+                {selectedIds.size === questions.length ? '取消全选' : '全选'}
+              </button>
+              {selectedIds.size > 0 && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(true)} title="上线">
+                    <Eye className="w-4 h-4" /> 上线({selectedIds.size})
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleBatchSetActive(false)} title="下线">
+                    <EyeOff className="w-4 h-4" /> 下线({selectedIds.size})
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setMoveTargetLevelId(''); setShowMoveModal(true); }} title="批量移动到其他关卡">
+                    <ArrowRight className="w-4 h-4" /> 移动({selectedIds.size})
+                  </Button>
+                  <Button variant="ghost" size="sm" danger onClick={handleBatchDelete}>
+                    <Trash2 className="w-4 h-4" /> 删除({selectedIds.size})
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      {loading ? (
+        <p className="text-sm text-slate-400 text-center py-8">加载中...</p>
+      ) : questions.length === 0 ? (
+        <EmptyState icon="❓" title="还没有题目" description="添加题目到本关卡，题目归属关卡不再依附题集" />
+      ) : (
+        <div className="space-y-2">
+          {questions.map((q, i) => {
+            const isSelected = selectedIds.has(q.id);
+            return (
+              <Card key={q.id} className={cn('p-3 transition-colors', isSelected && 'border-star-300 bg-star-50')}>
+                <div className="flex items-start gap-3">
+                  <button onClick={() => toggleSelect(q.id)} className="mt-1 flex-shrink-0">
+                    {isSelected
+                      ? <CheckSquare className="w-5 h-5 text-star-500" />
+                      : <Square className="w-5 h-5 text-slate-300" />}
+                  </button>
+                  <span className="text-slate-400 text-sm w-6 mt-0.5">{i + 1}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-slate-800">{q.question_text}</p>
+                      <span className={cn('text-xs px-1.5 py-0.5 rounded',
+                        q.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
+                        q.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
+                        {q.difficulty === 'easy' ? '简单' : q.difficulty === 'hard' ? '困难' : '中等'}
+                      </span>
+                      {q.type === 'multi_choice' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">多选</span>
+                      )}
+                      {q.type === 'math' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">数学</span>
+                      )}
+                      <button
+                        onClick={() => toggleQuestionActive(q)}
+                        title="下线后孩子端不再出现该题"
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded',
+                          q.is_active === false
+                            ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                        )}
+                      >
+                        {q.is_active === false ? '已下线' : '在线'}
+                      </button>
+                    </div>
+                    {q.options && (
+                      <div className="mt-1 text-sm text-slate-500">
+                        {q.options.map((opt, j) => {
+                          const letter = String.fromCharCode(65 + j);
+                          const isRight = q.correct_answer.includes(letter);
+                          return (
+                            <span key={j} className={cn('mr-3', isRight && 'text-emerald-600 font-medium')}>
+                              {letter}. {opt}{isRight ? ' ✓' : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {q.explanation && <p className="text-xs text-slate-400 mt-1">{q.explanation}</p>}
+                  </div>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button onClick={() => handleMoveQuestion(i, 'up')} disabled={i === 0}
+                      className="text-slate-400 hover:text-star-600 disabled:opacity-30">
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleMoveQuestion(i, 'down')} disabled={i === questions.length - 1}
+                      className="text-slate-400 hover:text-star-600 disabled:opacity-30">
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <button onClick={() => setEditingQuestion(q)} className="text-slate-400 hover:text-star-600">
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleDeleteQuestion(q.id)} className="text-red-400 hover:text-red-500">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {showAddQuestion && (
+        <AddQuestionModal
+          levelId={level.id}
+          type="choice"
+          onClose={() => setShowAddQuestion(false)}
+          onAdded={load}
+        />
+      )}
+      {showBatchImport && (
+        <BatchImportQuestionsModal
+          levelId={level.id}
+          existingCount={questions.length}
+          levels={[]}
+          onClose={() => setShowBatchImport(false)}
+          onImported={load}
+        />
+      )}
       {editingQuestion && (
         <EditQuestionModal
           question={editingQuestion}
-          isChoiceSet={set.type === 'choice'}
+          isChoiceSet={editingQuestion.type === 'choice' || editingQuestion.type === 'multi_choice'}
           onClose={() => setEditingQuestion(null)}
           onSaved={() => { setEditingQuestion(null); load(); }}
         />
+      )}
+
+      {showMoveModal && (
+        <Modal open onClose={() => setShowMoveModal(false)} title="批量移动到其他关卡" size="sm">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">将选中的 {selectedIds.size} 道题目移动到以下关卡：</p>
+            <Select value={moveTargetLevelId} onChange={e => setMoveTargetLevelId(e.target.value)}>
+              <option value="">请选择目标关卡</option>
+              {allLevels
+                .filter(l => l.id !== level.id)
+                .map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.subject ? `[${l.subject}] ` : ''}{l.title || `关卡 ${l.level_no}`}
+                  </option>
+                ))}
+            </Select>
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setShowMoveModal(false)}>取消</Button>
+              <Button className="flex-1" disabled={!moveTargetLevelId} onClick={handleBatchMove}>
+                <ArrowRight className="w-4 h-4" /> 确认移动
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -1032,6 +1092,7 @@ function EditSetModal({ set, onClose, onSaved }: {
   const [title, setTitle] = useState(set.title);
   const [description, setDescription] = useState(set.description ?? '');
   const [board, setBoard] = useState<ChallengeBoardType>((set.board as ChallengeBoardType) ?? 'today_review');
+  const [subject, setSubject] = useState<string>(set.subject ?? '');
   const [rewardEasy, setRewardEasy] = useState(set.reward_easy);
   const [rewardMedium, setRewardMedium] = useState(set.reward_medium);
   const [rewardHard, setRewardHard] = useState(set.reward_hard);
@@ -1046,6 +1107,7 @@ function EditSetModal({ set, onClose, onSaved }: {
         title: title.trim(),
         description: description.trim() || null,
         board,
+        subject: (subject || null) as ChallengeSubject | null,
         reward_easy: rewardEasy,
         reward_medium: rewardMedium,
         reward_hard: rewardHard,
@@ -1065,6 +1127,15 @@ function EditSetModal({ set, onClose, onSaved }: {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">题集标题</label>
           <Input value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">学科</label>
+          <Select value={subject} onChange={e => setSubject(e.target.value)}>
+            <option value="">未分类</option>
+            <option value="语文">语文</option>
+            <option value="数学">数学</option>
+            <option value="英语">英语</option>
+          </Select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">所属板块</label>
@@ -1137,6 +1208,9 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
   const [description, setDescription] = useState<string>(level?.description ?? '');
   const [passReward, setPassReward] = useState<number>(level?.pass_reward ?? 3);
   const [status, setStatus] = useState<'active' | 'inactive'>(level?.status ?? 'active');
+  const [subject, setSubject] = useState<string>(level?.subject ?? '');
+  const [targetSection, setTargetSection] = useState<string>(level?.target_section ?? '');
+  const [published, setPublished] = useState<boolean>(level?.published ?? false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -1156,6 +1230,9 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
           description: description.trim() || null,
           pass_reward: passReward,
           status,
+          subject: (subject || null) as any,
+          target_section: (targetSection || null) as any,
+          published,
         });
         toast.success('关卡已更新');
       } else {
@@ -1166,6 +1243,9 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
           description: description.trim() || undefined,
           pass_reward: passReward,
           status,
+          subject: (subject || null) as any,
+          target_section: (targetSection || null) as any,
+          published,
         });
         toast.success('关卡已创建');
       }
@@ -1217,6 +1297,39 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
             </button>
           </div>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">学科</label>
+          <select value={subject} onChange={e => setSubject(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-800">
+            <option value="">未分类</option>
+            <option value="语文">语文</option>
+            <option value="数学">数学</option>
+            <option value="英语">英语</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">目标板块（发布后在此板块显示独立卡片）</label>
+          <select value={targetSection} onChange={e => setTargetSection(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-800">
+            <option value="">未设置（不生成独立卡片）</option>
+            <option value="today_review">今日复习</option>
+            <option value="gap_check">疑难杂症</option>
+            <option value="advance">超前拓展</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">前台发布</label>
+          <div className="flex gap-2">
+            <button onClick={() => setPublished(true)}
+              className={cn('flex-1 py-2 rounded-lg text-sm', published ? 'bg-green-50 text-green-600 font-medium' : 'bg-slate-100 text-slate-500')}>
+              <Eye className="w-4 h-4 inline-block mr-1" /> 已发布
+            </button>
+            <button onClick={() => setPublished(false)}
+              className={cn('flex-1 py-2 rounded-lg text-sm', !published ? 'bg-slate-100 text-slate-500 font-medium' : 'bg-slate-100 text-slate-500')}>
+              <EyeOff className="w-4 h-4 inline-block mr-1" /> 未发布
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose} className="flex-1">取消</Button>
           <Button onClick={handleSave} loading={saving} className="flex-1">
@@ -1228,18 +1341,133 @@ function LevelModal({ setId, level, existingLevels, onClose, onSaved }: {
   );
 }
 
+// ====== 关卡库选择弹窗（从全局关卡库引用关卡到题集） ======
+function LevelPickerModal({ setId, existingLevelIds, nextSortOrder, onClose, onPicked }: {
+  setId: string;
+  existingLevelIds: string[];
+  nextSortOrder: number;
+  onClose: () => void;
+  onPicked: () => void;
+}) {
+  const toast = useToastStore();
+  const [allLevels, setAllLevels] = useState<ChallengeLevel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterSubject, setFilterSubject] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await fetchGlobalLevels();
+        setAllLevels(data);
+      } catch (e: any) {
+        toast.error(e?.message ?? '加载关卡库失败');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const available = allLevels.filter(l =>
+    !existingLevelIds.includes(l.id) &&
+    (!filterSubject || l.subject === filterSubject)
+  );
+
+  const handleAdd = async (levelId: string) => {
+    try {
+      await addLevelToSet(setId, levelId, nextSortOrder);
+      toast.success('关卡已添加到题集');
+      onPicked();
+    } catch (e: any) {
+      toast.error(e?.message ?? '添加失败');
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="从关卡库添加" size="md">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <select
+            value={filterSubject}
+            onChange={e => setFilterSubject(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-2 py-1"
+          >
+            <option value="">全部学科</option>
+            <option value="语文">语文</option>
+            <option value="数学">数学</option>
+            <option value="英语">英语</option>
+          </select>
+        </div>
+        {loading ? (
+          <p className="text-sm text-slate-400 text-center py-4">加载中...</p>
+        ) : available.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">暂无可添加的关卡</p>
+        ) : (
+          <div className="max-h-80 overflow-y-auto space-y-2">
+            {available.map(lv => (
+              <div key={lv.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50">
+                {lv.subject && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{lv.subject}</span>
+                )}
+                <span className="text-sm text-slate-700 flex-1 truncate">{lv.title || `关卡 ${lv.level_no}`}</span>
+                <span className={cn('text-xs px-1.5 py-0.5 rounded',
+                  lv.published ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400')}>
+                  {lv.published ? '已发布' : '未发布'}
+                </span>
+                <Button size="sm" onClick={() => handleAdd(lv.id)}>
+                  <Plus className="w-3 h-3" /> 添加
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ====== 编辑知识点弹窗 ======
 function EditKnowledgeModal({ set, onClose, onSaved }: {
   set: ChallengeSet; onClose: () => void; onSaved: (s: ChallengeSet) => void;
 }) {
   const toast = useToastStore();
   const [text, setText] = useState(set.knowledge_points ?? '');
+  const [images, setImages] = useState<string[]>(set.knowledge_points_images ?? []);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const f of Array.from(files)) {
+        const url = await uploadKnowledgeImage(f);
+        urls.push(url);
+      }
+      setImages(prev => [...prev, ...urls]);
+      toast.success('图片上传成功');
+    } catch (e: any) {
+      toast.error(e?.message ?? '上传失败');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = (idx: number) => {
+    setImages(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await updateChallengeSet(set.id, { knowledge_points: text.trim() || null });
+      const updated = await updateChallengeSet(set.id, {
+        knowledge_points: text.trim() || null,
+        knowledge_points_images: images.length > 0 ? images : null,
+      });
       toast.success('知识点已保存');
       onSaved(updated);
     } catch (e: any) {
@@ -1257,6 +1485,26 @@ function EditKnowledgeModal({ set, onClose, onSaved }: {
           <Textarea value={text} onChange={e => setText(e.target.value)} placeholder="每行一个知识点，答题前/答题中可查看" rows={6} />
           <p className="text-xs text-slate-400 mt-1">孩子答题前可预览，答题中右上角灯泡图标可随时查看</p>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">知识点图片</label>
+          {images.length > 0 && (
+            <div className="space-y-2 mb-2">
+              {images.map((url, i) => (
+                <div key={i} className="relative group">
+                  <img src={url} alt={`知识点图 ${i + 1}`} className="w-full rounded-lg border border-slate-200" />
+                  <button
+                    onClick={() => handleRemoveImage(i)}
+                    className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <label className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 cursor-pointer">
+            <Upload className="w-4 h-4" /> 上传图片
+            <input type="file" accept="image/*" multiple onChange={handleUpload} className="hidden" disabled={uploading} />
+          </label>
+        </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose} className="flex-1">取消</Button>
           <Button onClick={handleSave} loading={saving} className="flex-1">
@@ -1269,12 +1517,13 @@ function EditKnowledgeModal({ set, onClose, onSaved }: {
 }
 
 // ====== 添加题目弹窗 ======
-function AddQuestionModal({ setId, type, onClose, onAdded }: {
-  setId: string; type: QuestionType; onClose: () => void; onAdded: () => void;
+function AddQuestionModal({ setId, levelId, type, onClose, onAdded }: {
+  setId?: string; levelId?: string; type: QuestionType; onClose: () => void; onAdded: () => void;
 }) {
   const toast = useToastStore();
-  const isChoiceSet = type === 'choice';
-  // 对于 choice 题集，允许单选/多选切换；math 题集固定 math
+  const isLevelMode = !!levelId && !setId;
+  const isChoiceSet = type === 'choice' || (isLevelMode && type !== 'math');
+  // 对于 choice 题集，允许单选/多选切换；math 题集固定 math；关卡模式可切换 choice/multi_choice/math
   const [questionType, setQuestionType] = useState<QuestionType>(type);
   const [questionNumber, setQuestionNumber] = useState(''); // 题号（选填），映射到 display_order
   const [questionText, setQuestionText] = useState('');
@@ -1333,14 +1582,14 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
       toast.error('题号需为正整数');
       return;
     }
-    if (isChoiceSet) {
+    if (isChoiceSet && questionType !== 'math') {
       const opts = options.map(o => o.trim()).filter(Boolean);
       if (opts.length < 2) { toast.error('至少 2 个选项'); return; }
       if (correctLetters.length === 0) { toast.error('请标记正确选项'); return; }
       setSaving(true);
       try {
         await createQuestion({
-          challenge_set_id: setId,
+          ...(isLevelMode ? { level_id: levelId, challenge_set_id: null } : { challenge_set_id: setId }),
           type: questionType,
           question_text: questionText.trim(),
           options: opts,
@@ -1363,7 +1612,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
       setSaving(true);
       try {
         await createQuestion({
-          challenge_set_id: setId,
+          ...(isLevelMode ? { level_id: levelId, challenge_set_id: null } : { challenge_set_id: setId }),
           type: 'math',
           question_text: questionText.trim(),
           correct_answer: correctAnswer.trim(),
@@ -1383,9 +1632,9 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
   };
 
   return (
-    <Modal open onClose={onClose} title={isChoiceSet ? '添加选择题' : '添加数学题'} size="md">
+    <Modal open onClose={onClose} title={questionType === 'math' ? '添加数学题' : '添加选择题'} size="md">
       <div className="space-y-4">
-        {isChoiceSet && (
+        {(isChoiceSet || isLevelMode) && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">题型</label>
             <div className="flex gap-2">
@@ -1397,6 +1646,12 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
                 className={cn('flex-1 py-2 rounded-lg text-sm', questionType === 'multi_choice' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500')}>
                 多选
               </button>
+              {isLevelMode && (
+                <button onClick={() => handleTypeToggle('math')}
+                  className={cn('flex-1 py-2 rounded-lg text-sm', questionType === 'math' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500')}>
+                  数学
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1411,7 +1666,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
             <Textarea value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="如：He ___ to school every day." rows={2} />
           </div>
         </div>
-        {isChoiceSet && (
+        {questionType !== 'math' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               选项（点击左侧圆点标记正确答案{questionType === 'multi_choice' ? '，可多选' : ''}）
@@ -1444,7 +1699,7 @@ function AddQuestionModal({ setId, type, onClose, onAdded }: {
             </button>
           </div>
         )}
-        {!isChoiceSet && (
+        {questionType === 'math' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">正确答案（填数字）</label>
             <Input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="42" />
@@ -1508,14 +1763,15 @@ function detectQuestionType(raw: string): QuestionType {
   return 'choice'; // 默认
 }
 
-function BatchImportQuestionsModal({ setId, existingCount, levels, onClose, onImported }: {
-  setId: string; existingCount: number; levels: ChallengeLevel[]; onClose: () => void; onImported: () => void;
+function BatchImportQuestionsModal({ setId, levelId, existingCount, levels, onClose, onImported }: {
+  setId?: string; levelId?: string; existingCount: number; levels: ChallengeLevel[]; onClose: () => void; onImported: () => void;
 }) {
   const toast = useToastStore();
+  const isLevelMode = !!levelId && !setId;
   const [parsed, setParsed] = useState<ParsedQuestion[]>([]);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState('');
-  const [defaultLevelId, setDefaultLevelId] = useState<string>(levels[0]?.id ?? '');
+  const [defaultLevelId, setDefaultLevelId] = useState<string>(isLevelMode ? (levelId ?? '') : (levels[0]?.id ?? ''));
 
   // 关卡号 → level_id 的映射表
   const levelNoToId = new Map<number, string>(levels.map(l => [l.level_no, l.id]));
@@ -1721,9 +1977,9 @@ function BatchImportQuestionsModal({ setId, existingCount, levels, onClose, onIm
         }
       }
       await createQuestionsBatch(validItems.map((p, i) => {
-        const levelId = (p.level_no && levelNoToId.get(p.level_no)) || defaultLevelId || null;
+        const qLevelId = isLevelMode ? (levelId ?? null) : ((p.level_no && levelNoToId.get(p.level_no)) || defaultLevelId || null);
         return {
-          challenge_set_id: setId,
+          ...(isLevelMode ? { level_id: qLevelId ?? undefined, challenge_set_id: null } : { challenge_set_id: setId, level_id: qLevelId ?? undefined }),
           type: p.type,
           question_text: p.question_text,
           options: p.options ?? undefined,
@@ -1731,7 +1987,6 @@ function BatchImportQuestionsModal({ setId, existingCount, levels, onClose, onIm
           explanation: p.explanation || undefined,
           difficulty: p.difficulty,
           display_order: p.display_order ?? (existingCount + i + 1),
-          level_id: levelId ?? undefined,
           metadata: p.metadata ?? undefined,
         };
       }));

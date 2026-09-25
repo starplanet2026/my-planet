@@ -38,6 +38,28 @@ interface StudyTask {
   reward: number;
   done: boolean;
   rewarded: boolean; // 是否已发放奖励（防止重复）
+  selected?: boolean; // 任务模板是否被勾选（选择页使用）
+}
+
+// 任务模板本地存储 key（关闭弹窗后仍保留）
+const TASK_TEMPLATES_KEY = 'pet-study-task-templates';
+
+function loadTaskTemplates(): StudyTask[] {
+  try {
+    const raw = localStorage.getItem(TASK_TEMPLATES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as StudyTask[];
+  } catch {
+    return [];
+  }
+}
+
+function saveTaskTemplates(list: StudyTask[]) {
+  try {
+    localStorage.setItem(TASK_TEMPLATES_KEY, JSON.stringify(list));
+  } catch {
+    // 忽略写入失败
+  }
 }
 
 export function StudyCompanionModal({
@@ -59,6 +81,7 @@ export function StudyCompanionModal({
   const [minutes, setMinutes] = useState(15);
   const [studyTask, setStudyTask] = useState('');
   const [taskList, setTaskList] = useState<StudyTask[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>(() => loadTaskTemplates());
   const [remaining, setRemaining] = useState(0);
   const [studying, setStudying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -139,17 +162,55 @@ export function StudyCompanionModal({
     };
   }, [studying, paused]);
 
-  const handleStart = () => {
-    if (!selectedPet) return;
-    // 解析每行任务，提取星光值奖励
+  // 自动生成任务：将输入框每行解析为任务条目，追加到现有任务列表
+  const handleGenerateTasks = () => {
     const lines = studyTask
       .split(/\r?\n/)
       .map(s => s.trim())
       .filter(s => s.length > 0);
-    const tasks: StudyTask[] = lines.map((line, i) => {
+    if (lines.length === 0) {
+      toast.info('请在输入框中输入任务，每行一个');
+      return;
+    }
+    const maxId = taskTemplates.reduce((m, t) => Math.max(m, t.id), 0);
+    const newTasks: StudyTask[] = lines.map((line, i) => {
       const { label, reward } = parseReward(line);
-      return { id: i, text: label, reward, done: false, rewarded: false };
+      return { id: maxId + 1 + i, text: label, reward, done: false, rewarded: false, selected: true };
     });
+    const next = [...taskTemplates, ...newTasks];
+    setTaskTemplates(next);
+    saveTaskTemplates(next);
+    setStudyTask(''); // 清空输入框，方便继续追加
+    toast.success(`已生成 ${newTasks.length} 个任务`);
+  };
+
+  // 勾选/取消勾选任务模板
+  const handleToggleSelect = (taskId: number) => {
+    const next = taskTemplates.map(t =>
+      t.id === taskId ? { ...t, selected: !t.selected } : t
+    );
+    setTaskTemplates(next);
+    saveTaskTemplates(next);
+  };
+
+  // 删除单个任务模板
+  const handleDeleteTask = (taskId: number) => {
+    const next = taskTemplates.filter(t => t.id !== taskId);
+    setTaskTemplates(next);
+    saveTaskTemplates(next);
+  };
+
+  const handleStart = () => {
+    if (!selectedPet) return;
+    // 取已勾选的任务模板作为本次学习任务
+    const selectedTasks = taskTemplates.filter(t => t.selected);
+    if (selectedTasks.length === 0) {
+      toast.info('请至少勾选一个任务');
+      return;
+    }
+    const tasks: StudyTask[] = selectedTasks.map((t, i) => ({
+      id: i, text: t.text, reward: t.reward, done: false, rewarded: false,
+    }));
     setTaskList(tasks);
     setTotalStarEarned(0);
     setRemaining(minutes * 60);
@@ -289,18 +350,72 @@ export function StudyCompanionModal({
             )}
           </div>
 
-          {/* 学习任务 */}
+          {/* 今日任务 */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">学习任务</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">今日任务</label>
             <textarea
               value={studyTask}
               onChange={e => setStudyTask(e.target.value)}
               placeholder={'如：\n英语学习 2星光值\n背20个单词 3星光值\n阅读课文第3课 1星光值'}
               maxLength={300}
-              rows={5}
+              rows={4}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-green-400 focus:outline-none resize-none"
             />
-            <p className="text-[10px] text-slate-400 mt-1">每行一个任务，可在任务名后加"X星光值"设置奖励</p>
+            <p className="text-[10px] text-slate-400 mt-1">每行一个任务，可在任务名后加"X星光值"设置奖励；支持多次粘贴追加</p>
+            <button
+              type="button"
+              onClick={handleGenerateTasks}
+              disabled={!studyTask.trim()}
+              className="mt-2 w-full py-2 rounded-xl bg-green-50 text-green-600 text-sm font-medium hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              自动生成任务
+            </button>
+
+            {/* 已生成的任务模板列表 */}
+            {taskTemplates.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[11px] text-slate-400">
+                  已生成 {taskTemplates.length} 个任务，已勾选 {taskTemplates.filter(t => t.selected).length} 个
+                </p>
+                <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {taskTemplates.map(t => (
+                    <li
+                      key={t.id}
+                      className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+                        t.selected ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
+                      }`}
+                    >
+                      {/* 勾选框 */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelect(t.id)}
+                        className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs transition-colors ${
+                          t.selected ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
+                        }`}
+                      >
+                        {t.selected ? '✓' : ''}
+                      </button>
+                      {/* 任务名称 + 奖励 */}
+                      <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
+                        {t.text}
+                        {t.reward > 0 && (
+                          <span className="text-amber-500 text-xs ml-1">⭐{t.reward}</span>
+                        )}
+                      </span>
+                      {/* 删除按钮 */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(t.id)}
+                        className="flex-shrink-0 w-6 h-6 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        title="删除任务"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* 选择时长 */}

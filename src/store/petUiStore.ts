@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { PetWord } from '../api/types';
+import { setMuted as setAudioMuted } from '../lib/audio';
 
 // 萌宠闯关任务类型（与 StudyCompanionModal 内部定义保持一致）
 export interface PersistedStudyTask {
@@ -21,6 +22,8 @@ interface PetUiState {
   // 萌宠闯关：当前关卡与单词（用于恢复对局）
   gameLevel: number | null;
   gameWords: PetWord[];
+  gameBookId: string | null;
+  gameBookTitle: string;
 
   // 陪伴学习：关键字段（用于恢复）
   studyStep: 'select' | 'timer' | 'done' | 'records';
@@ -32,16 +35,20 @@ interface PetUiState {
   studyStudying: boolean;
   studyPaused: boolean;
 
+  // 全局音效静音开关（跨页面共享）
+  audioMuted: boolean;
+
   // Actions
   setActiveModal: (m: PetUiState['activeModal']) => void;
   setShowStudy: (v: boolean) => void;
-  setGameState: (level: number | null, words: PetWord[]) => void;
+  setGameState: (level: number | null, words: PetWord[], bookId?: string | null, bookTitle?: string) => void;
   clearGameState: () => void;
   setStudyState: (patch: Partial<Pick<PetUiState,
     'studyStep' | 'studyPetId' | 'studyMinutes' | 'studyTaskText' |
     'studyTaskList' | 'studyRemaining' | 'studyStudying' | 'studyPaused'
   >>) => void;
   clearStudyState: () => void;
+  toggleAudioMute: () => void;
 }
 
 export const usePetUiStore = create<PetUiState>((set) => ({
@@ -50,6 +57,8 @@ export const usePetUiStore = create<PetUiState>((set) => ({
 
   gameLevel: null,
   gameWords: [],
+  gameBookId: null,
+  gameBookTitle: '',
 
   studyStep: 'select',
   studyPetId: null,
@@ -60,10 +69,21 @@ export const usePetUiStore = create<PetUiState>((set) => ({
   studyStudying: false,
   studyPaused: false,
 
+  audioMuted: (() => {
+    try {
+      const m = localStorage.getItem('pet-audio-muted') === 'true';
+      setAudioMuted(m); // 初始化时同步到 audio 引擎
+      return m;
+    } catch { return false; }
+  })(),
+
   setActiveModal: (m) => set({ activeModal: m }),
   setShowStudy: (v) => set({ showStudy: v }),
-  setGameState: (level, words) => set({ gameLevel: level, gameWords: words }),
-  clearGameState: () => set({ gameLevel: null, gameWords: [] }),
+  setGameState: (level, words, bookId, bookTitle) => set({
+    gameLevel: level, gameWords: words,
+    gameBookId: bookId ?? null, gameBookTitle: bookTitle ?? '',
+  }),
+  clearGameState: () => set({ gameLevel: null, gameWords: [], gameBookId: null, gameBookTitle: '' }),
   setStudyState: (patch) => set(patch),
   clearStudyState: () => set({
     studyStep: 'select',
@@ -74,5 +94,11 @@ export const usePetUiStore = create<PetUiState>((set) => ({
     studyRemaining: 0,
     studyStudying: false,
     studyPaused: false,
+  }),
+  toggleAudioMute: () => set((s) => {
+    const next = !s.audioMuted;
+    try { localStorage.setItem('pet-audio-muted', String(next)); } catch {}
+    setAudioMuted(next); // 同步到 audio 引擎
+    return { audioMuted: next };
   }),
 }));

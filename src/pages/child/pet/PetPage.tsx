@@ -7,8 +7,8 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight } from '../../../api/pets';
-import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet } from '../../../api/types';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages } from '../../../api/pets';
+import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
 import { expNeeded, TRAIT_DESC } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
 import { TopActionBar } from './components/TopActionBar';
@@ -20,6 +20,7 @@ import { WordMatchGame } from './components/WordMatchGame';
 import { AdoptPetModal } from './components/AdoptPetModal';
 import { StudyCompanionModal } from './components/StudyCompanionModal';
 import { PetBoardingModal } from './components/PetBoardingModal';
+import { AudioToggleButton } from './components/AudioToggleButton';
 
 // 稀有度徽章配置
 const RARITY_BADGE: Record<PetRarity, { label: string; cls: string }> = {
@@ -61,6 +62,9 @@ export function PetPage() {
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
   const [showBoarding, setShowBoarding] = useState(false);
+  const [showPetMessages, setShowPetMessages] = useState(false);
+  const [petMessages, setPetMessages] = useState<PetMessage[]>([]);
+  const [petMessagesLoading, setPetMessagesLoading] = useState(false);
   const [evolvingPetId, setEvolvingPetId] = useState<string | null>(null);
   const [renamingPetId, setRenamingPetId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -157,6 +161,36 @@ export function PetPage() {
     }
   };
 
+  // 加载宠物消息
+  const loadPetMessages = useCallback(async () => {
+    if (!child) return;
+    setPetMessagesLoading(true);
+    try {
+      const data = await fetchPetMessages(child.id, 50, 0);
+      setPetMessages(data);
+    } catch {
+      setPetMessages([]);
+    } finally {
+      setPetMessagesLoading(false);
+    }
+  }, [child?.id]);
+
+  const handleClearPetMessages = async () => {
+    if (!child) return;
+    try {
+      await clearPetMessages(child.id);
+      setPetMessages([]);
+      toast.success('消息已清空');
+    } catch (e: any) {
+      toast.error(e?.message ?? '清空失败');
+    }
+  };
+
+  // 打开消息面板时加载
+  useEffect(() => {
+    if (showPetMessages) loadPetMessages();
+  }, [showPetMessages, loadPetMessages]);
+
   // 懒加载背景列表：仅在打开切换弹窗时加载，避免大 base64 阻塞首屏
   const loadBackgrounds = useCallback(async () => {
     if (!family) return;
@@ -184,8 +218,14 @@ export function PetPage() {
         fetchPets(child.id),
         getDogHouse(child.id),
       ]);
-      // 结算每只宠物状态
-      const checked = await Promise.all(petsData.map(p => checkPet(p.id)));
+      // Try checkPet for daily decay, but fall back to raw data if it fails
+      let checked = petsData;
+      try {
+        checked = await Promise.all(petsData.map(p => checkPet(p.id)));
+        console.log('[PetPage] checkPet success:', checked.map(p => ({ name: p.name, hunger: p.hunger, clean: p.clean, happiness: p.happiness })));
+      } catch (checkErr: any) {
+        console.error('[PetPage] checkPet failed, using raw data:', checkErr);
+      }
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
@@ -203,7 +243,12 @@ export function PetPage() {
         fetchPets(child.id),
         getDogHouse(child.id),
       ]);
-      const checked = await Promise.all(petsData.map(p => checkPet(p.id)));
+      let checked = petsData;
+      try {
+        checked = await Promise.all(petsData.map(p => checkPet(p.id)));
+      } catch {
+        // fall back to raw data
+      }
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
@@ -228,7 +273,7 @@ export function PetPage() {
   if (loading) return <Loading />;
 
   // 弹窗打开时隐藏所有外层 icon
-  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding;
+  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding || showPetMessages;
 
   const base = import.meta.env.BASE_URL;
   // 菜单图标：使用圆角矩形裁剪 + object-cover 去除 jpg 白边
@@ -306,12 +351,13 @@ export function PetPage() {
             <span className="text-xs font-medium">帮助</span>
           </button>
           <button
-            onClick={() => toast.info('暂无新消息')}
+            onClick={() => setShowPetMessages(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
           >
             <MessageCircle className="w-4 h-4" />
             <span className="text-xs font-medium">消息</span>
           </button>
+          <AudioToggleButton />
         </div>
       )}
 
@@ -466,6 +512,58 @@ export function PetPage() {
           onClose={() => setShowBoarding(false)}
           onBoarded={() => { refreshData(); refreshMembers(); }}
         />
+      )}
+
+      {/* 宠物消息面板 */}
+      {showPetMessages && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPetMessages(false)}>
+          <div className="bg-white rounded-2xl p-4 w-80 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-slate-800 text-lg">🐾 宠物消息</h3>
+              <div className="flex items-center gap-2">
+                {petMessages.length > 0 && (
+                  <button
+                    onClick={handleClearPetMessages}
+                    className="text-xs text-slate-400 hover:text-red-500"
+                  >
+                    清空消息
+                  </button>
+                )}
+                <button onClick={() => setShowPetMessages(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {petMessagesLoading ? (
+                <div className="text-center py-8 text-sm text-slate-400">加载中...</div>
+              ) : petMessages.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">📭</div>
+                  <p className="text-sm text-slate-400">暂无消息</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {petMessages.map(msg => {
+                    const icon = msg.event_type === 'level_up' ? '⬆️'
+                      : msg.event_type === 'coin_harvest' ? '💰'
+                      : msg.event_type === 'sick' ? '🤒'
+                      : '🐾';
+                    return (
+                      <div key={msg.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50">
+                        <span className="text-lg flex-shrink-0">{icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-slate-700">{msg.message}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {new Date(msg.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 我的宠物弹窗：查看已领养宠物列表 + 出来玩/回家 */}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
-import { useTasks } from '../../hooks/useTasks';
+import { useTasks, useTaskCategories } from '../../hooks/useTasks';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
@@ -10,12 +10,12 @@ import { Input, Textarea, Select } from '../../components/common/Input';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToastStore } from '../../store/toastStore';
-import { TASK_CATEGORIES, TASK_CATEGORY_LIST, TASK_ICONS, STAR_PERSON_DEFAULT_ICON, getTaskIconUrl, ROUTES } from '../../lib/constants';
+import { TASK_ICONS, STAR_PERSON_DEFAULT_ICON, getTaskIconUrl, getCategoryMeta, ROUTES } from '../../lib/constants';
 import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
-import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square } from 'lucide-react';
-import type { Task, TaskCategory } from '../../api/types';
-import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks } from '../../api/tasks';
+import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square, Pencil } from 'lucide-react';
+import type { Task, TaskCategory, TaskCategoryItem } from '../../api/types';
+import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks, updateTaskPriority } from '../../api/tasks';
 
 // 周几标签（0=周日, 1=周一...6=周六）
 const WEEKDAY_LABELS: { value: number; label: string }[] = [
@@ -36,6 +36,7 @@ interface TaskFormData {
   deadline: string;        // YYYY-MM-DD 格式
   icon: string;
   repeat_days: number[];  // 周几重复（0=周日）
+  priority: number;       // 优先级，数值越大越靠前
 }
 
 export function TaskManagePage() {
@@ -50,6 +51,7 @@ export function TaskManagePage() {
   const validChild = childMembers.find(m => m.id === currentChildId);
   const effectiveChildId = validChild?.id ?? childMembers[0]?.id ?? null;
   const { tasks, loading, refresh, createTask, updateTask, deleteTask, publishTask, offlineTask } = useTasks();
+  const { categories, createCategory, renameCategory, deleteCategory } = useTaskCategories();
   const toast = useToastStore();
 
   const [showForm, setShowForm] = useState(false);
@@ -57,6 +59,12 @@ export function TaskManagePage() {
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  // 分类管理
+  const [showCategoryManage, setShowCategoryManage] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [catActionLoading, setCatActionLoading] = useState(false);
 
   const [form, setForm] = useState<TaskFormData>({
     title: '',
@@ -66,6 +74,7 @@ export function TaskManagePage() {
     deadline: '',
     icon: STAR_PERSON_DEFAULT_ICON,
     repeat_days: [],
+    priority: 0,
   });
 
   const update = (k: keyof TaskFormData, v: string | number | number[]) =>
@@ -85,7 +94,7 @@ export function TaskManagePage() {
     setEditingTask(null);
     setForm({
       title: '', description: '', category: 'daily', reward_coins: 1,
-      deadline: '', icon: STAR_PERSON_DEFAULT_ICON, repeat_days: [],
+      deadline: '', icon: STAR_PERSON_DEFAULT_ICON, repeat_days: [], priority: 0,
     });
     setShowForm(true);
   };
@@ -102,6 +111,7 @@ export function TaskManagePage() {
       deadline: deadlineDate,
       icon: task.icon ?? STAR_PERSON_DEFAULT_ICON,
       repeat_days: task.repeat_days ?? [],
+      priority: task.priority ?? 0,
     });
     setShowForm(true);
   };
@@ -135,6 +145,7 @@ export function TaskManagePage() {
         created_by: parentMember.id,
         icon: form.icon,
         repeat_days: form.repeat_days,
+        priority: Number(form.priority) || 0,
       };
 
       if (editingTask) {
@@ -207,10 +218,67 @@ export function TaskManagePage() {
 
   // 任务分类筛选
   const [categoryFilter, setCategoryFilter] = useState<'all' | TaskCategory>('all');
+  // 分类选项：来自数据库（默认4 + 自定义）
   const CATEGORY_OPTIONS: { id: 'all' | TaskCategory; label: string; emoji: string }[] = [
     { id: 'all', label: '全部', emoji: '📚' },
-    ...TASK_CATEGORY_LIST.map(([cat, cfg]) => ({ id: cat, label: cfg.label, emoji: cfg.emoji })),
+    ...categories.map(c => ({
+      id: c.key as TaskCategory,
+      label: c.name,
+      emoji: getCategoryMeta(c.key, categories).emoji,
+    })),
   ];
+
+  // 分类管理操作
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) { toast.error('请输入分类名称'); return; }
+    setCatActionLoading(true);
+    try {
+      await createCategory(newCategoryName.trim());
+      setNewCategoryName('');
+      toast.success('分类已创建');
+    } catch (e: any) {
+      toast.error(e?.message ?? '创建失败');
+    } finally {
+      setCatActionLoading(false);
+    }
+  };
+
+  const handleRenameCategory = async (id: string) => {
+    if (!editingCategoryName.trim()) { toast.error('名称不能为空'); return; }
+    setCatActionLoading(true);
+    try {
+      await renameCategory(id, editingCategoryName.trim());
+      setEditingCategoryId(null);
+      toast.success('已重命名');
+    } catch (e: any) {
+      toast.error(e?.message ?? '重命名失败');
+    } finally {
+      setCatActionLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string, name: string) => {
+    if (!window.confirm(`确认删除分类「${name}」？该分类下已有任务不受影响。`)) return;
+    setCatActionLoading(true);
+    try {
+      await deleteCategory(id);
+      toast.success('分类已删除');
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+    } finally {
+      setCatActionLoading(false);
+    }
+  };
+
+  // 任务优先级快捷修改
+  const handlePriorityChange = async (id: string, val: number) => {
+    try {
+      await updateTaskPriority(id, val);
+      await refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? '更新优先级失败');
+    }
+  };
 
   // 分类任务（先按分类筛选，再按状态分组）
   const visibleTasks = tasks.filter(t =>
@@ -356,6 +424,9 @@ export function TaskManagePage() {
           <h1 className="text-xl font-bold">任务管理</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setShowCategoryManage(true)}>
+            <Pencil className="w-4 h-4" /> 分类管理
+          </Button>
           <Button size="sm" variant="ghost" onClick={handleSeedDefaults} disabled={seeding}>
             <Upload className="w-4 h-4" /> 导入成就清单
           </Button>
@@ -465,11 +536,13 @@ export function TaskManagePage() {
                   <TaskRow
                     task={task}
                     childMembers={childMembers}
+                    categories={categories}
                     actionLoading={actionId === task.id}
                     onEdit={() => openEdit(task)}
                     onDelete={() => setDeleteTarget(task)}
                     onOffline={() => handleOffline(task.id)}
                     onRewardChange={(val) => handleRewardChange(task.id, val)}
+                    onPriorityChange={(val) => handlePriorityChange(task.id, val)}
                     dragHandle
                     selected={selectedIds.has(task.id)}
                     onToggleSelect={() => toggleSelect(task.id)}
@@ -514,11 +587,13 @@ export function TaskManagePage() {
                   <TaskRow
                     task={task}
                     childMembers={childMembers}
+                    categories={categories}
                     actionLoading={actionId === task.id}
                     onEdit={() => openEdit(task)}
                     onDelete={() => setDeleteTarget(task)}
                     onPublish={() => handlePublish(task.id)}
                     onRewardChange={(val) => handleRewardChange(task.id, val)}
+                    onPriorityChange={(val) => handlePriorityChange(task.id, val)}
                     dragHandle
                     selected={selectedIds.has(task.id)}
                     onToggleSelect={() => toggleSelect(task.id)}
@@ -629,17 +704,24 @@ export function TaskManagePage() {
             value={form.category}
             onChange={e => update('category', e.target.value)}
           >
-            {TASK_CATEGORY_LIST.map(([cat, cfg]) => (
-              <option key={cat} value={cat}>{cfg.emoji} {cfg.label}</option>
+            {categories.map(c => (
+              <option key={c.key} value={c.key}>{getCategoryMeta(c.key, categories).emoji} {c.name}</option>
             ))}
           </Select>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Input
               label="奖励星光值"
               type="number"
               required
               value={form.reward_coins}
               onChange={e => update('reward_coins', e.target.value)}
+            />
+            <Input
+              label="优先级"
+              type="number"
+              value={form.priority}
+              onChange={e => update('priority', e.target.value)}
+              title="数值越大越靠前（0=默认）"
             />
             <Input
               label="截止时间（可选）"
@@ -706,6 +788,78 @@ export function TaskManagePage() {
         onClose={() => setDeleteTarget(null)}
       />
 
+      {/* 分类管理弹窗 */}
+      <Modal
+        open={showCategoryManage}
+        onClose={() => setShowCategoryManage(false)}
+        title="分类管理"
+        size="md"
+      >
+        <div className="space-y-4">
+          {/* 新建分类 */}
+          <div className="flex gap-2">
+            <Input
+              placeholder="输入新分类名称"
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateCategory(); }}
+            />
+            <Button onClick={handleCreateCategory} disabled={catActionLoading}>
+              <Plus className="w-4 h-4" /> 新增
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400">
+            内置 4 个分类不可删除，但可重命名；自定义分类可删除。
+          </p>
+
+          {/* 分类列表 */}
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {categories.map(cat => (
+              <div key={cat.id} className="flex items-center gap-2 p-3 rounded-xl border border-slate-100 bg-white">
+                <span className="text-lg">{getCategoryMeta(cat.key, categories).emoji}</span>
+                {editingCategoryId === cat.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={editingCategoryName}
+                      onChange={e => setEditingCategoryName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRenameCategory(cat.id); }}
+                      className="flex-1 px-2 py-1 border border-slate-200 rounded-lg text-sm focus:border-star-400 focus:outline-none"
+                    />
+                    <button onClick={() => handleRenameCategory(cat.id)} disabled={catActionLoading}
+                      className="px-2 py-1 text-xs text-emerald-600 hover:bg-emerald-50 rounded">保存</button>
+                    <button onClick={() => setEditingCategoryId(null)}
+                      className="px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 rounded">取消</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium">{cat.name}</span>
+                    {cat.is_default && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-400">内置</span>
+                    )}
+                    <button
+                      onClick={() => { setEditingCategoryId(cat.id); setEditingCategoryName(cat.name); }}
+                      className="p-1.5 text-slate-400 hover:text-star-500 hover:bg-star-50 rounded"
+                      title="重命名"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      disabled={cat.is_default || catActionLoading}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                      title={cat.is_default ? '内置分类不可删除' : '删除分类'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }
@@ -714,29 +868,33 @@ export function TaskManagePage() {
 function TaskRow({
   task,
   childMembers,
+  categories,
   actionLoading,
   onEdit,
   onDelete,
   onPublish,
   onOffline,
   onRewardChange,
+  onPriorityChange,
   dragHandle,
   selected,
   onToggleSelect,
 }: {
   task: Task;
   childMembers: { id: string; name: string; avatar_emoji: string }[];
+  categories: TaskCategoryItem[];
   actionLoading?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onPublish?: () => void;
   onOffline?: () => void;
   onRewardChange?: (val: number) => void;
+  onPriorityChange?: (val: number) => void;
   dragHandle?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
-  const cfg = TASK_CATEGORIES[task.category];
+  const cfg = getCategoryMeta(task.category, categories);
   const assignedTo = childMembers.find(m => m.id === task.member_id);
   const iconUrl = getTaskIconUrl(task.icon);
   const isDraft = task.status === 'draft';
@@ -788,16 +946,37 @@ function TaskRow({
                   · 重复 {task.repeat_days!.map(d => '日一二三四五六'[d]).join('')}
                 </span>
               )}
+              <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500" title="优先级，数值越大越靠前">
+                优先级 {task.priority ?? 0}
+              </span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {onPriorityChange && (
+            <div className="flex items-center gap-1" title="优先级，数值越大越靠前，回车保存">
+              <input
+                type="number"
+                defaultValue={task.priority ?? 0}
+                key={`pri-${task.id}`}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v !== (task.priority ?? 0)) onPriorityChange(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                }}
+                className="w-12 text-center font-bold tabular-nums border border-slate-200 rounded-lg px-1 py-0.5 focus:border-star-400 focus:outline-none focus:ring-1 focus:ring-star-200"
+              />
+              <span className="text-[10px] text-slate-400">优先</span>
+            </div>
+          )}
           {onRewardChange ? (
             <div className="flex items-center gap-1">
               <input
                 type="number"
                 defaultValue={task.reward_coins}
-                key={task.id}
+                key={`rw-${task.id}`}
                 onBlur={(e) => {
                   const v = parseInt(e.target.value, 10);
                   if (!isNaN(v) && v !== task.reward_coins) onRewardChange(v);

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { cn } from '../../../../lib/utils';
 import { useToastStore } from '../../../../store/toastStore';
+import { usePetUiStore } from '../../../../store/petUiStore';
+import { playClick, playCorrect, playWrong } from '../../../../lib/audio';
 import { type PetWord } from '../../../../api/types';
 
 export interface GamePlayBoardProps {
@@ -98,17 +100,30 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
   const [enTiles, setEnTiles] = useState<Tile[]>(initialTiles.en);
   const [selectedCN, setSelectedCN] = useState<string | null>(null);
   const [selectedEN, setSelectedEN] = useState<string | null>(null);
-  const [selectedPOS, setSelectedPOS] = useState<string | null>(null);
+  // 词性可多选（最多2个）：单词有2个词性时需点击2个词性按钮
+  const [selectedPOS, setSelectedPOS] = useState<string[]>([]);
   // 仅保留必要的中间状态：错词ID列表 + 最后1个消除词ID（用于后端排序复习）
   const [lastCorrectWord, setLastCorrectWord] = useState<string | null>(null);
   const [wrongWordIds, setWrongWordIds] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const muted = usePetUiStore(s => s.audioMuted); // 全局静音开关
   const [finishResult, setFinishResult] = useState<{ success: boolean; rewardStar: number; newUnlockedLevel: number } | null>(null);
 
   const totalWords = words.length;
   const eliminatedCount = cnTiles.filter(t => t.eliminated).length;
   const hasNextLevel = level < 100;
+
+  // 当前选中英文单词的词性数量（用于下方提示）：点击英文卡片后显示
+  const enWordForHint = selectedEN
+    ? words.find(w => w.id === enTiles.find(t => t.id === selectedEN)?.wordId)
+    : null;
+  const enPosCount = enWordForHint
+    ? [enWordForHint.part_of_speech, enWordForHint.part_of_speech_2].filter(p => p && p.trim() !== '').length
+    : 0;
+  const posHint = enWordForHint
+    ? (enPosCount === 0 ? '无词性' : `共${enPosCount}个词性`)
+    : '';
 
   // 用 ref 防止重复触发
   const checkingRef = useRef(false);
@@ -122,6 +137,21 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
     const tiles = zone === 'cn' ? cnTiles : enTiles;
     const tile = tiles.find(t => t.id === tileId);
     if (!tile || tile.eliminated) return;
+
+    // 点击卡片音效
+    playClick();
+    // 点击英文卡片时朗读单词（Web Speech API）
+    if (zone === 'en' && tile.text && !muted) {
+      try {
+        const u = new SpeechSynthesisUtterance(tile.text);
+        u.lang = 'en-US';
+        u.rate = 0.9; // 稍慢，便于孩子听清
+        speechSynthesis.cancel(); // 防止连点叠加
+        speechSynthesis.speak(u);
+      } catch {
+        // 某些环境不支持 SpeechSynthesis，静默失败
+      }
+    }
 
     const setter = zone === 'cn' ? setSelectedCN : setSelectedEN;
     const setTiles = zone === 'cn' ? setCnTiles : setEnTiles;
@@ -140,44 +170,63 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
       selected: t.id === tileId,
     })));
     setter(tileId);
-  }, [checking, completed, cnTiles, enTiles, selectedCN, selectedEN]);
+    // 新选词后，词性集合可能变化，清空已选词性
+    setSelectedPOS([]);
+  }, [checking, completed, cnTiles, enTiles, selectedCN, selectedEN, muted]);
 
-  // 点击词性按钮
+  // 点击词性按钮：累加进已选集合（最多2个），重复点击则取消
   const handlePOSClick = useCallback((abbr: string) => {
     if (checking || completed) return;
     if (!selectedCN || !selectedEN) {
       toast.warning('请先选择中文和英文');
       return;
     }
-    setSelectedPOS(abbr);
+    setSelectedPOS(prev => {
+      if (prev.includes(abbr)) return prev.filter(a => a !== abbr); // 取消
+      if (prev.length >= 2) return prev; // 最多2个
+      return [...prev, abbr];
+    });
   }, [checking, completed, selectedCN, selectedEN, toast]);
 
   // 当三个都选中后，触发检查（用 useEffect 替代 setTimeout，修复连击 bug）
+  // 消除判定：必须将英文+中文+【全部绑定的词性】全部匹配完成，才算完整消除。
+  // ① 无词性：英文+中文即可消除（selectedPOS 长度 0 即触发）
+  // ② 1个词性：英文+中文+词性
+  // ③ 2个词性：英文+中文+词性+词性2（两个词性都点完才触发）
   useEffect(() => {
-    if (!selectedCN || !selectedEN || !selectedPOS) return;
+    if (!selectedCN || !selectedEN) return;
     if (checkingRef.current) return;
-    checkingRef.current = true;
-    setChecking(true);
 
     const cnTile = cnTiles.find(t => t.id === selectedCN);
     const enTile = enTiles.find(t => t.id === selectedEN);
-    if (!cnTile || !enTile) {
-      checkingRef.current = false;
-      setChecking(false);
-      return;
-    }
+    if (!cnTile || !enTile) return;
 
     const cnWord = words.find(w => w.id === cnTile.wordId);
-    if (!cnWord) {
-      checkingRef.current = false;
-      setChecking(false);
-      return;
-    }
+    if (!cnWord) return;
 
-    // 判断：中英文是同一单词 + 词性匹配
+    // 该单词需要匹配的词性集合（归一化）
+    const requiredPOS = [
+      cnWord.part_of_speech ? normalizePOS(cnWord.part_of_speech) : null,
+      cnWord.part_of_speech_2 ? normalizePOS(cnWord.part_of_speech_2) : null,
+    ].filter(Boolean) as string[];
+    const requiredCount = requiredPOS.length;
+
+    // 已选词性数量不足，等待用户继续点击词性按钮
+    if (selectedPOS.length !== requiredCount) return;
+
+    checkingRef.current = true;
+    setChecking(true);
+
+    // 判断：中英文是同一单词 + 全部词性匹配（集合相等）
     const isSameWord = cnTile.wordId === enTile.wordId;
-    const posMatch = normalizePOS(cnWord.part_of_speech) === posButtonValue(selectedPOS);
+    const selectedSet = new Set(selectedPOS.map(posButtonValue));
+    const posMatch = requiredCount === 0
+      ? true
+      : requiredPOS.every(p => selectedSet.has(p));
     const isCorrect = isSameWord && posMatch;
+
+    // 答对/答错音效
+    if (isCorrect) playCorrect(); else playWrong();
 
     // 闪烁动画
     const flashStyle: 'correct' | 'wrong' = isCorrect ? 'correct' : 'wrong';
@@ -194,7 +243,7 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
         // 正确才清空选择状态
         setSelectedCN(null);
         setSelectedEN(null);
-        setSelectedPOS(null);
+        setSelectedPOS([]);
         checkingRef.current = false;
         setChecking(false);
       } else {
@@ -209,7 +258,7 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
         setEnTiles(prev => prev.map(t => t.id === selectedEN ? { ...t, selected: false } : t));
         setSelectedCN(null);
         setSelectedEN(null);
-        setSelectedPOS(null);
+        setSelectedPOS([]);
         checkingRef.current = false;
         setChecking(false);
       }
@@ -275,11 +324,15 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
         <h2 className="text-2xl font-bold text-slate-800 mb-3">
           {isSuccess ? '闯关成功！' : '闯关结束'}
         </h2>
-        {isSuccess && (
+        {isSuccess && (finishResult.rewardStar > 0 ? (
           <p className="text-sm text-slate-500 mb-6">
             获得 <span className="text-amber-500 font-bold">{finishResult.rewardStar}</span> 星光值
           </p>
-        )}
+        ) : (
+          <p className="text-sm text-slate-400 mb-6">
+            复习完成，已通关关卡不再发放星光值
+          </p>
+        ))}
         <div className="flex gap-3">
           <button
             onClick={onExit}
@@ -311,7 +364,7 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
 
   return (
     <div className="flex flex-col">
-      {/* 顶部信息栏：只保留返回 + 关号（去掉正确/错误计数 + 星级） */}
+      {/* 顶部信息栏：只保留返回 + 关号（去掉正确/错误计数 + 星级；静音由全局按钮控制） */}
       <div className="flex items-center justify-between mb-3 px-1">
         <button
           onClick={onExit}
@@ -334,7 +387,7 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
 
       {/* 玩法提示（顶部） */}
       <p className="text-center text-xs text-slate-500 mb-2">
-        中英文匹配，词性也要选择哦！无词性选空格
+        中英文匹配，有词性的还需点完全部词性哦！
       </p>
 
       {/* 游戏区域：绿草地背景 + 左右阵营（无中文/English 标题 bar） */}
@@ -358,7 +411,7 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
                 onClick={() => handlePOSClick(pos.abbr)}
                 className={cn(
                   'px-1 py-2 rounded-lg border-2 text-xs font-medium transition-all active:scale-95',
-                  selectedPOS === pos.abbr
+                  selectedPOS.includes(pos.abbr)
                     ? 'bg-purple-400 border-purple-600 text-white scale-105 shadow-md'
                     : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:border-purple-300',
                   !isSelectable && 'opacity-50 cursor-not-allowed',
@@ -370,6 +423,12 @@ export function GamePlayBoard({ level, words, onFinish, onNextLevel, onExit }: G
             );
           })}
         </div>
+        {/* 词性数量提示：点击英文卡片后，在词性选择区域下方显示 */}
+        {posHint && (
+          <p className="text-center text-[11px] text-slate-500 mt-1.5">
+            {posHint}（需点击对应数量词性）
+          </p>
+        )}
       </div>
     </div>
   );

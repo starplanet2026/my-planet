@@ -1,9 +1,11 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
 import { usePurchases } from '../../hooks/usePurchases';
 import { updateMember } from '../../api/members';
+import { fetchAssetLogs, clearAssetLogs, type BalanceType } from '../../api/coins';
+import { replyMessage } from '../../api/coins';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Textarea } from '../../components/common/Input';
@@ -11,8 +13,8 @@ import { Loading } from '../../components/common/Loading';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useToastStore } from '../../store/toastStore';
-import { formatCoins, formatSignedCoins, formatDate, isExpired, timeAgo } from '../../lib/utils';
-import { MessageSquare, ChevronDown, Pencil, CornerDownRight, Upload } from 'lucide-react';
+import { formatCoins, formatDate, isExpired, timeAgo } from '../../lib/utils';
+import { MessageSquare, ChevronDown, Pencil, CornerDownRight, Upload, Trash2 } from 'lucide-react';
 import { CHILD_EMOJIS, PURCHASE_STATUS_LABELS, COIN_ICON_SM, STAR_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { CoinRecord, Purchase } from '../../api/types';
@@ -36,8 +38,72 @@ export function ProfilePage() {
   const child = members.find(m => m.id === currentChildId && m.role === 'child')
     ?? members.find(m => m.role === 'child');
 
-  const { records, loading: recordsLoading, replyMessage, refresh: refreshRecords } = useCoinRecords();
+  const { refresh: refreshRecords } = useCoinRecords();
   const { purchases, loading: purchasesLoading, redeemPurchase, sellPurchase } = usePurchases();
+
+  // 资产明细日志：星光 / 金币 切换 + 分页
+  const [assetTab, setAssetTab] = useState<BalanceType>('coin');
+  const [assetLogs, setAssetLogs] = useState<CoinRecord[]>([]);
+  const [assetLogsLoading, setAssetLogsLoading] = useState(false);
+  const [assetLoadingMore, setAssetLoadingMore] = useState(false);
+  const [assetOffset, setAssetOffset] = useState(0);
+  const [hasMoreAsset, setHasMoreAsset] = useState(true);
+  const ASSET_PAGE_SIZE = 20;
+
+  const loadAssetLogs = useCallback(async (tab: BalanceType, offset = 0) => {
+    if (!child) return;
+    const isFirst = offset === 0;
+    if (isFirst) setAssetLogsLoading(true); else setAssetLoadingMore(true);
+    try {
+      const data = await fetchAssetLogs(child.id, tab, ASSET_PAGE_SIZE, offset);
+      if (offset === 0) {
+        setAssetLogs(data);
+      } else {
+        setAssetLogs(prev => [...prev, ...data]);
+      }
+      setAssetOffset(offset + data.length);
+      setHasMoreAsset(data.length >= ASSET_PAGE_SIZE);
+    } catch {
+      if (offset === 0) setAssetLogs([]);
+      setHasMoreAsset(false);
+    } finally {
+      setAssetLogsLoading(false);
+      setAssetLoadingMore(false);
+    }
+  }, [child?.id]);
+
+  const handleClearAssetLogs = async () => {
+    if (!child) return;
+    try {
+      await clearAssetLogs(child.id, assetTab);
+      setAssetLogs([]);
+      setAssetOffset(0);
+      setHasMoreAsset(false);
+      toast.success('已清空');
+    } catch (e: any) {
+      toast.error(e?.message ?? '清空失败');
+    }
+  };
+
+  // 切换 tab 时重新加载
+  const switchAssetTab = (tab: BalanceType) => {
+    if (tab === assetTab) return;
+    setAssetTab(tab);
+    setAssetLogs([]);
+    setAssetOffset(0);
+    setHasMoreAsset(true);
+    loadAssetLogs(tab, 0);
+  };
+
+  // 首次展开时加载
+  const [assetLogsLoaded, setAssetLogsLoaded] = useState(false);
+  const toggleRecords = () => {
+    if (!showRecords && !assetLogsLoaded) {
+      setAssetLogsLoaded(true);
+      loadAssetLogs(assetTab, 0);
+    }
+    setShowRecords(v => !v);
+  };
 
   // 编辑名字和头像
   const [editing, setEditing] = useState(false);
@@ -117,14 +183,6 @@ export function ProfilePage() {
   );
   const pendingPurchases = myPurchases.filter(p => p.status === 'pending');
   const usedPurchases = myPurchases.filter(p => p.status === 'redeemed' || p.status === 'sold');
-
-  // 消息：当前孩子
-  const myRecords = useMemo(() => {
-    if (!child) return [];
-    return records
-      .filter(r => r.member_id === child.id)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [records, child]);
 
   const handleReply = async () => {
     if (!replyTarget) return;
@@ -328,82 +386,133 @@ export function ProfilePage() {
         )}
       </div>
 
-      {/* 消息：点击展开 */}
+      {/* 资产明细：点击展开 + 星光/金币 切换 */}
       <div>
         <button
-          onClick={() => setShowRecords(v => !v)}
+          onClick={toggleRecords}
           className="w-full flex items-center justify-between px-1 py-2"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-slate-500">
-            <MessageSquare className="w-4 h-4" /> 消息
-            <span className="text-xs text-slate-400">({myRecords.length})</span>
+            <MessageSquare className="w-4 h-4" /> 资产明细
           </span>
           <ChevronDown className={cn('w-4 h-4 text-slate-400 transition-transform', showRecords && 'rotate-180')} />
         </button>
 
         {showRecords && (
-          recordsLoading && myRecords.length === 0 ? (
-            <Loading />
-          ) : myRecords.length === 0 ? (
-            <EmptyState icon="📬" title="暂无消息" description="完成任务后这里会有消息" />
-          ) : (
-            <div className="space-y-2 mt-2">
-              {myRecords.slice(0, 50).map(record => {
-                const isReject = record.category === 'task_reject';
-                const isManual = record.category === 'manual_adjust';
-                const isTask = record.category === 'task';
-                return (
-                  <Card key={record.id} className={cn(
-                    'p-3',
-                    isReject && 'border-amber-200 bg-amber-50/30',
-                    isManual && 'border-purple-200 bg-purple-50/30',
-                  )}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          {isReject && <span className="text-xs">⚠️</span>}
-                          {isManual && <span className="text-xs">✋</span>}
-                          {isTask && <span className="text-xs">⭐</span>}
-                          {record.category === 'purchase' && <span className="text-xs">🎴</span>}
-                          <p className="text-sm font-medium truncate">{record.reason}</p>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">{timeAgo(record.created_at)}</p>
-                        {record.message && (
-                          <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 rounded-lg p-2">
-                            家长留言：{record.message}
-                          </p>
-                        )}
-                        {record.reply && (
-                          <p className="text-xs text-blue-500 mt-1.5 bg-blue-50 rounded-lg p-2 flex items-center gap-1">
-                            <CornerDownRight className="w-3 h-3" />
-                            我的回复：{record.reply}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        {record.amount !== 0 && (
-                          <span className={cn(
-                            'font-bold tabular-nums',
-                            record.amount >= 0 ? 'text-emerald-500' : 'text-red-500'
-                          )}>
-                            {formatSignedCoins(record.amount)}
-                          </span>
-                        )}
-                        {isReject && !record.reply && (
-                          <button
-                            onClick={() => { setReplyTarget(record); setReplyText(''); }}
-                            className="text-xs text-blue-400 hover:text-blue-600"
-                          >
-                            回复
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
+          <div className="mt-2">
+            {/* 分类切换 */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => switchAssetTab('coin')}
+                  className={cn(
+                    'px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1',
+                    assetTab === 'coin' ? 'bg-white text-amber-500 shadow-sm' : 'text-slate-400'
+                  )}
+                >
+                  <img src={COIN_ICON_SM} alt="" className="w-3.5 h-3.5 object-contain" /> 金币
+                </button>
+                <button
+                  onClick={() => switchAssetTab('star')}
+                  className={cn(
+                    'px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1',
+                    assetTab === 'star' ? 'bg-white text-star-500 shadow-sm' : 'text-slate-400'
+                  )}
+                >
+                  <img src={STAR_ICON_SM} alt="" className="w-3.5 h-3.5 object-contain" /> 星光值
+                </button>
+              </div>
+              {assetLogs.length > 0 && (
+                <button
+                  onClick={handleClearAssetLogs}
+                  className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" /> 清空
+                </button>
+              )}
             </div>
-          )
+
+            {assetLogsLoading && assetLogs.length === 0 ? (
+              <Loading />
+            ) : assetLogs.length === 0 ? (
+              <EmptyState icon="📬" title="暂无记录" description="完成任务后这里会有流水" />
+            ) : (
+              <div className="space-y-2">
+                {assetLogs.map(record => {
+                  const isReject = record.category === 'task_reject';
+                  const isManual = record.category === 'manual_adjust';
+                  const isTask = record.category === 'task';
+                  const positive = record.amount >= 0;
+                  return (
+                    <Card key={record.id} className={cn(
+                      'p-3',
+                      isReject && 'border-amber-200 bg-amber-50/30',
+                      isManual && 'border-purple-200 bg-purple-50/30',
+                    )}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            {isReject && <span className="text-xs">⚠️</span>}
+                            {isManual && <span className="text-xs">✋</span>}
+                            {isTask && <span className="text-xs">⭐</span>}
+                            {record.category === 'purchase' && <span className="text-xs">🎴</span>}
+                            {record.category === 'upgrade' && <span className="text-xs">⬆️</span>}
+                            {record.category === 'evolve' && <span className="text-xs">✨</span>}
+                            {record.category === 'boarding' && <span className="text-xs">🏠</span>}
+                            {record.category === 'study' && <span className="text-xs">📚</span>}
+                            {record.category === 'challenge' && <span className="text-xs">🧠</span>}
+                            <p className="text-sm font-medium truncate">{record.reason}</p>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">{timeAgo(record.created_at)}</p>
+                          {record.message && (
+                            <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 rounded-lg p-2">
+                              家长留言：{record.message}
+                            </p>
+                          )}
+                          {record.reply && (
+                            <p className="text-xs text-blue-500 mt-1.5 bg-blue-50 rounded-lg p-2 flex items-center gap-1">
+                              <CornerDownRight className="w-3 h-3" />
+                              我的回复：{record.reply}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          {record.amount !== 0 && (
+                            <span className={cn(
+                              'font-bold tabular-nums',
+                              positive ? 'text-emerald-500' : 'text-red-500'
+                            )}>
+                              {positive ? '+' : ''}{record.amount}
+                              <span className="text-[10px] ml-0.5">{assetTab === 'coin' ? '金币' : '星光'}</span>
+                            </span>
+                          )}
+                          {isReject && !record.reply && (
+                            <button
+                              onClick={() => { setReplyTarget(record); setReplyText(''); }}
+                              className="text-xs text-blue-400 hover:text-blue-600"
+                            >
+                              回复
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+
+                {/* 加载更多 */}
+                {hasMoreAsset && (
+                  <button
+                    onClick={() => loadAssetLogs(assetTab, assetOffset)}
+                    disabled={assetLoadingMore}
+                    className="w-full py-2 text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    {assetLoadingMore ? '加载中...' : '加载更多'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
