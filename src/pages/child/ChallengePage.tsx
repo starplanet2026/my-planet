@@ -127,8 +127,15 @@ export function ChallengePage() {
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchChallengeBoards(child.id);
+        const [data, dictTasks] = await Promise.all([
+          fetchChallengeBoards(child.id),
+          listDictationTasks(child.id).catch(() => []),
+        ]);
         setBoards(data);
+        // 仅 status=active 的家默任务才在前台展示入口
+        const activeSubjects = new Set<string>();
+        dictTasks.filter(t => t.status === 'active').forEach(t => activeSubjects.add(t.subject));
+        setActiveDictationSubjects(activeSubjects);
       } catch (e) {
         // 迁移未执行时回退到旧逻辑
         const sets = await fetchChallengeSets();
@@ -355,6 +362,7 @@ export function ChallengePage() {
                 sets={sets}
                 standaloneLevels={board?.levels ?? []}
                 childId={child?.id ?? ''}
+                activeDictationSubjects={activeDictationSubjects}
                 onSelectSet={(s) => {
                   // 清除旧快照，进入新题集
                   setSnapshot(null);
