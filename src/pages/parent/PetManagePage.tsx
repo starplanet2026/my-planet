@@ -7,6 +7,7 @@ import { Input, Textarea } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
+import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
@@ -686,7 +687,7 @@ function UserDataTab({
                   : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
               )}
             >
-              {c.avatar_emoji} {c.name}
+              <Avatar emoji={c.avatar_emoji} size="sm" /> {c.name}
             </button>
           ))}
         </div>
@@ -1163,7 +1164,7 @@ function WordManageTab() {
                           : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
                       }`}
                     >
-                      {c.avatar_emoji} {c.name}
+                      <Avatar emoji={c.avatar_emoji} size="sm" /> {c.name}
                     </button>
                   ))}
                 </div>
