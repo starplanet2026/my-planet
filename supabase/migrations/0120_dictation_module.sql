@@ -1,5 +1,10 @@
 -- ====== 家默模块：词条库、错词库、任务、记录 + 星光值RPC + 艾宾浩斯RPC ======
 
+-- 0. 扩展 coin_records.category 约束，允许家默流水分类
+alter table public.coin_records drop constraint if exists coin_records_category_check;
+alter table public.coin_records add constraint coin_records_category_check
+  check (category in ('task','purchase','manual','system','task_reject','manual_adjust','challenge','shop','boarding','evolve','study','upgrade','dictation'));
+
 -- 1. 长期词条库（按 family_id 隔离）
 create table if not exists public.dictation_words (
   id uuid primary key default gen_random_uuid(),
