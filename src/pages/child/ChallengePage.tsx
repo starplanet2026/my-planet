@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useChallengeUiStore } from '../../store/challengeUiStore';
@@ -432,6 +433,27 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
 
       {/* 题集卡片网格 */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+        {/* 家默入口卡片（仅今日复习板块显示，置于最前） */}
+        {boardType === 'today_review' && (
+          <>
+            <div
+              onClick={() => navigate('/challenge/dictation/english')}
+              className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+            >
+              <span className="text-3xl mb-1">📝</span>
+              <span className="text-sm font-bold">英语家默</span>
+              <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+            </div>
+            <div
+              onClick={() => navigate('/challenge/dictation/chinese')}
+              className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+            >
+              <span className="text-3xl mb-1">✍️</span>
+              <span className="text-sm font-bold">语文家默</span>
+              <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+            </div>
+          </>
+        )}
         {/* 错题混战池入口（仅错题大混战板块显示） */}
         {boardType === 'wrong_battle' && (
           <div
