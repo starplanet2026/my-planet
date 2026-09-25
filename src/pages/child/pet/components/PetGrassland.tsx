@@ -487,7 +487,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
                 )}
                 {/* 会话框：宠物头部右侧，内外层常驻显示（全局右侧偏移25px） */}
                 {petMessage(pet) && (
-                  <div className="absolute top-0 left-full -ml-[25px]">
+                  <div className="absolute top-[25px] left-full -ml-[25px]">
                     {collapsedChats.has(pet.id) ? (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
