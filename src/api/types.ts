@@ -804,3 +804,105 @@ export interface ClaimStudyResult {
   total_claimed: number;
   new_star: number;
 }
+
+// ==================== 家默模块类型 ====================
+export type DictationSubject = 'english' | 'chinese';
+
+export interface DictationWord {
+  id: string;
+  family_id: string;
+  subject: DictationSubject;
+  textbook_name: string;
+  unit_no: number;
+  unit_name: string;
+  page_no: number | null;
+  chinese_meaning: string | null;
+  part_of_speech: string | null;
+  pinyin: string | null;
+  answer: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DictationErrorStatus = 'in_progress' | 'completed';
+
+export interface DictationErrorWord {
+  id: string;
+  member_id: string;
+  subject: DictationSubject;
+  word_id: string | null;
+  textbook_name: string;
+  unit_no: number;
+  unit_name: string;
+  page_no: number | null;
+  chinese_meaning: string | null;
+  part_of_speech: string | null;
+  pinyin: string | null;
+  answer: string;
+  cycle_start_date: string;
+  current_node: number;
+  next_review_date: string;
+  status: DictationErrorStatus;
+  last_review_date: string | null;
+  review_history: Array<{ date: string; correct: boolean; action: string }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DictationTaskStatus = 'active' | 'completed';
+
+export interface DictationTask {
+  id: string;
+  family_id: string;
+  member_id: string;
+  subject: DictationSubject;
+  title: string;
+  task_date: string | null;
+  star_per_word: number;
+  status: DictationTaskStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DictationTaskWord {
+  id: string;
+  task_id: string;
+  word_id: string | null;
+  error_word_id: string | null;
+  textbook_name: string;
+  unit_no: number;
+  unit_name: string;
+  page_no: number | null;
+  chinese_meaning: string | null;
+  part_of_speech: string | null;
+  pinyin: string | null;
+  answer: string;
+  is_temporary: boolean;
+  save_to_library: boolean;
+  created_at: string;
+}
+
+export interface DictationRecord {
+  id: string;
+  task_id: string;
+  member_id: string;
+  subject: DictationSubject;
+  word_text: string;
+  answer: string;
+  is_correct: boolean;
+  created_at: string;
+}
+
+export interface GrantDictationResult {
+  success: boolean;
+  message: string;
+  total_star: number;
+  new_star: number;
+}
+
+export interface SubmitDictationResult {
+  success: boolean;
+  message: string;
+  correct_count: number;
+  error_count: number;
+}
