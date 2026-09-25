@@ -56,11 +56,6 @@ function coalesce0(v: number | null | undefined): number {
   return typeof v === 'number' ? v : 0;
 }
 
-// 心情表情
-function moodEmoji(pet: Pet): string {
-  return moodState(pet).emoji;
-}
-
 // 对话框文案
 function petMessage(pet: Pet): string | null {
   return moodState(pet).text;
