@@ -93,11 +93,15 @@ export async function batchDeletePetShopItems(ids: string[]): Promise<void> {
 export async function fetchPets(memberId: string): Promise<Pet[]> {
   const { data, error } = await supabase
     .from('pets')
-    .select('*')
+    .select('*, pet_shop_items(image_url)')
     .eq('member_id', memberId)
     .order('created_at');
   if (error) throw error;
-  return (data ?? []) as Pet[];
+  // 家长更新商店形象图后，已购宠物应同步展示最新图片
+  return ((data ?? []) as any[]).map(p => ({
+    ...p,
+    image_url: p.pet_shop_items?.image_url ?? p.image_url,
+  })) as Pet[];
 }
 
 // 查询家庭所有宠物（后台管理用）
