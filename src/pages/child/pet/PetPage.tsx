@@ -234,6 +234,10 @@ export function PetPage() {
       } catch (checkErr: any) {
         console.error('[PetPage] checkPet failed, using raw data:', checkErr);
       }
+      // check_pet RPC 返回的是 pets 表自身的 image_url（旧快照），
+      // 用 fetchPets 关联到的商店最新形象图覆盖，保证家长改图后已购宠物同步更新
+      const shopImageById = new Map(petsData.map(p => [p.id, p.image_url]));
+      checked = checked.map(p => ({ ...p, image_url: shopImageById.get(p.id) ?? p.image_url }));
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
@@ -257,6 +261,8 @@ export function PetPage() {
       } catch {
         // fall back to raw data
       }
+      const shopImageById = new Map(petsData.map(p => [p.id, p.image_url]));
+      checked = checked.map(p => ({ ...p, image_url: shopImageById.get(p.id) ?? p.image_url }));
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
@@ -302,7 +308,7 @@ export function PetPage() {
         dogHouse={dogHouse}
         onPetClick={(pet) => setActivePet(pet)}
         bgImage={bgImage}
-        onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? updated : p))}
+        onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
         positionResetPetId={positionResetPetId}
         onPositionResetDone={() => setPositionResetPetId(null)}
       />
