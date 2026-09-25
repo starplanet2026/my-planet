@@ -438,34 +438,6 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
               onPointerDown={(e) => onPointerDown(e, pet.id)}
               className="flex flex-col items-center cursor-pointer select-none relative"
             >
-              {/* 默认态第一行：心情表情 + 对话框（居中排列） */}
-              {!isInteracting && (
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="text-2xl drop-shadow-sm">{moodEmoji(pet)}</span>
-                  {petMessage(pet) && (
-                    collapsedChats.has(pet.id) ? (
-                      <button
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
-                        className="text-lg drop-shadow-md hover:scale-110 transition-transform"
-                      >
-                        💬
-                      </button>
-                    ) : (
-                      <div
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
-                        className="max-w-[90px] cursor-pointer relative"
-                      >
-                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[9px] text-slate-600 leading-tight border border-slate-100">
-                          {petMessage(pet)}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-
               {/* 信息板块（内外层页面完全一致） */}
               <div className="mb-1 flex flex-col items-center gap-0.5">
                 {/* 上一行：等级数字（左）+ 经验条（缩短）+ 经验数值 */}
