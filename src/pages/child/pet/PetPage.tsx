@@ -7,7 +7,7 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages } from '../../../api/pets';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, runBoardingCare } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
 import { expNeeded, TRAIT_DESC } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
@@ -75,16 +75,40 @@ export function PetPage() {
   // 进修宠物列表（我的宠物店弹窗）
   const [studyPets, setStudyPets] = useState<StudyPet[]>([]);
   const [studyLoading, setStudyLoading] = useState(false);
-  // 隐藏的宠物 ID 集合（"回家"的宠物）；从 localStorage 恢复
+  // 隐藏的宠物 ID 集合（"回家"的宠物）；按用户独立存储，切换用户不互相覆盖
+  const hiddenIdsKey = `pet-hidden-ids-${currentChildId ?? ''}`;
   const [hiddenPetIds, setHiddenPetIds] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem('pet-hidden-ids');
+      const saved = localStorage.getItem(hiddenIdsKey);
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
 
   // 出来玩时重置位置的信号（传递给 PetGrassland）
   const [positionResetPetId, setPositionResetPetId] = useState<string | null>(null);
+
+  // 新登录初始化：用户首次进入时，所有宠物默认"回家"（隐藏），不渲染到页面
+  // 仅在用户无历史 hidden 记录时触发一次，避免覆盖已"出来玩"的宠物
+  const initKey = `pet-hidden-initialized-${currentChildId ?? ''}`;
+  useEffect(() => {
+    if (!child || pets.length === 0) return;
+    if (localStorage.getItem(initKey)) return;
+    // 首次登录：全部宠物标记为隐藏
+    const allHidden = new Set(pets.map(p => p.id));
+    localStorage.setItem(initKey, '1');
+    localStorage.setItem(hiddenIdsKey, JSON.stringify([...allHidden]));
+    setHiddenPetIds(allHidden);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child, pets.length]);
+
+  // 切换用户时重新读取对应用户的 hidden 集合
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(hiddenIdsKey);
+      setHiddenPetIds(saved ? new Set(JSON.parse(saved)) : new Set());
+    } catch { setHiddenPetIds(new Set()); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChildId]);
 
   // 切换宠物"出来玩/回家"
   const togglePetVisible = (petId: string) => {
@@ -93,7 +117,7 @@ export function PetPage() {
       const next = new Set(prev);
       if (next.has(petId)) next.delete(petId);
       else next.add(petId);
-      localStorage.setItem('pet-hidden-ids', JSON.stringify([...next]));
+      localStorage.setItem(hiddenIdsKey, JSON.stringify([...next]));
       return next;
     });
     // 出来玩：重置宠物位置到底部菜单栏上方居中
@@ -222,6 +246,9 @@ export function PetPage() {
     if (!child) return;
     setLoading(true);
     try {
+      // 懒加载兜底：每次进入宠物页触发当日托管结算（cron 每日0点也会执行）
+      // 函数对当日已结算宠物幂等跳过，不会重复发属性/经验
+      try { await runBoardingCare(child.id); } catch { /* 静默：不影响页面加载 */ }
       const [petsData, houseData] = await Promise.all([
         fetchPets(child.id),
         getDogHouse(child.id),

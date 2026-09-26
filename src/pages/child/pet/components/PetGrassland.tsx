@@ -106,6 +106,40 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     try { return JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { return {}; }
   });
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
+  // 宠物图层顺序：数组末尾 = 最上层。双击宠物将其置顶。
+  // 按用户独立存储，切换用户不互相覆盖
+  const layerOrderKey = `pet-layer-order-${childId}`;
+  const [layerOrder, setLayerOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(layerOrderKey) || '[]'); } catch { return []; }
+  });
+
+  // 切换用户时重新读取对应用户的图层顺序
+  useEffect(() => {
+    try { setLayerOrder(JSON.parse(localStorage.getItem(layerOrderKey) || '[]')); } catch { setLayerOrder([]); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childId]);
+
+  // 持久化图层顺序
+  useEffect(() => {
+    localStorage.setItem(layerOrderKey, JSON.stringify(layerOrder));
+  }, [layerOrder, layerOrderKey]);
+
+  // 双击宠物：将其置顶（移到数组末尾 = 最高 z-index）
+  const bringToFront = (petId: string) => {
+    setLayerOrder(prev => {
+      const filtered = prev.filter(id => id !== petId);
+      filtered.push(petId);
+      return filtered;
+    });
+    playPetClick();
+  };
+
+  // 计算某只宠物的 z-index：数组末尾 = 最上层
+  const petZIndex = (petId: string) => {
+    const idx = layerOrder.indexOf(petId);
+    if (idx === -1) return 10; // 未排序的宠物默认 z-10
+    return 10 + idx;
+  };
 
   // 初始化宠物状态：直接使用 props 数据
   useEffect(() => {
@@ -363,8 +397,9 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
         return (
           <div
             key={pet.id}
-            className="absolute z-10 flex flex-col items-center"
-            style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none' }}
+            className="absolute flex flex-col items-center"
+            style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none', zIndex: petZIndex(pet.id) }}
+            onDoubleClick={(e) => { e.stopPropagation(); bringToFront(pet.id); }}
           >
             {/* 升级挑战悬浮按钮：经验满 + 未满级时显示 */}
             {(pet.pending_levelup || pet.exp >= expNeeded(pet.level, pet.rarity as PetRarity)) && pet.level < pet.max_level && (

@@ -73,26 +73,28 @@ export function PetBoardingModal({ onClose, onBoarded }: {
     }
   };
 
-  // 单只宠物开启托管：点击即保存到后端
-  const handleEnableBoarding = async (petId: string) => {
+  // 切换宠物托管状态：开启/取消，点击即保存到后端
+  const handleToggleBoarding = async (petId: string) => {
     if (!status?.has_active_card) {
       toast.warning('请先购买托管卡');
       return;
     }
     const nextIds = new Set(selectedIds);
-    nextIds.add(petId);
+    const willEnable = !nextIds.has(petId);
+    if (willEnable) nextIds.add(petId);
+    else nextIds.delete(petId);
     setActing(petId);
     try {
       const result = await setBoardingSelection(childId, [...nextIds]);
       if (result.success) {
         setSelectedIds(nextIds);
-        toast.success(`${result.message || '已开启托管'}`);
+        toast.success(willEnable ? (result.message || '已开启托管') : '已取消托管');
         onBoarded();
       } else {
-        toast.error(result.message || '开启托管失败');
+        toast.error(result.message || '操作失败');
       }
     } catch (e: any) {
-      toast.error(e?.message ?? '开启托管失败');
+      toast.error(e?.message ?? '操作失败');
     } finally {
       setActing(null);
     }
@@ -182,22 +184,22 @@ export function PetBoardingModal({ onClose, onBoarded }: {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-700 truncate">{pet.name}</p>
                       <p className="text-[10px] text-slate-400">
-                        {boarded ? '✅ 今日已托管' : sick ? '🤒 生病中，无法托管' : `Lv.${pet.level} · ${pet.base_coin_per_day || 0}💰/天`}
+                        {boarded ? '✅ 今日已托管' : sick ? '🤒 生病中，无法托管' : selected ? `Lv.${pet.level} · 🏠 托管中` : `Lv.${pet.level} · ${pet.base_coin_per_day || 0}💰/天`}
                       </p>
                     </div>
                     <button
-                      onClick={() => !selected && !sick && !isActing && handleEnableBoarding(pet.id)}
-                      disabled={selected || sick || isActing}
+                      onClick={() => !sick && !isActing && handleToggleBoarding(pet.id)}
+                      disabled={sick || isActing}
                       className={cn(
                         'flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95',
                         selected
-                          ? 'bg-indigo-500 text-white cursor-default'
+                          ? 'bg-indigo-500 text-white hover:bg-indigo-600'
                           : sick
                             ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             : 'bg-amber-400 text-white hover:bg-amber-500 disabled:opacity-50'
                       )}
                     >
-                      {isActing ? '处理中…' : selected ? '托管中' : '托管'}
+                      {isActing ? '处理中…' : selected ? '取消托管' : '托管'}
                     </button>
                   </div>
                 );
