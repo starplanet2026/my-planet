@@ -4,6 +4,11 @@
 -- 逻辑：找到近2天 coin_records 中 category='task' 且 balance_type='coin' 的记录，
 --       按用户汇总金额，从 coin_balance 扣除、补入 star_value，并写入修正流水。
 
+-- 扩展 coin_records.category 约束，增加 'correction'
+alter table public.coin_records drop constraint if exists coin_records_category_check;
+alter table public.coin_records add constraint coin_records_category_check
+  check (category in ('task','purchase','manual','system','task_reject','manual_adjust','challenge','shop','boarding','evolve','study','upgrade','dictation','correction'));
+
 DO $$
 declare
   v_rec record;
