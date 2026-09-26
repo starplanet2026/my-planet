@@ -15,14 +15,14 @@ const ACTION_SUBCAT: Record<string, PetSubcategory> = {
 };
 
 const SECTIONS = [
-  { key: 'feed', stat: 'hunger' as const, label: '体力', icon: '🍖', color: 'bg-orange-400', btnLabel: '喂食', btnColor: 'bg-orange-100 hover:bg-orange-200 text-orange-600' },
-  { key: 'clean', stat: 'clean' as const, label: '清洁', icon: '🧼', color: 'bg-sky-400', btnLabel: '清洁', btnColor: 'bg-sky-100 hover:bg-sky-200 text-sky-600' },
-  { key: 'play', stat: 'happiness' as const, label: '心情', icon: '💖', color: 'bg-pink-400', btnLabel: '玩耍', btnColor: 'bg-pink-100 hover:bg-pink-200 text-pink-600' },
-  { key: 'heal', stat: 'health' as const, label: '健康', icon: '💊', color: 'bg-emerald-400', btnLabel: '就医', btnColor: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600' },
+  { key: 'feed', stat: 'hunger' as const, max: 100, label: '体力', icon: '🍖', color: 'bg-orange-400', btnLabel: '喂食', btnColor: 'bg-orange-100 hover:bg-orange-200 text-orange-600' },
+  { key: 'clean', stat: 'clean' as const, max: 100, label: '清洁', icon: '🧼', color: 'bg-sky-400', btnLabel: '清洁', btnColor: 'bg-sky-100 hover:bg-sky-200 text-sky-600' },
+  { key: 'play', stat: 'happiness' as const, max: 300, label: '心情', icon: '💖', color: 'bg-pink-400', btnLabel: '玩耍', btnColor: 'bg-pink-100 hover:bg-pink-200 text-pink-600' },
+  { key: 'heal', stat: 'health' as const, max: 100, label: '健康', icon: '💊', color: 'bg-emerald-400', btnLabel: '就医', btnColor: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600' },
 ] as const;
 
-function StatBar({ value, color }: { value: number; color: string }) {
-  const pct = Math.max(0, Math.min(100, value));
+function StatBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const barColor = pct > 60 ? color : pct > 30 ? 'bg-yellow-400' : 'bg-red-400';
   return (
     <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
@@ -176,7 +176,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
             const disabled = !!acting
               || (section.key === 'heal' && !currentPet.has_stomach_issue && !currentPet.has_skin_issue)
               || (section.key === 'heal' && isSevere);
-            const playDisabled = section.key === 'play' && (currentPet.happiness_rounds || 0) >= 3;
+            const playDisabled = section.key === 'play' && statValue >= section.max;
             return (
               <div
                 key={section.key}
@@ -199,7 +199,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
                   <span className="text-xs font-bold text-slate-500">{Math.round(statValue)}</span>
                 </div>
                 {/* 血条 */}
-                <StatBar value={statValue} color={section.color} />
+                <StatBar value={statValue} max={section.max} color={section.color} />
                 {/* 按钮 */}
                 <button
                   onClick={() => handleInteract(section.key)}
@@ -221,7 +221,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
 
         {/* 心情提示 */}
         <p className="text-[10px] text-slate-400 text-center">
-          和小狗玩耍填满心情条，+10经验。心情每1小时重置，一天最多可玩耍3轮。
+          和小狗玩耍填满心情条（上限300），满额+10经验。托管可一次性补满心情至300，+30经验。
         </p>
 
         {/* 领取金币 */}

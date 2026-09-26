@@ -63,10 +63,10 @@ function petMessage(pet: Pet): string | null {
 
 // 互动按钮配置
 const ACTIONS = [
-  { key: 'feed', label: '喂食', statLabel: '体力值', icon: '🍖', stat: 'hunger' as const, barColor: 'bg-orange-400', btnColor: 'bg-orange-100 hover:bg-orange-200 text-orange-600' },
-  { key: 'clean', label: '清洁', statLabel: '清洁度', icon: '🧼', stat: 'clean' as const, barColor: 'bg-sky-400', btnColor: 'bg-sky-100 hover:bg-sky-200 text-sky-600' },
-  { key: 'play', label: '玩耍', statLabel: '心情值', icon: '🎾', stat: 'happiness' as const, barColor: 'bg-pink-400', btnColor: 'bg-pink-100 hover:bg-pink-200 text-pink-600' },
-  { key: 'heal', label: '就医', statLabel: '健康度', icon: '💊', stat: 'health' as const, barColor: 'bg-emerald-400', btnColor: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600' },
+  { key: 'feed', label: '喂食', statLabel: '体力值', icon: '🍖', stat: 'hunger' as const, max: 100, barColor: 'bg-orange-400', btnColor: 'bg-orange-100 hover:bg-orange-200 text-orange-600' },
+  { key: 'clean', label: '清洁', statLabel: '清洁度', icon: '🧼', stat: 'clean' as const, max: 100, barColor: 'bg-sky-400', btnColor: 'bg-sky-100 hover:bg-sky-200 text-sky-600' },
+  { key: 'play', label: '玩耍', statLabel: '心情值', icon: '🎾', stat: 'happiness' as const, max: 300, barColor: 'bg-pink-400', btnColor: 'bg-pink-100 hover:bg-pink-200 text-pink-600' },
+  { key: 'heal', label: '就医', statLabel: '健康度', icon: '💊', stat: 'health' as const, max: 100, barColor: 'bg-emerald-400', btnColor: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600' },
 ] as const;
 
 const ACTION_SUBCAT: Record<string, PetSubcategory> = {
@@ -226,7 +226,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     if (actionCfg) {
       const statVal = pet[actionCfg.stat] ?? 0;
       console.log('[handleInteract]', { action, petId, petName: pet.name, stat: actionCfg.stat, statVal });
-      if (statVal >= 100) {
+      if (statVal >= actionCfg.max) {
         const fullMsg: Record<string, string> = {
           feed: '我已经饱啦 🍖',
           clean: '我很干净啦 🧼',
@@ -419,7 +419,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
                   const item = getItem(action.key);
                   const disabled = !!acting || (action.key === 'heal' && !pet.is_sick);
                   const statVal = pet[action.stat];
-                  const pct = Math.max(0, Math.min(100, statVal));
+                  const pct = Math.max(0, Math.min(100, (statVal / action.max) * 100));
                   const barColor = pct > 60 ? action.barColor : pct > 30 ? 'bg-yellow-400' : 'bg-red-400';
                   return (
                     <div key={action.key} className="flex flex-col items-center gap-1 w-[52px]">
