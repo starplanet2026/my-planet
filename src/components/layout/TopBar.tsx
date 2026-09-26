@@ -35,6 +35,9 @@ export function TopBar() {
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showTodayCompleted, setShowTodayCompleted] = useState(false);
   const [showTodayAnswerRecords, setShowTodayAnswerRecords] = useState(false);
+  // 面板时间范围：今日 / 近30天
+  const [completedRange, setCompletedRange] = useState<'today' | '30days'>('today');
+  const [answerRange, setAnswerRange] = useState<'today' | '30days'>('today');
   // TopBar 专用的轻量数据（不走 useRealtimeTable 避免频道冲突）
   const [todayCompleted, setTodayCompleted] = useState<Task[]>([]);
   const [backpackCount, setBackpackCount] = useState(0);
@@ -69,14 +72,15 @@ export function TopBar() {
     let cancelled = false;
     (async () => {
       try {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        const start = completedRange === 'today' ? (() => {
+          const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+        })() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const { data } = await supabase
           .from('tasks')
           .select('*')
           .eq('family_id', familyId)
           .not('completed_at', 'is', null)
-          .gte('completed_at', startOfDay.toISOString())
+          .gte('completed_at', start.toISOString())
           .order('completed_at', { ascending: false });
         if (!cancelled) setTodayCompleted((data as Task[]) ?? []);
       } catch {
@@ -84,7 +88,7 @@ export function TopBar() {
       }
     })();
     return () => { cancelled = true; };
-  }, [familyId, currentChild?.id, isTasksPage]);
+  }, [familyId, currentChild, isTasksPage, completedRange]);
 
   useEffect(() => {
     if (!familyId || !currentChild) {
@@ -112,7 +116,8 @@ export function TopBar() {
     return () => { cancelled = true; };
   }, [familyId, currentChild, isShopPage]);
 
-  // 智慧星战页面：查询今日答题数（答题记录 + 默写记录，剔除已删除题集）
+  // 智慧星战页面：查询答题数（答题记录 + 默写记录），支持今日/近30天
+  // 统计范围：全部答题入口（含错题混战、宠物升级挑战）+ 默写入口，后续新增入口自动纳入
   useEffect(() => {
     if (!currentChild || !isChallengePage) {
       setTodayAnswerCount(0);
@@ -121,16 +126,15 @@ export function TopBar() {
     let cancelled = false;
     (async () => {
       try {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const startISO = startOfDay.toISOString();
-        // 答题记录：剔除 challenge_set_id 为 null（题集已删除）的记录
+        const start = answerRange === 'today' ? (() => {
+          const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+        })() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const startISO = start.toISOString();
         const [{ count: qCount }, { count: dCount }] = await Promise.all([
           supabase
             .from('question_records')
             .select('*', { count: 'exact', head: true })
             .eq('member_id', currentChild.id)
-            .not('challenge_set_id', 'is', null)
             .gte('answered_at', startISO),
           supabase
             .from('dictation_records')
@@ -144,11 +148,13 @@ export function TopBar() {
       }
     })();
     return () => { cancelled = true; };
-  }, [currentChild?.id, isChallengePage]);
+  }, [currentChild?.id, isChallengePage, answerRange]);
 
-  // 打开答题记录弹窗时：加载今日答题记录，按来源（题集/默写任务）分组
-  // 统计范围：智慧星战下全部答题入口（question_records）+ 默写入口（dictation_records）
-  // 过滤：剔除 challenge_set_id 为 null（题集已删除）的无效记录
+  // 打开答题记录弹窗时：加载今日答题记录，按来源名称分组
+  // 来源命名规则：
+  //   - source 不为空（错题混战/宠物升级挑战）→ 直接用 source
+  //   - source 为空 → 取 challenge_sets.title（题集名）/ dictation_tasks.title（默写任务名）
+  // 过滤：剔除来源名称无法确定的记录
   useEffect(() => {
     if (!showTodayAnswerRecords || !currentChild) {
       setTodayAnswerGroups([]);
@@ -157,16 +163,15 @@ export function TopBar() {
     let cancelled = false;
     (async () => {
       try {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const startISO = startOfDay.toISOString();
-        // 并行查询答题记录和默写记录
+        const start = answerRange === 'today' ? (() => {
+          const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+        })() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const startISO = start.toISOString();
         const [qRes, dRes] = await Promise.all([
           supabase
             .from('question_records')
-            .select('challenge_set_id, challenge_sets(title)')
+            .select('challenge_set_id, source, challenge_sets(title)')
             .eq('member_id', currentChild.id)
-            .not('challenge_set_id', 'is', null)
             .gte('answered_at', startISO),
           supabase
             .from('dictation_records')
@@ -176,23 +181,27 @@ export function TopBar() {
         ]);
         if (cancelled) return;
         const map = new Map<string, { title: string; count: number }>();
-        // 答题记录：按题集分组，来源名称取 challenge_sets.title
-        for (const r of (qRes.data ?? []) as { challenge_set_id: string; challenge_sets: { title: string } | null }[]) {
-          const id = 'q_' + r.challenge_set_id;
-          const title = r.challenge_sets?.title ?? '未知题集';
-          const cur = map.get(id);
+        const addGroup = (title: string | null | undefined) => {
+          if (!title) return; // 剔除来源名称无法确定的记录
+          const cur = map.get(title);
           if (cur) cur.count += 1;
-          else map.set(id, { title, count: 1 });
+          else map.set(title, { title, count: 1 });
+        };
+        // 答题记录：source 优先，否则取题集名
+        for (const r of (qRes.data ?? []) as {
+          challenge_set_id: string | null;
+          source: string | null;
+          challenge_sets: { title: string } | null;
+        }[]) {
+          addGroup(r.source ?? r.challenge_sets?.title ?? null);
         }
-        // 默写记录：按默写任务分组，来源名称取 dictation_tasks.title
-        for (const r of (dRes.data ?? []) as { task_id: string; dictation_tasks: { title: string } | null }[]) {
-          const id = 'd_' + r.task_id;
-          const title = r.dictation_tasks?.title ?? '未知默写任务';
-          const cur = map.get(id);
-          if (cur) cur.count += 1;
-          else map.set(id, { title, count: 1 });
+        // 默写记录：取默写任务名
+        for (const r of (dRes.data ?? []) as {
+          task_id: string;
+          dictation_tasks: { title: string } | null;
+        }[]) {
+          addGroup(r.dictation_tasks?.title ?? null);
         }
-        // 按数量降序排列
         const groups = [...map.values()].sort((a, b) => b.count - a.count);
         setTodayAnswerGroups(groups);
       } catch {
@@ -200,7 +209,7 @@ export function TopBar() {
       }
     })();
     return () => { cancelled = true; };
-  }, [showTodayAnswerRecords, currentChild?.id]);
+  }, [showTodayAnswerRecords, currentChild?.id, answerRange]);
 
   const handleToggleClick = () => {
     if (mode === 'parent') return;
@@ -388,11 +397,28 @@ export function TopBar() {
       <Modal
         open={showTodayCompleted}
         onClose={() => setShowTodayCompleted(false)}
-        title={'今日达成 ' + todayCompleted.length}
+        title={completedRange === 'today' ? '今日达成 ' + todayCompleted.length : '近30天达成 ' + todayCompleted.length}
         size="sm"
       >
+        {/* 时间范围切换 */}
+        <div className="flex gap-1 mb-3 p-1 bg-slate-100 rounded-lg">
+          {(['today', '30days'] as const).map(r => (
+            <button
+              key={r}
+              onClick={() => setCompletedRange(r)}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors',
+                completedRange === r ? 'bg-white text-star-600 shadow-sm' : 'text-slate-500'
+              )}
+            >
+              {r === 'today' ? '今日' : '近30天'}
+            </button>
+          ))}
+        </div>
         {todayCompleted.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-4">今天还没有达成的任务</p>
+          <p className="text-sm text-slate-400 text-center py-4">
+            {completedRange === 'today' ? '今天还没有达成的任务' : '近30天暂无达成记录'}
+          </p>
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {todayCompleted.map(t => {
@@ -428,15 +454,32 @@ export function TopBar() {
         )}
       </Modal>
 
-      {/* 今日答题记录弹窗：按题集分组展示 */}
+      {/* 今日答题记录弹窗：按来源分组展示 */}
       <Modal
         open={showTodayAnswerRecords}
         onClose={() => setShowTodayAnswerRecords(false)}
-        title={'今日答题 ' + todayAnswerCount}
+        title={answerRange === 'today' ? '今日答题 ' + todayAnswerCount : '近30天答题 ' + todayAnswerCount}
         size="sm"
       >
+        {/* 时间范围切换 */}
+        <div className="flex gap-1 mb-3 p-1 bg-slate-100 rounded-lg">
+          {(['today', '30days'] as const).map(r => (
+            <button
+              key={r}
+              onClick={() => setAnswerRange(r)}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium rounded-md transition-colors',
+                answerRange === r ? 'bg-white text-star-600 shadow-sm' : 'text-slate-500'
+              )}
+            >
+              {r === 'today' ? '今日' : '近30天'}
+            </button>
+          ))}
+        </div>
         {todayAnswerGroups.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-4">今天还没有答题记录</p>
+          <p className="text-sm text-slate-400 text-center py-4">
+            {answerRange === 'today' ? '今天还没有答题记录' : '近30天暂无答题记录'}
+          </p>
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {todayAnswerGroups.map((g, idx) => (

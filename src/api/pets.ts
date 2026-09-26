@@ -680,6 +680,20 @@ export async function completePetLevelup(memberId: string, petId: string): Promi
   return row as Pet;
 }
 
+// 记录宠物升级挑战单题答题（不发星光、不改进度，仅计入今日答题数）
+export async function recordLevelupQuizAnswer(
+  memberId: string,
+  questionId: string,
+  isCorrect: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('record_levelup_quiz_answer', {
+    p_member_id: memberId,
+    p_question_id: questionId,
+    p_is_correct: isCorrect,
+  });
+  if (error) throw error;
+}
+
 // 陪伴学习任务完成奖励（星光值）
 export async function studyTaskReward(memberId: string, reward: number): Promise<{ success: boolean; message: string; new_star: number }> {
   const { data, error } = await supabase.rpc('study_task_reward', {

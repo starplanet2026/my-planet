@@ -5,7 +5,7 @@ import { Loading } from '../../../../components/common/Loading';
 import { useToastStore } from '../../../../store/toastStore';
 import { cn } from '../../../../lib/utils';
 import { fetchWrongBattlePool } from '../../../../api/challenges';
-import { completePetLevelup } from '../../../../api/pets';
+import { completePetLevelup, recordLevelupQuizAnswer } from '../../../../api/pets';
 import type { Pet } from '../../../../api/types';
 
 // 通过分数线
@@ -113,9 +113,21 @@ export function PetLevelUpQuiz({
     });
   };
 
+  const computeCorrect = (q: QuizItem): boolean => {
+    const userAns = (answers[q.id] ?? '').trim();
+    if (!userAns) return false;
+    if (q.type === 'choice' || q.type === 'multi_choice') {
+      const sortStr = (s: string) => s.split('').sort().join('');
+      return sortStr(userAns) === sortStr(q.correct_answer);
+    }
+    return userAns === q.correct_answer;
+  };
+
   const handleConfirm = () => {
     if (!current) return;
     setRevealed(prev => ({ ...prev, [current.id]: true }));
+    // 记录宠物升级挑战答题（计入今日答题数，不发星光）
+    recordLevelupQuizAnswer(memberId, current.id, computeCorrect(current)).catch(() => {});
   };
 
   const handleNext = () => {
