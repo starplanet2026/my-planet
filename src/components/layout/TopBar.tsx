@@ -34,10 +34,13 @@ export function TopBar() {
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showTodayCompleted, setShowTodayCompleted] = useState(false);
+  const [showTodayAnswerRecords, setShowTodayAnswerRecords] = useState(false);
   // TopBar 专用的轻量数据（不走 useRealtimeTable 避免频道冲突）
   const [todayCompleted, setTodayCompleted] = useState<Task[]>([]);
   const [backpackCount, setBackpackCount] = useState(0);
   const [todayAnswerCount, setTodayAnswerCount] = useState(0);
+  // 今日答题记录：按题集分组（题集名称 + 今日答题数量）
+  const [todayAnswerGroups, setTodayAnswerGroups] = useState<{ title: string; count: number }[]>([]);
 
   const childMembers = members.filter(m => m.role === 'child');
 
@@ -133,6 +136,45 @@ export function TopBar() {
     return () => { cancelled = true; };
   }, [currentChild?.id, isChallengePage]);
 
+  // 打开答题记录弹窗时：加载今日答题记录并按题集分组
+  useEffect(() => {
+    if (!showTodayAnswerRecords || !currentChild) {
+      setTodayAnswerGroups([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const { data } = await supabase
+          .from('question_records')
+          .select('challenge_set_id, challenge_sets(title)')
+          .eq('member_id', currentChild.id)
+          .gte('answered_at', startOfDay.toISOString());
+        if (cancelled) return;
+        // 按 challenge_set_id 分组统计数量，题集名称取 challenge_sets.title
+        const map = new Map<string, { title: string; count: number }>();
+        for (const r of (data ?? []) as { challenge_set_id: string | null; challenge_sets: { title: string } | null }[]) {
+          const id = r.challenge_set_id ?? 'null';
+          const title = r.challenge_sets?.title ?? '已删除题集';
+          const cur = map.get(id);
+          if (cur) {
+            cur.count += 1;
+          } else {
+            map.set(id, { title, count: 1 });
+          }
+        }
+        // 按数量降序排列
+        const groups = [...map.values()].sort((a, b) => b.count - a.count);
+        setTodayAnswerGroups(groups);
+      } catch {
+        if (!cancelled) setTodayAnswerGroups([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showTodayAnswerRecords, currentChild?.id]);
+
   const handleToggleClick = () => {
     if (mode === 'parent') return;
     navigate(ROUTES.PARENT_DASHBOARD);
@@ -220,12 +262,16 @@ export function TopBar() {
             </span>
           </div>
           <div className="w-px h-6 bg-slate-200" />
-          <div className="flex items-center gap-1.5">
+          {/* 今日答题：点击弹出按题集分组的答题记录 */}
+          <button
+            onClick={() => setShowTodayAnswerRecords(true)}
+            className="flex items-center gap-1.5 hover:bg-star-50 rounded-lg px-2 py-1.5 cursor-pointer transition-colors relative z-40"
+          >
             <span className="text-sm text-slate-500 font-medium">今日答题</span>
             <span className="text-lg font-bold text-star-600 tabular-nums">
               {todayAnswerCount}
             </span>
-          </div>
+          </button>
         </div>
       );
     }
@@ -351,6 +397,34 @@ export function TopBar() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </Modal>
+
+      {/* 今日答题记录弹窗：按题集分组展示 */}
+      <Modal
+        open={showTodayAnswerRecords}
+        onClose={() => setShowTodayAnswerRecords(false)}
+        title={'今日答题 ' + todayAnswerCount}
+        size="sm"
+      >
+        {todayAnswerGroups.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">今天还没有答题记录</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {todayAnswerGroups.map((g, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between p-3 rounded-xl bg-star-50 border border-star-100"
+              >
+                <span className="font-medium text-sm text-slate-700 truncate pr-2">
+                  {g.title}
+                </span>
+                <span className="text-sm font-bold text-star-600 tabular-nums flex-shrink-0">
+                  {g.count} 题
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </Modal>
