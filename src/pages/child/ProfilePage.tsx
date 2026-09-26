@@ -186,7 +186,24 @@ export function ProfilePage() {
     purchases.filter(p => child ? p.member_id === child.id : false),
     [purchases, child],
   );
-  const pendingPurchases = myPurchases.filter(p => p.status === 'pending');
+  // 同一特权卡多笔购买合并展示（按 item_id 合并数量）
+  const pendingPurchases = useMemo(() => {
+    const map = new Map<string, Purchase>();
+    for (const p of myPurchases.filter(p => p.status === 'pending')) {
+      const key = p.item_id;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        // 合并：保留最早购买记录的id，累加数量
+        map.set(key, {
+          ...existing,
+          quantity: existing.quantity + p.quantity,
+        });
+      } else {
+        map.set(key, { ...p });
+      }
+    }
+    return Array.from(map.values());
+  }, [myPurchases]);
   const usedPurchases = myPurchases.filter(p => p.status === 'redeemed' || p.status === 'sold');
 
   // 获取本周特权卡使用次数
