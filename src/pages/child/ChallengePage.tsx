@@ -28,10 +28,11 @@ import {
   startChallengeSession, flushChallengeSession,
 } from '../../api/challenges';
 import { listTasks as listDictationTasks } from '../../api/dictation';
+import { listStudentInstances } from '../../api/recitation';
 import type {
   ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, SetWithLevels, LevelWithProgress,
-  WrongQuestionStat, WrongBattlePoolItem, ChallengeSubject,
+  WrongQuestionStat, WrongBattlePoolItem, ChallengeSubject, RecitationInstance,
 } from '../../api/types';
 
 // ====== 板块配置 ======
@@ -114,6 +115,8 @@ export function ChallengePage() {
   const [activeBoard, setActiveBoard] = useState<ChallengeBoardType>('today_review');
   // 有 active 家默任务的学科集合（用于控制今日复习入口卡片展示）
   const [activeDictationSubjects, setActiveDictationSubjects] = useState<Set<string>>(new Set());
+  // 待作答的背诵任务实例（用于今日复习板块展示背诵入口）
+  const [pendingRecitations, setPendingRecitations] = useState<RecitationInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [wrongRetry, setWrongRetry] = useState<{ setId: string; setTitle: string; questionIds: string[] } | null>(null);
   const [viewOnly, setViewOnly] = useState<{ questions: Question[]; title: string } | null>(null);
@@ -127,15 +130,17 @@ export function ChallengePage() {
     (async () => {
       setLoading(true);
       try {
-        const [data, dictTasks] = await Promise.all([
+        const [data, dictTasks, recInstances] = await Promise.all([
           fetchChallengeBoards(child.id),
           listDictationTasks(child.id).catch(() => []),
+          listStudentInstances(child.id, 'pending').catch(() => []),
         ]);
         setBoards(data);
         // 仅 status=active 的家默任务才在前台展示入口
         const activeSubjects = new Set<string>();
         dictTasks.filter(t => t.status === 'active').forEach(t => activeSubjects.add(t.subject));
         setActiveDictationSubjects(activeSubjects);
+        setPendingRecitations(recInstances);
       } catch (e) {
         // 迁移未执行时回退到旧逻辑
         const sets = await fetchChallengeSets();
@@ -363,6 +368,7 @@ export function ChallengePage() {
                 standaloneLevels={board?.levels ?? []}
                 childId={child?.id ?? ''}
                 activeDictationSubjects={activeDictationSubjects}
+                pendingRecitations={pendingRecitations}
                 onSelectSet={(s) => {
                   // 清除旧快照，进入新题集
                   setSnapshot(null);
@@ -413,7 +419,7 @@ export function ChallengePage() {
 // ================================================================
 // 板块组件：标题 + 题集卡片网格
 // ================================================================
-function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, activeDictationSubjects, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
+function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, activeDictationSubjects, pendingRecitations, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
   boardType: ChallengeBoardType;
   label: string;
   icon: string;
@@ -423,6 +429,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   onSelectLevel: (lv: LevelWithProgress) => void;
   childId: string;
   activeDictationSubjects: Set<string>;
+  pendingRecitations: RecitationInstance[];
   onWrongRetry: (setId: string, setTitle: string, questionIds: string[]) => void;
   onStartBattle: () => void;
   onViewSetQuestions: (setId: string, setTitle: string) => void;
@@ -432,8 +439,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   const navigate = useNavigate();
 
   const hasDictationEntry = boardType === 'today_review' && activeDictationSubjects.size > 0;
-  // 今日复习板块：有题集或有 active 家默任务时才渲染
-  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && !hasDictationEntry) return null;
+  const hasRecitationEntry = boardType === 'today_review' && pendingRecitations.length > 0;
+  // 今日复习板块：有题集或有 active 家默任务或有待背诵任务时才渲染
+  if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && !hasDictationEntry && !hasRecitationEntry) return null;
 
   return (
     <div>
@@ -467,6 +475,18 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
             <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
           </div>
         )}
+        {/* 背诵任务入口卡片（每个待作答实例一张，点击进入录音作答页） */}
+        {boardType === 'today_review' && pendingRecitations.map(inst => (
+          <div
+            key={inst.id}
+            onClick={() => navigate(`/challenge/recitation/${inst.id}`)}
+            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+          >
+            <span className="text-3xl mb-1">🎙️</span>
+            <span className="text-sm font-bold text-center line-clamp-2">{inst.task?.title ?? '背诵任务'}</span>
+            <span className="text-[10px] mt-1 opacity-90">{inst.task?.subject === 'english' ? '英语' : '语文'}背诵</span>
+          </div>
+        ))}
         {/* 错题混战池入口（仅错题大混战板块显示） */}
         {boardType === 'wrong_battle' && (
           <div

@@ -81,6 +81,8 @@ export const ROUTES = {
   PARENT_PETS: '/parent/pets',
   // 家默管理（一级板块，内含词条库/错词库/任务三个 Tab）
   PARENT_DICTATION: '/parent/dictation',
+  // 背诵任务管理（一级板块，模板列表 + 学生提交查看）
+  PARENT_RECITATION: '/parent/recitation',
   PET: '/pet',
 } as const;
 

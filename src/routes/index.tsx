@@ -17,6 +17,8 @@ import { PurchaseRedeemPage } from '../pages/parent/PurchaseRedeemPage';
 import { ChallengeManagePage } from '../pages/parent/ChallengeManagePage';
 import { PetManagePage } from '../pages/parent/PetManagePage';
 import { DictationManagePage } from '../pages/parent/DictationManagePage';
+import { RecitationManagePage } from '../pages/parent/RecitationManagePage';
+import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
 import { ROUTES } from '../lib/constants';
 
 function ParentLayout() {
@@ -41,6 +43,7 @@ export function AppRoutes() {
         <Route path="challenge" element={<ChallengePage />} />
         <Route path="challenge/dictation/:subject" element={<DictationPlayPage />} />
         <Route path="challenge/dictation/:subject/grade" element={<DictationGradePage />} />
+        <Route path="challenge/recitation/:instanceId" element={<RecitationTaskPage />} />
         <Route path="pet" element={<PetPage />} />
 
         {/* 家长端 */}
@@ -54,6 +57,7 @@ export function AppRoutes() {
           <Route path="challenges" element={<ChallengeManagePage />} />
           <Route path="pets" element={<PetManagePage />} />
           <Route path="dictation" element={<DictationManagePage />} />
+          <Route path="recitation" element={<RecitationManagePage />} />
         </Route>
       </Route>
 

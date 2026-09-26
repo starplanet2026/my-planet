@@ -939,3 +939,86 @@ export interface SubmitDictationResult {
   total_star: number;
   new_star: number;
 }
+
+// ==================== 背诵任务模块类型 ====================
+export type RecitationSubject = 'chinese' | 'english';
+export type RecitationMatchMode = 'fuzzy' | 'strict';
+export type RecitationTaskStatus = 'saved' | 'published' | 'offline';
+export type RecitationInstanceStatus = 'pending' | 'submitted';
+
+// 背诵任务模板（永久保存）
+export interface RecitationTask {
+  id: string;
+  family_id: string;
+  created_by: string | null;
+  title: string;
+  subject: RecitationSubject;
+  answer_text: string;
+  pass_threshold: number;
+  match_mode: RecitationMatchMode;
+  reward_tier1_min: number | null;
+  reward_tier1_max: number | null;
+  reward_tier1_stars: number | null;
+  reward_tier2_min: number | null;
+  reward_tier2_max: number | null;
+  reward_tier2_stars: number | null;
+  reward_tier3_min: number | null;
+  reward_tier3_max: number | null;
+  reward_tier3_stars: number | null;
+  status: RecitationTaskStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+// 背诵作业实例（每次发布推送给学生生成一条）
+export interface RecitationInstance {
+  id: string;
+  task_id: string;
+  family_id: string;
+  member_id: string;
+  status: RecitationInstanceStatus;
+  score: number | null;
+  passed: boolean | null;
+  recognized_text: string | null;
+  awarded_stars: number;
+  submitted_at: string | null;
+  created_at: string;
+  // 关联模板（前端 join 查询时使用）
+  task?: RecitationTask | null;
+}
+
+// 创建/编辑背诵任务模板入参
+export interface RecitationTaskInput {
+  family_id: string;
+  created_by?: string | null;
+  title: string;
+  subject: RecitationSubject;
+  answer_text: string;
+  pass_threshold: number;
+  match_mode: RecitationMatchMode;
+  reward_tier1_min?: number | null;
+  reward_tier1_max?: number | null;
+  reward_tier1_stars?: number | null;
+  reward_tier2_min?: number | null;
+  reward_tier2_max?: number | null;
+  reward_tier2_stars?: number | null;
+  reward_tier3_min?: number | null;
+  reward_tier3_max?: number | null;
+  reward_tier3_stars?: number | null;
+}
+
+// 提交背诵结果 RPC 返回
+export interface SubmitRecitationResult {
+  success: boolean;
+  message: string;
+  passed: boolean;
+  awarded_stars: number;
+  new_star: number;
+}
+
+// 发布背诵任务 RPC 返回
+export interface PublishRecitationResult {
+  success: boolean;
+  message: string;
+  published_count: number;
+}
