@@ -197,12 +197,12 @@ export function AdoptPetModal({
     }
   }, [family?.id, mode, childId]);
 
-  // 进入抽卡模式时加载抽卡配置（领养扣费/放弃扣费）
+  // 组件挂载即加载抽卡配置（领养扣费/放弃扣费），避免进入抽卡后才异步加载导致短暂显示默认值
   useEffect(() => {
-    if (mode === 'gacha' && !gachaCfg) {
+    if (!gachaCfg) {
       fetchGachaConfig().then(setGachaCfg).catch(() => {});
     }
-  }, [mode, gachaCfg]);
+  }, [gachaCfg]);
 
   const navigate = useNavigate();
   // 当前孩子的星光值
