@@ -156,9 +156,9 @@ export function ShopPage() {
     ? availableItems
     : availableItems.filter(i => i.category === activeCat)
   ).slice().sort((a, b) => {
-    // 零用钱兑换卡最高优先级，排第一排最左侧
-    const aMoney = a.name?.includes('零用钱') ? 0 : 1;
-    const bMoney = b.name?.includes('零用钱') ? 0 : 1;
+    // 零花钱兑换卡最高优先级，排第一排最左侧
+    const aMoney = a.name?.includes('零花钱') ? 0 : 1;
+    const bMoney = b.name?.includes('零花钱') ? 0 : 1;
     if (aMoney !== bMoney) return aMoney - bMoney;
     // 同组内按分类顺序：玩乐 → 放松 → 美食 → 稀有
     const ia = CATEGORY_ORDER.indexOf(a.category ?? '');
