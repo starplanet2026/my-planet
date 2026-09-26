@@ -292,12 +292,14 @@ export async function fetchWordProgress(memberId: string, setId: string): Promis
 export async function answerQuestion(
   memberId: string,
   questionId: string,
-  answer: string
+  answer: string,
+  source?: string
 ): Promise<AnswerQuestionResult> {
   const { data, error } = await supabase.rpc('answer_question', {
     p_member_id: memberId,
     p_question_id: questionId,
     p_answer: answer,
+    p_source: source ?? null,
   });
   if (error) throw error;
   // answer_question 是 returns table 的集合函数，rpc 返回数组，取首行

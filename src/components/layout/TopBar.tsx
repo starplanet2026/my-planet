@@ -40,8 +40,10 @@ export function TopBar() {
   const [answerRange, setAnswerRange] = useState<'today' | '30days'>('today');
   // TopBar 专用的轻量数据（不走 useRealtimeTable 避免频道冲突）
   const [todayCompleted, setTodayCompleted] = useState<Task[]>([]);
+  const [todayCompletedCount, setTodayCompletedCount] = useState(0); // 外层 badge 始终显示今日
   const [backpackCount, setBackpackCount] = useState(0);
   const [todayAnswerCount, setTodayAnswerCount] = useState(0);
+  const [todayAnswerCountBadge, setTodayAnswerCountBadge] = useState(0); // 外层 badge 始终显示今日
   // 今日答题记录：按题集分组（题集名称 + 今日答题数量）
   const [todayAnswerGroups, setTodayAnswerGroups] = useState<{ title: string; count: number }[]>([]);
 
@@ -64,6 +66,7 @@ export function TopBar() {
   const isChallengePage = location.pathname === ROUTES.CHALLENGE;
 
   // 轻量查询：只在对应页面 + 有 familyId 时拉取（不创建实时订阅频道）
+  // 面板列表：按 completedRange 切换今日/近30天
   useEffect(() => {
     if (!familyId || !currentChild || !isTasksPage) {
       setTodayCompleted([]);
@@ -89,6 +92,30 @@ export function TopBar() {
     })();
     return () => { cancelled = true; };
   }, [familyId, currentChild, isTasksPage, completedRange]);
+
+  // 外层 badge 始终查今日达成数量（不受面板切换影响）
+  useEffect(() => {
+    if (!familyId || !currentChild || !isTasksPage) {
+      setTodayCompletedCount(0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = new Date(); d.setHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('family_id', familyId)
+          .not('completed_at', 'is', null)
+          .gte('completed_at', d.toISOString());
+        if (!cancelled) setTodayCompletedCount(count ?? 0);
+      } catch {
+        if (!cancelled) setTodayCompletedCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [familyId, currentChild, isTasksPage]);
 
   useEffect(() => {
     if (!familyId || !currentChild) {
@@ -149,6 +176,37 @@ export function TopBar() {
     })();
     return () => { cancelled = true; };
   }, [currentChild?.id, isChallengePage, answerRange]);
+
+  // 外层 badge 始终查今日答题数（不受面板切换影响）
+  useEffect(() => {
+    if (!currentChild || !isChallengePage) {
+      setTodayAnswerCountBadge(0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = new Date(); d.setHours(0, 0, 0, 0);
+        const startISO = d.toISOString();
+        const [{ count: qCount }, { count: dCount }] = await Promise.all([
+          supabase
+            .from('question_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('member_id', currentChild.id)
+            .gte('answered_at', startISO),
+          supabase
+            .from('dictation_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('member_id', currentChild.id)
+            .gte('created_at', startISO),
+        ]);
+        if (!cancelled) setTodayAnswerCountBadge((qCount ?? 0) + (dCount ?? 0));
+      } catch {
+        if (!cancelled) setTodayAnswerCountBadge(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentChild?.id, isChallengePage]);
 
   // 打开答题记录弹窗时：加载今日答题记录，按来源名称分组
   // 来源命名规则：
@@ -236,7 +294,7 @@ export function TopBar() {
           >
             <span className="text-sm text-slate-500 font-medium">今日达成</span>
             <span className="text-lg font-bold text-star-600 tabular-nums">
-              {todayCompleted.length}
+              {todayCompletedCount}
             </span>
           </button>
         </div>
@@ -305,7 +363,7 @@ export function TopBar() {
           >
             <span className="text-sm text-slate-500 font-medium">今日答题</span>
             <span className="text-lg font-bold text-star-600 tabular-nums">
-              {todayAnswerCount}
+              {todayAnswerCountBadge}
             </span>
           </button>
         </div>

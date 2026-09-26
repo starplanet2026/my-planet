@@ -790,7 +790,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
     if (!answer.trim() || !q) return;
     setSubmitting(true);
     try {
-      const result = await answerQuestion(childId, q.id, answer);
+      const result = await answerQuestion(childId, q.id, answer, setTitle);
       setIsCorrect(result.is_correct);
       setShowResult(true);
       setResults(prev => [...prev, result.is_correct]);
@@ -993,7 +993,7 @@ function WrongBattlePlayer({ childId, onBack }: {
     if (!answer.trim() || !q) return;
     setSubmitting(true);
     try {
-      const result = await answerQuestion(childId, q.question_id, answer);
+      const result = await answerQuestion(childId, q.question_id, answer, '错题混战');
       setIsCorrect(result.is_correct);
       setShowResult(true);
       setResults(prev => [...prev, result.is_correct]);
@@ -1390,7 +1390,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
     setSubmitting(true);
     setResultQuestion(q); // 锁定当前题目，防止消题后 q 指向下一题
     try {
-      const result = await answerQuestion(childId, q.id, answer);
+      const result = await answerQuestion(childId, q.id, answer, set.title);
       setIsCorrect(result.is_correct);
       setShowResult(true);
       onDone();
@@ -1974,7 +1974,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
     if (!answer.trim()) return;
     setSubmitting(true);
     try {
-      const result = await answerQuestion(childId, q.id, answer);
+      const result = await answerQuestion(childId, q.id, answer, set.title);
       setIsCorrect(result.is_correct);
       setShowResult(true);
       onDone();
