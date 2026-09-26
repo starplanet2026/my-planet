@@ -112,7 +112,7 @@ export function TopBar() {
     return () => { cancelled = true; };
   }, [familyId, currentChild, isShopPage]);
 
-  // 智慧星战页面：查询今日答题数
+  // 智慧星战页面：查询今日答题数（答题记录 + 默写记录，剔除已删除题集）
   useEffect(() => {
     if (!currentChild || !isChallengePage) {
       setTodayAnswerCount(0);
@@ -123,12 +123,22 @@ export function TopBar() {
       try {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
-        const { count } = await supabase
-          .from('question_records')
-          .select('*', { count: 'exact', head: true })
-          .eq('member_id', currentChild.id)
-          .gte('answered_at', startOfDay.toISOString());
-        if (!cancelled) setTodayAnswerCount(count ?? 0);
+        const startISO = startOfDay.toISOString();
+        // 答题记录：剔除 challenge_set_id 为 null（题集已删除）的记录
+        const [{ count: qCount }, { count: dCount }] = await Promise.all([
+          supabase
+            .from('question_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('member_id', currentChild.id)
+            .not('challenge_set_id', 'is', null)
+            .gte('answered_at', startISO),
+          supabase
+            .from('dictation_records')
+            .select('*', { count: 'exact', head: true })
+            .eq('member_id', currentChild.id)
+            .gte('created_at', startISO),
+        ]);
+        if (!cancelled) setTodayAnswerCount((qCount ?? 0) + (dCount ?? 0));
       } catch {
         if (!cancelled) setTodayAnswerCount(0);
       }
@@ -136,7 +146,9 @@ export function TopBar() {
     return () => { cancelled = true; };
   }, [currentChild?.id, isChallengePage]);
 
-  // 打开答题记录弹窗时：加载今日答题记录并按题集分组
+  // 打开答题记录弹窗时：加载今日答题记录，按来源（题集/默写任务）分组
+  // 统计范围：智慧星战下全部答题入口（question_records）+ 默写入口（dictation_records）
+  // 过滤：剔除 challenge_set_id 为 null（题集已删除）的无效记录
   useEffect(() => {
     if (!showTodayAnswerRecords || !currentChild) {
       setTodayAnswerGroups([]);
@@ -147,23 +159,38 @@ export function TopBar() {
       try {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
-        const { data } = await supabase
-          .from('question_records')
-          .select('challenge_set_id, challenge_sets(title)')
-          .eq('member_id', currentChild.id)
-          .gte('answered_at', startOfDay.toISOString());
+        const startISO = startOfDay.toISOString();
+        // 并行查询答题记录和默写记录
+        const [qRes, dRes] = await Promise.all([
+          supabase
+            .from('question_records')
+            .select('challenge_set_id, challenge_sets(title)')
+            .eq('member_id', currentChild.id)
+            .not('challenge_set_id', 'is', null)
+            .gte('answered_at', startISO),
+          supabase
+            .from('dictation_records')
+            .select('task_id, dictation_tasks(title)')
+            .eq('member_id', currentChild.id)
+            .gte('created_at', startISO),
+        ]);
         if (cancelled) return;
-        // 按 challenge_set_id 分组统计数量，题集名称取 challenge_sets.title
         const map = new Map<string, { title: string; count: number }>();
-        for (const r of (data ?? []) as { challenge_set_id: string | null; challenge_sets: { title: string } | null }[]) {
-          const id = r.challenge_set_id ?? 'null';
-          const title = r.challenge_sets?.title ?? '已删除题集';
+        // 答题记录：按题集分组，来源名称取 challenge_sets.title
+        for (const r of (qRes.data ?? []) as { challenge_set_id: string; challenge_sets: { title: string } | null }[]) {
+          const id = 'q_' + r.challenge_set_id;
+          const title = r.challenge_sets?.title ?? '未知题集';
           const cur = map.get(id);
-          if (cur) {
-            cur.count += 1;
-          } else {
-            map.set(id, { title, count: 1 });
-          }
+          if (cur) cur.count += 1;
+          else map.set(id, { title, count: 1 });
+        }
+        // 默写记录：按默写任务分组，来源名称取 dictation_tasks.title
+        for (const r of (dRes.data ?? []) as { task_id: string; dictation_tasks: { title: string } | null }[]) {
+          const id = 'd_' + r.task_id;
+          const title = r.dictation_tasks?.title ?? '未知默写任务';
+          const cur = map.get(id);
+          if (cur) cur.count += 1;
+          else map.set(id, { title, count: 1 });
         }
         // 按数量降序排列
         const groups = [...map.values()].sort((a, b) => b.count - a.count);
