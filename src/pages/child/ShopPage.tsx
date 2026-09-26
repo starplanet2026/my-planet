@@ -140,20 +140,26 @@ export function ShopPage() {
     i.status === 'active' && (!i.expires_at || !isExpired(i.expires_at))
   );
 
-  // 分类列表（稀有放最后）
+  // 分类列表排序：玩乐 → 放松 → 美食 → 稀有
+  const CATEGORY_ORDER = ['玩乐', '放松', '美食', '稀有'];
   const categories = useMemo(() => {
     const cats = Array.from(new Set(availableItems.map(i => i.category).filter(Boolean))) as string[];
     const sorted = cats.sort((a, b) => {
-      if (a === '稀有') return 1;
-      if (b === '稀有') return -1;
-      return 0;
+      const ia = CATEGORY_ORDER.indexOf(a);
+      const ib = CATEGORY_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
     });
     return ['全部', ...sorted];
   }, [availableItems]);
 
-  const filteredItems = activeCat === '全部'
+  const filteredItems = (activeCat === '全部'
     ? availableItems
-    : availableItems.filter(i => i.category === activeCat);
+    : availableItems.filter(i => i.category === activeCat)
+  ).slice().sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a.category ?? '');
+    const ib = CATEGORY_ORDER.indexOf(b.category ?? '');
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
 
   const balance = child?.coin_balance ?? 0;
 

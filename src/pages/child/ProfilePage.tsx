@@ -328,9 +328,6 @@ export function ProfilePage() {
                     <div className="flex items-center justify-center gap-1 mt-1 mb-2">
                       <img src={COIN_ICON_SM} alt="金币" className="w-3 h-3 object-contain" />
                       <span className="text-[11px] font-bold text-amber-600">{formatCoins(totalPaid)}</span>
-                      <span className="text-[9px] text-slate-400 hidden sm:inline">
-                        ·可售{formatCoins(sellRefund(p))}
-                      </span>
                     </div>
 
                     {/* 操作按钮 */}
@@ -535,7 +532,9 @@ export function ProfilePage() {
               )}
             </div>
             <p className="text-sm text-slate-500 text-center">
-              使用后特权卡将消失，请向家长出示确认
+              {redeemTarget.quantity > 1
+                ? `将使用 1 张特权卡（剩余 ${redeemTarget.quantity - 1} 张），请向家长出示确认`
+                : '使用后特权卡将消失，请向家长出示确认'}
             </p>
             <div className="flex gap-3">
               <Button variant="secondary" fullWidth onClick={() => setRedeemTarget(null)} disabled={processing}>
