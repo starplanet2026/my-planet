@@ -6,7 +6,7 @@ import type {
   CheckinResult, UpgradeDogHouseResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
   PetBackground,
   GameLevelResult, GameWordStat, FinishGameLevelResult,
-  BoardingStatus, StudyPet,
+  BoardingStatus, BoardingHistoryItem, StudyPet,
   BuyBoardingCardResult, SetBoardingSelectionResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
   PetMessage,
 } from './types';
@@ -746,6 +746,16 @@ export async function runBoardingCare(memberId?: string): Promise<void> {
     p_member_id: memberId ?? null,
   });
   if (error) throw error;
+}
+
+// 查询托管历史明细（近 N 天）
+export async function getBoardingHistory(memberId: string, days = 30): Promise<BoardingHistoryItem[]> {
+  const { data, error } = await supabase.rpc('get_boarding_history', {
+    p_member_id: memberId,
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data ?? []) as BoardingHistoryItem[];
 }
 
 // ====== 重症治疗 ======

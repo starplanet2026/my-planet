@@ -9,6 +9,7 @@ import {
   fetchPets, checkPet, fetchPetShopItems, runBoardingCare,
 } from '../../../../api/pets';
 import type { Pet, BoardingStatus, PetShopItem } from '../../../../api/types';
+import { BoardingHistoryModal } from './BoardingHistoryModal';
 
 export function PetBoardingModal({ onClose, onBoarded }: {
   onClose: () => void;
@@ -25,6 +26,7 @@ export function PetBoardingModal({ onClose, onBoarded }: {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const loadData = async () => {
     if (!childId) return;
@@ -121,7 +123,12 @@ export function PetBoardingModal({ onClose, onBoarded }: {
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-400">今日已托管</p>
-                <p className="text-lg font-bold text-indigo-600">{boardedSet.size} 只</p>
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="text-lg font-bold text-indigo-600 hover:text-indigo-700 transition-colors active:scale-95"
+                >
+                  {boardedSet.size} 只
+                </button>
               </div>
             </div>
           </div>
@@ -213,6 +220,10 @@ export function PetBoardingModal({ onClose, onBoarded }: {
             三项属性补满后发放该宠物每日金币奖励。
           </p>
         </div>
+      )}
+
+      {showHistory && childId && (
+        <BoardingHistoryModal memberId={childId} onClose={() => setShowHistory(false)} />
       )}
     </Modal>
   );

@@ -759,6 +759,20 @@ export interface BoardingStatus {
   selected_pet_ids: string[];
 }
 
+// 托管历史明细条目
+export interface BoardingHistoryItem {
+  board_date: string;
+  pet_id: string;
+  pet_name: string;
+  pet_emoji: string | null;
+  pet_image_url: string | null;
+  hunger_gain: number;
+  clean_gain: number;
+  happiness_gain: number;
+  exp_gain: number;
+  coin_gain: number;
+}
+
 // 进修宠物信息
 export interface StudyPet {
   pet_id: string;
