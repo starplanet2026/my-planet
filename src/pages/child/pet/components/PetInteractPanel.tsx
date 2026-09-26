@@ -77,7 +77,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
       } else if (updated.level > currentPet.level) {
         toast.success(`升级！现在 Lv.${updated.level}`);
       } else if (action === 'play') {
-        toast.success(`玩耍成功 +10经验（今日 ${updated.happiness_rounds || 0}/3 轮）`);
+        toast.success(`玩耍成功，心情+${Math.round(updated.happiness - currentPet.happiness)}，当前${Math.round(updated.happiness)}/300`);
       } else {
         toast.success('互动成功');
       }
@@ -193,7 +193,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
                     <span>{section.icon}</span>
                     {section.label}
                     {section.key === 'play' && (
-                      <span className="text-[9px] text-slate-400">({currentPet.happiness_rounds || 0}/3)</span>
+                      <span className="text-[9px] text-slate-400">({Math.round(statValue)}/300)</span>
                     )}
                   </span>
                   <span className="text-xs font-bold text-slate-500">{Math.round(statValue)}</span>
