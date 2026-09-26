@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
@@ -6,6 +6,7 @@ import { usePurchases } from '../../hooks/usePurchases';
 import { updateMember } from '../../api/members';
 import { fetchAssetLogs, clearAssetLogs, type BalanceType } from '../../api/coins';
 import { replyMessage } from '../../api/coins';
+import { fetchWeeklyUsage } from '../../api/purchases';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Textarea } from '../../components/common/Input';
@@ -122,6 +123,10 @@ export function ProfilePage() {
   const [redeemTarget, setRedeemTarget] = useState<Purchase | null>(null);
   const [sellTarget, setSellTarget] = useState<Purchase | null>(null);
   const [processing, setProcessing] = useState(false);
+  // 出售数量选择
+  const [sellQty, setSellQty] = useState(1);
+  // 本周使用次数（按 item_id 分组）
+  const [weeklyUsage, setWeeklyUsage] = useState<Record<string, number>>({});
 
   const startEdit = () => {
     setEditName(child?.name ?? '');
@@ -184,6 +189,12 @@ export function ProfilePage() {
   const pendingPurchases = myPurchases.filter(p => p.status === 'pending');
   const usedPurchases = myPurchases.filter(p => p.status === 'redeemed' || p.status === 'sold');
 
+  // 获取本周特权卡使用次数
+  useEffect(() => {
+    if (!child?.id) return;
+    fetchWeeklyUsage(child.id).then(setWeeklyUsage).catch(() => {});
+  }, [child?.id, myPurchases.length]);
+
   const handleReply = async () => {
     if (!replyTarget) return;
     if (!replyText.trim()) { toast.error('请输入回复内容'); return; }
@@ -220,9 +231,9 @@ export function ProfilePage() {
     if (!sellTarget || !child) return;
     setProcessing(true);
     try {
-      const result = await sellPurchase(sellTarget.id, child.id);
+      const result = await sellPurchase(sellTarget.id, child.id, sellQty);
       await refreshMembers();
-      toast.success(`已出售，返还 ${formatCoins(result.refund)} 金币`);
+      toast.success(`已出售 ${sellQty} 张，返还 ${formatCoins(result.refund)} 金币`);
       setSellTarget(null);
     } catch (e: any) {
       toast.error(e?.message ?? '出售失败');
@@ -305,8 +316,12 @@ export function ProfilePage() {
 
                   {/* 特权图标区 */}
                   <div className="pt-3 pb-1 flex items-center justify-center relative">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center shadow-inner">
-                      <span className="text-2xl sm:text-3xl">🎴</span>
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center shadow-inner overflow-hidden">
+                      {p.items?.image_url ? (
+                        <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-2xl sm:text-3xl">🎴</span>
+                      )}
                     </div>
                     {/* 特权标签 */}
                     <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-star-500 text-white text-[9px] font-bold shadow">
@@ -322,6 +337,11 @@ export function ProfilePage() {
                   {/* 信息 */}
                   <div className="px-2 pb-2 text-center relative">
                     <h4 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-1">{p.item_name_snapshot}</h4>
+                    {p.items?.weekly_limit && p.items.weekly_limit > 0 && (
+                      <p className="text-[9px] text-amber-500 font-medium mt-0.5">
+                        每周限用{p.items.weekly_limit}次｜本周已用{weeklyUsage[p.item_id] ?? 0}次
+                      </p>
+                    )}
                     <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
                       购买于 {formatDate(p.created_at)}
                     </p>
@@ -339,7 +359,7 @@ export function ProfilePage() {
                         使用
                       </button>
                       <button
-                        onClick={() => setSellTarget(p)}
+                        onClick={() => { setSellTarget(p); setSellQty(1); }}
                         className="flex-1 py-1 rounded-lg text-[11px] font-bold text-star-600 bg-white/70 hover:bg-white border border-star-200 transition-all"
                       >
                         出售
@@ -523,12 +543,21 @@ export function ProfilePage() {
         {redeemTarget && (
           <div className="space-y-4">
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center mb-2">
-                <span className="text-3xl">🎴</span>
+              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center mb-2 overflow-hidden">
+                {redeemTarget.items?.image_url ? (
+                  <img src={redeemTarget.items.image_url} alt={redeemTarget.item_name_snapshot} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl">🎴</span>
+                )}
               </div>
               <h3 className="font-bold text-slate-800">{redeemTarget.item_name_snapshot}</h3>
               {redeemTarget.quantity > 1 && (
                 <p className="text-sm text-slate-400">数量 x{redeemTarget.quantity}</p>
+              )}
+              {redeemTarget.items?.weekly_limit && redeemTarget.items.weekly_limit > 0 && (
+                <p className="text-xs text-amber-500 font-medium mt-1">
+                  每周限用{redeemTarget.items.weekly_limit}次｜本周已用{weeklyUsage[redeemTarget.item_id] ?? 0}次
+                </p>
               )}
             </div>
             <p className="text-sm text-slate-500 text-center">
@@ -563,23 +592,56 @@ export function ProfilePage() {
         {sellTarget && (
           <div className="space-y-4">
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center mb-2">
-                <span className="text-3xl">🎴</span>
+              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center mb-2 overflow-hidden">
+                {sellTarget.items?.image_url ? (
+                  <img src={sellTarget.items.image_url} alt={sellTarget.item_name_snapshot} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl">🎴</span>
+                )}
               </div>
               <h3 className="font-bold text-slate-800">{sellTarget.item_name_snapshot}</h3>
-              {sellTarget.quantity > 1 && (
-                <p className="text-sm text-slate-400">数量 x{sellTarget.quantity}</p>
-              )}
+              <p className="text-sm text-slate-400">持有 {sellTarget.quantity} 张</p>
             </div>
+
+            {/* 数量选择（仅多张时显示） */}
+            {sellTarget.quantity > 1 && (
+              <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-100">
+                <span className="text-slate-600">出售数量</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSellQty(q => Math.max(1, q - 1))}
+                    disabled={processing}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-600 hover:bg-slate-50"
+                  >-</button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={sellTarget.quantity}
+                    value={sellQty}
+                    onChange={e => {
+                      const v = parseInt(e.target.value) || 1;
+                      setSellQty(Math.max(1, Math.min(sellTarget.quantity, v)));
+                    }}
+                    className="w-16 text-center font-bold text-slate-800 border border-slate-200 rounded-lg py-1"
+                  />
+                  <button
+                    onClick={() => setSellQty(q => Math.min(sellTarget.quantity, q + 1))}
+                    disabled={processing}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-600 hover:bg-slate-50"
+                  >+</button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">
               <span className="text-slate-600">返还金币（90%）</span>
               <span className="flex items-center gap-1 font-bold text-amber-600 text-lg">
                 <img src={COIN_ICON_SM} alt="金币" className="w-5 h-5 object-contain" />
-                {formatCoins(sellRefund(sellTarget))}
+                {formatCoins(Math.floor(sellTarget.price_paid * sellQty * 0.9))}
               </span>
             </div>
             <p className="text-sm text-slate-500 text-center">
-              出售后特权卡将消失，金币按购买价的 90% 返还
+              出售 {sellQty} 张，金币按购买价 90% 返还
             </p>
             <div className="flex gap-3">
               <Button variant="secondary" fullWidth onClick={() => setSellTarget(null)} disabled={processing}>

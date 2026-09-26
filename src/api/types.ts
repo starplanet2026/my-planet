@@ -117,6 +117,8 @@ export interface Purchase {
   redeemed_at: string | null;
   expires_at: string | null;
   created_at: string;
+  // 关联商品信息
+  items?: { image_url: string | null; weekly_limit: number | null } | null;
 }
 
 export interface CoinRecord {
@@ -163,6 +165,12 @@ export interface PurchaseItemResult {
 export interface SellPurchaseResult {
   new_balance: number;
   refund: number;
+}
+
+// 本周特权卡使用次数
+export interface WeeklyUsage {
+  item_id: string;
+  used_count: number;
 }
 
 export interface AdjustCoinsResult {
