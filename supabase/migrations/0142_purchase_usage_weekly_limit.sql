@@ -66,7 +66,7 @@ begin
   if v_p.quantity > 1 then
     -- 多张：减1张，保持pending
     update public.purchases
-      set quantity = quantity - 1, updated_at = now()
+      set quantity = quantity - 1
       where id = p_purchase_id;
   else
     -- 最后1张：标记为已使用
@@ -114,7 +114,7 @@ begin
   -- 扣卡
   if v_sell_qty < v_p.quantity then
     update public.purchases
-      set quantity = quantity - v_sell_qty, updated_at = now()
+      set quantity = quantity - v_sell_qty
       where id = p_purchase_id;
   else
     update public.purchases
