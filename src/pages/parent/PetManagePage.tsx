@@ -14,7 +14,7 @@ import { cn } from '../../lib/utils';
 import {
   Plus, Trash2, ArrowLeft, Dog, ShoppingBag, Star, Upload,
   Image as ImageIcon, Pencil, BookOpen, Package, CheckSquare, Square, Send, Power,
-  GripVertical,
+  GripVertical, Dices,
 } from 'lucide-react';
 import {
   fetchPetShopItems, createPetShopItem, deletePetShopItem, updatePetShopItem,
@@ -27,6 +27,7 @@ import {
   fetchGameWordStats,
   fetchWordBooks, createWordBook, deleteWordBook,
   reorderWordBooks, reorderWordsInBook,
+  fetchGachaConfig, updateGachaConfig,
 } from '../../api/pets';
 import type {
   PetShopItem, PetShopItemType, PetSubcategory, PetRarity, PetWord, PetWordBook, Pet,
@@ -106,13 +107,14 @@ const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'doghouse', label: '住所' },
 ];
 
-// 顶部 tab：商品管理 / 单词管理 / 用户数据
-type PageTab = 'shop' | 'word' | 'user' | 'bg';
+// 顶部 tab：商品管理 / 单词管理 / 用户数据 / 抽卡管理
+type PageTab = 'shop' | 'word' | 'user' | 'bg' | 'gacha';
 const PAGE_TABS: { id: PageTab; label: string; icon: React.ReactNode }[] = [
   { id: 'shop', label: '商品管理', icon: <Package className="w-4 h-4" /> },
   { id: 'word', label: '单词管理', icon: <BookOpen className="w-4 h-4" /> },
   { id: 'user', label: '用户数据', icon: <Dog className="w-4 h-4" /> },
   { id: 'bg', label: '背景管理', icon: <ImageIcon className="w-4 h-4" /> },
+  { id: 'gacha', label: '抽卡管理', icon: <Dices className="w-4 h-4" /> },
 ];
 
 // 根据 type + subcategory 获取 emoji 备选列表
@@ -456,6 +458,9 @@ export function PetManagePage() {
 
       {/* 背景管理 tab */}
       {activeTab === 'bg' && <BackgroundTab />}
+
+      {/* 抽卡管理 tab */}
+      {activeTab === 'gacha' && <GachaConfigTab />}
 
       {showCreate && (
         <CreateItemModal onClose={() => setShowCreate(false)} onCreated={loadItems} />
@@ -2238,6 +2243,189 @@ function BackgroundTab() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ====== 抽卡管理 Tab ======
+function GachaConfigTab() {
+  const toast = useToastStore();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  // 用 string 方便输入控制
+  const [adoptCost, setAdoptCost] = useState('150');
+  const [cancelPenalty, setCancelPenalty] = useState('45');
+  const [commonProb, setCommonProb] = useState('70');
+  const [rareProb, setRareProb] = useState('25');
+  const [epicProb, setEpicProb] = useState('5');
+
+  const loadCfg = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchGachaConfig();
+      setAdoptCost(String(data.adopt_cost));
+      setCancelPenalty(String(data.cancel_penalty));
+      setCommonProb(String(data.rarity_common_prob));
+      setRareProb(String(data.rarity_rare_prob));
+      setEpicProb(String(data.rarity_epic_prob));
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载抽卡配置失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadCfg(); }, [loadCfg]);
+
+  const probSum = Number(commonProb || 0) + Number(rareProb || 0) + Number(epicProb || 0);
+  const probValid = Math.abs(probSum - 100) < 0.01;
+  const costValid = Number(adoptCost) >= 0 && Number(cancelPenalty) >= 0;
+
+  const handleSave = async () => {
+    if (!probValid) {
+      toast.error('三个稀有度概率之和必须为100，当前为' + probSum);
+      return;
+    }
+    if (!costValid) {
+      toast.error('扣费值不能为负');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateGachaConfig({
+        adopt_cost: Number(adoptCost),
+        cancel_penalty: Number(cancelPenalty),
+        rarity_common_prob: Number(commonProb),
+        rarity_rare_prob: Number(rareProb),
+        rarity_epic_prob: Number(epicProb),
+      });
+      toast.success('抽卡配置已保存');
+      loadCfg();
+    } catch (e: any) {
+      toast.error(e?.message ?? '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <EmptyState icon="🎲" title="加载中..." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Dices className="w-5 h-5 text-star-500" />
+            抽卡参数配置
+          </h2>
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+            全局生效；抽取按稀有度权重加权随机（每只宠物权重 = 其稀有度对应概率），
+            自动剔除当前用户已拥有的宠物。
+          </p>
+        </div>
+
+        {/* 扣费配置 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">
+              领养扣星光值
+            </label>
+            <Input
+              type="number"
+              value={adoptCost}
+              onChange={e => setAdoptCost(e.target.value)}
+              min={0}
+              className="w-full"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">抽中后选择"领养"时扣除的星光值</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">
+              放弃扣星光值
+            </label>
+            <Input
+              type="number"
+              value={cancelPenalty}
+              onChange={e => setCancelPenalty(e.target.value)}
+              min={0}
+              className="w-full"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">放弃抽卡时扣除的星光值</p>
+          </div>
+        </div>
+
+        {/* 稀有度概率配置 */}
+        <div className="border-t border-slate-100 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-slate-700">稀有度抽取概率 (%)</h3>
+            <span className={cn(
+              'text-xs px-2 py-0.5 rounded-full font-medium',
+              probValid ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+            )}>
+              合计 {probSum} / 100
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5" />
+                普通
+              </label>
+              <Input
+                type="number"
+                value={commonProb}
+                onChange={e => setCommonProb(e.target.value)}
+                min={0}
+                max={100}
+                step="0.01"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />
+                稀有
+              </label>
+              <Input
+                type="number"
+                value={rareProb}
+                onChange={e => setRareProb(e.target.value)}
+                min={0}
+                max={100}
+                step="0.01"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-purple-500 mr-1.5" />
+                史诗
+              </label>
+              <Input
+                type="number"
+                value={epicProb}
+                onChange={e => setEpicProb(e.target.value)}
+                min={0}
+                max={100}
+                step="0.01"
+                className="w-full"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">
+            注意：实际抽中某稀有度的概率还受该稀有度下可抽宠物数量影响
+            （每只宠物独立权重 = 此处配置值）。
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <Button onClick={handleSave} disabled={saving || !probValid || !costValid}>
+            {saving ? '保存中...' : '保存配置'}
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

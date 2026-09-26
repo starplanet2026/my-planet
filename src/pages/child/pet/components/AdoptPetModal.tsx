@@ -7,9 +7,9 @@ import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { cn } from '../../../../lib/utils';
 import { ShoppingBag, Heart, Dices, Sparkles } from 'lucide-react';
-import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo } from '../../../../api/pets';
+import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo, fetchGachaConfig } from '../../../../api/pets';
 import { supabase } from '../../../../api/client';
-import type { PetShopItem, Pet } from '../../../../api/types';
+import type { PetShopItem, Pet, GachaConfig } from '../../../../api/types';
 
 // 性格测试题
 const QUIZ_QUESTIONS = [
@@ -171,6 +171,7 @@ export function AdoptPetModal({
   const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
 
   const [gachaPaid, setGachaPaid] = useState(false);
+  const [gachaCfg, setGachaCfg] = useState<GachaConfig | null>(null);
   const [gachaDraws, setGachaDraws] = useState(0);
   const [drawnItem, setDrawnItem] = useState<PetShopItem | null>(null);
   const [gachaResult, setGachaResult] = useState<Pet | null>(null);
@@ -196,9 +197,19 @@ export function AdoptPetModal({
     }
   }, [family?.id, mode, childId]);
 
+  // 进入抽卡模式时加载抽卡配置（领养扣费/放弃扣费）
+  useEffect(() => {
+    if (mode === 'gacha' && !gachaCfg) {
+      fetchGachaConfig().then(setGachaCfg).catch(() => {});
+    }
+  }, [mode, gachaCfg]);
+
   const navigate = useNavigate();
   // 当前孩子的星光值
   const starValue = members.find(m => m.id === childId)?.star_value ?? 0;
+  // 抽卡参数（从后台配置读取，未加载完成用默认值兜底）
+  const adoptCost = gachaCfg?.adopt_cost ?? 150;
+  const cancelPenalty = gachaCfg?.cancel_penalty ?? 45;
   // 星光值不足信息（RPC 返回不足错误时设置）
   const [insufficientInfo, setInsufficientInfo] = useState<{ current: number; needed: number } | null>(null);
 
@@ -237,7 +248,7 @@ export function AdoptPetModal({
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
-          setInsufficientInfo({ current: starValue, needed: 150 });
+          setInsufficientInfo({ current: starValue, needed: adoptCost });
         } else {
           toast.error(result?.message || '抽卡失败');
         }
@@ -254,7 +265,7 @@ export function AdoptPetModal({
         image_url: result.drawn_item_image,
         type: 'pet',
         subcategory: 'dog',
-        price_star: 150,
+        price_star: adoptCost,
         price_coin: 0,
         status: 'active',
         rarity: 'common',
@@ -262,7 +273,7 @@ export function AdoptPetModal({
       setGachaDraws(1);
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
-        setInsufficientInfo({ current: starValue, needed: 150 });
+        setInsufficientInfo({ current: starValue, needed: adoptCost });
       } else {
         toast.error(e?.message ?? '抽卡失败');
       }
@@ -290,7 +301,7 @@ export function AdoptPetModal({
         image_url: result.drawn_item_image,
         type: 'pet',
         subcategory: 'dog',
-        price_star: 150,
+        price_star: adoptCost,
         price_coin: 0,
         status: 'active',
         rarity: 'common',
@@ -303,7 +314,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：领养抽中的宠物（扣 150 星光值）
+  // 抽卡：领养抽中的宠物（扣 adoptCost 星光值，从配置读取）
   const handleGachaAdopt = async () => {
     if (!childId || !drawnItem) return;
     setAdopting(true);
@@ -316,7 +327,7 @@ export function AdoptPetModal({
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.success) {
         if (isInsufficientError(result?.message)) {
-          setInsufficientInfo({ current: starValue, needed: 150 });
+          setInsufficientInfo({ current: starValue, needed: adoptCost });
         } else if (result?.message?.includes('小屋') || result?.message?.includes('狗屋') || result?.message?.includes('住所') || result?.message?.includes('饲养位')) {
           toast.error(result.message);
         } else {
@@ -324,7 +335,7 @@ export function AdoptPetModal({
         }
         return;
       }
-      toast.success('领养成功！扣除150星光值');
+      toast.success(`领养成功！扣除${adoptCost}星光值`);
       refreshMembers();
       // 问题11: 直接弹起名框，不跳转
       if (result?.pet_id) {
@@ -333,7 +344,7 @@ export function AdoptPetModal({
       onAdopted();
     } catch (e: any) {
       if (isInsufficientError(e?.message)) {
-        setInsufficientInfo({ current: starValue, needed: 150 });
+        setInsufficientInfo({ current: starValue, needed: adoptCost });
       } else if (e?.message?.includes('小屋') || e?.message?.includes('狗屋') || e?.message?.includes('住所')) {
         toast.error(e.message);
       } else {
@@ -344,7 +355,7 @@ export function AdoptPetModal({
     }
   };
 
-  // 抽卡：放弃（扣 45 星光值 = 原价30%）
+  // 抽卡：放弃（扣 cancelPenalty 星光值，从配置读取）
   const handleGachaCancel = async () => {
     if (!childId) return;
     try {
@@ -352,7 +363,7 @@ export function AdoptPetModal({
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
       if (result?.success) {
-        toast.info('已放弃，扣除45星光值');
+        toast.info(`已放弃，扣除${cancelPenalty}星光值`);
         refreshMembers();
       }
     } catch (e: any) {
@@ -441,7 +452,7 @@ export function AdoptPetModal({
     const options = [
       { id: 'shop' as const, icon: <ShoppingBag className="w-6 h-6" />, label: '商城选购', desc: '直接去商城挑选喜欢的宠物', color: 'from-blue-400 to-cyan-500' },
       { id: 'quiz' as const, icon: <Heart className="w-6 h-6" />, label: '性格测试', desc: '答题测出最适合你的宠物', color: 'from-pink-400 to-rose-500' },
-      { id: 'gacha' as const, icon: <Dices className="w-6 h-6" />, label: '抽卡', desc: '花150星光值，最多可抽取三次', color: 'from-amber-400 to-orange-500' },
+      { id: 'gacha' as const, icon: <Dices className="w-6 h-6" />, label: '抽卡', desc: `花${adoptCost}星光值，最多可抽取三次`, color: 'from-amber-400 to-orange-500' },
       { id: 'story' as const, icon: <Sparkles className="w-6 h-6" />, label: '萌宠奇遇记', desc: '在故事中与宠物相遇', color: 'from-purple-400 to-indigo-500' },
     ];
     return (
@@ -589,7 +600,7 @@ export function AdoptPetModal({
     );
   }
 
-  // 抽卡：开始不扣，领养扣150，放弃扣45
+  // 抽卡：开始不扣，领养扣 adoptCost，放弃扣 cancelPenalty（均从配置读取）
   if (mode === 'gacha') {
     return (
       <Modal open onClose={handleClose} title="抽卡" size="md">
@@ -601,16 +612,16 @@ export function AdoptPetModal({
               <div>
                 <p className="text-lg font-bold text-slate-700">宠物抽卡</p>
                 <p className="text-sm text-slate-500 mt-1">
-                  领养扣150星光值，最多可抽取三次
+                  {`领养扣${adoptCost}星光值，最多可抽取三次`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  放弃扣45星光值（原价30%）
+                  {`放弃扣${cancelPenalty}星光值（原价30%）`}
                 </p>
               </div>
-              {(insufficientInfo || starValue < 150) && (
+              {(insufficientInfo || starValue < adoptCost) && (
                 <InsufficientGuide
                   current={insufficientInfo?.current ?? starValue}
-                  needed={insufficientInfo?.needed ?? 150}
+                  needed={insufficientInfo?.needed ?? adoptCost}
                   onGoTasks={() => goEarnStars('/tasks')}
                   onGoChallenge={() => goEarnStars('/challenge')}
                   onGoPetGame={onGoGame}
@@ -626,7 +637,7 @@ export function AdoptPetModal({
           ) : namingPet ? (
             // 问题11: 起名弹框
             <div className="space-y-3 py-4">
-              <p className="text-sm text-slate-500 text-center">领养成功！扣除150星光值</p>
+              <p className="text-sm text-slate-500 text-center">{`领养成功！扣除${adoptCost}星光值`}</p>
               {drawnItem?.image_url ? (
                 <img src={drawnItem.image_url} alt="" className="w-28 h-36 mx-auto object-contain" />
               ) : (
@@ -698,7 +709,7 @@ export function AdoptPetModal({
               )}
               <div className="flex gap-2">
                 <Button onClick={handleGachaAdopt} disabled={adopting} className="flex-1">
-                  {adopting ? '领养中...' : '领养它（扣150⭐）'}
+                  {adopting ? '领养中...' : `领养它（扣${adoptCost}⭐）`}
                 </Button>
                 {gachaDraws < 3 ? (
                   <Button variant="ghost" onClick={handleGachaDraw} disabled={drawing} className="flex-1">
@@ -706,7 +717,7 @@ export function AdoptPetModal({
                   </Button>
                 ) : (
                   <Button variant="ghost" onClick={handleGachaCancel} className="flex-1">
-                    放弃（扣45⭐）
+                    {`放弃（扣${cancelPenalty}⭐）`}
                   </Button>
                 )}
               </div>

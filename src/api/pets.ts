@@ -8,7 +8,7 @@ import type {
   GameLevelResult, GameWordStat, FinishGameLevelResult,
   BoardingStatus, BoardingHistoryItem, StudyPet,
   BuyBoardingCardResult, SetBoardingSelectionResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
-  PetMessage,
+  PetMessage, GachaConfig,
 } from './types';
 
 // ====== 商店商品 ======
@@ -808,5 +808,39 @@ export async function fetchPetMessages(memberId: string, limit = 50, offset = 0)
 
 export async function clearPetMessages(memberId: string): Promise<void> {
   const { error } = await supabase.rpc('clear_pet_messages', { p_member_id: memberId });
+  if (error) throw error;
+}
+
+// ====== 抽卡配置 ======
+
+// 读取抽卡配置（全局单行）
+export async function fetchGachaConfig(): Promise<GachaConfig> {
+  const { data, error } = await supabase.rpc('get_gacha_config');
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    adopt_cost: row.adopt_cost,
+    cancel_penalty: row.cancel_penalty,
+    rarity_common_prob: Number(row.rarity_common_prob),
+    rarity_rare_prob: Number(row.rarity_rare_prob),
+    rarity_epic_prob: Number(row.rarity_epic_prob),
+  };
+}
+
+// 更新抽卡配置
+export async function updateGachaConfig(params: {
+  adopt_cost: number;
+  cancel_penalty: number;
+  rarity_common_prob: number;
+  rarity_rare_prob: number;
+  rarity_epic_prob: number;
+}): Promise<void> {
+  const { error } = await supabase.rpc('update_gacha_config', {
+    p_adopt_cost: params.adopt_cost,
+    p_cancel_penalty: params.cancel_penalty,
+    p_common: params.rarity_common_prob,
+    p_rare: params.rarity_rare_prob,
+    p_epic: params.rarity_epic_prob,
+  });
   if (error) throw error;
 }

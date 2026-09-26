@@ -465,6 +465,15 @@ export interface PetShopItem {
   updated_at: string;
 }
 
+// 抽卡配置（全局单行表 gacha_config）
+export interface GachaConfig {
+  adopt_cost: number;          // 领养抽中宠物扣除的星光值
+  cancel_penalty: number;      // 放弃抽卡扣除的星光值
+  rarity_common_prob: number;  // 普通概率(%)
+  rarity_rare_prob: number;    // 稀有概率(%)
+  rarity_epic_prob: number;    // 史诗概率(%)
+}
+
 // 背包物品
 export interface PetInventory {
   id: string;
