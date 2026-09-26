@@ -615,7 +615,7 @@ export function AdoptPetModal({
                   {`领养扣${adoptCost}星光值，最多可抽取三次`}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  {`放弃扣${cancelPenalty}星光值（原价30%）`}
+                  {`放弃扣${cancelPenalty}星光值`}
                 </p>
               </div>
               {(insufficientInfo || starValue < adoptCost) && (
