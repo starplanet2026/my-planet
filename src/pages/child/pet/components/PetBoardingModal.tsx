@@ -62,7 +62,7 @@ export function PetBoardingModal({ onClose, onBoarded }: {
       if (result.success) {
         toast.success(result.message || '购买成功');
         refreshMembers();
-        loadData();
+        await loadData();
       } else {
         toast.error(result.message || '购买失败');
       }
