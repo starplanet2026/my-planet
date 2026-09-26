@@ -14,7 +14,7 @@ declare
   v_family uuid;
 begin
   for v_rec in
-    select member_id, sum(amount) as total_amount, max(family_id) as family_id
+    select member_id, sum(amount) as total_amount, max(family_id::text)::uuid as family_id
     from public.coin_records
     where category = 'task'
       and balance_type = 'coin'
