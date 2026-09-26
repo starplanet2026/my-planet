@@ -337,10 +337,12 @@ export function ProfilePage() {
                   {/* 信息 */}
                   <div className="px-2 pb-2 text-center relative">
                     <h4 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-1">{p.item_name_snapshot}</h4>
-                    {p.items?.weekly_limit && p.items.weekly_limit > 0 && (
+                    {p.items?.weekly_limit && p.items.weekly_limit > 0 ? (
                       <p className="text-[9px] text-amber-500 font-medium mt-0.5">
                         每周限用{p.items.weekly_limit}次｜本周已用{weeklyUsage[p.item_id] ?? 0}次
                       </p>
+                    ) : (
+                      <p className="text-[9px] text-slate-400 font-medium mt-0.5">无使用限制</p>
                     )}
                     <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
                       购买于 {formatDate(p.created_at)}
