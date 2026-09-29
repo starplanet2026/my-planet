@@ -758,13 +758,21 @@ export function StudyCompanionModal({
               </div>
             </div>
             {/* 对话框：小狗说的话 */}
-            <div className="bg-white/95 rounded-2xl px-6 py-3 max-w-xs shadow-md relative">
-              <p className="text-base md:text-lg text-slate-600 text-center leading-relaxed">
+            <div className={`rounded-2xl px-6 py-3 max-w-xs shadow-md relative ${
+              studyEnded && !rewardClaimed
+                ? 'bg-green-400 text-white animate-pulse'
+                : 'bg-white/95'
+            }`}>
+              <p className={`text-base md:text-lg text-center leading-relaxed ${
+                studyEnded && !rewardClaimed ? 'text-white font-bold' : 'text-slate-600'
+              }`}>
                 {studyEnded
-                  ? (rewardClaimed ? '奖励已领取，下次再一起学习吧' : '学习结束啦，快来领取奖励吧')
+                  ? (rewardClaimed ? '奖励已领取，下次再一起学习吧' : '学习完成啦，点我领取奖励吧！')
                   : currentMessage}
               </p>
-              <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white/95 rotate-45" />
+              <span className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 ${
+                studyEnded && !rewardClaimed ? 'bg-green-400' : 'bg-white/95'
+              }`} />
             </div>
             {/* 宠物（倒计时归零后可点击领取奖励） */}
             {selectedPet && (
