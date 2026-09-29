@@ -84,9 +84,6 @@ export function PetPage() {
     } catch { return new Set(); }
   });
 
-  // 出来玩时重置位置的信号（传递给 PetGrassland）
-  const [positionResetPetId, setPositionResetPetId] = useState<string | null>(null);
-
   // 每次登录/刷新：所有宠物默认"回家"（隐藏），不渲染到页面
   // 用户可在"我的宠物"中手动点击"出来玩"让宠物显示
   // 注意：依赖 currentChildId 而非 child 对象引用，避免 refreshMembers 导致 child 引用变化而重复隐藏
@@ -109,7 +106,6 @@ export function PetPage() {
 
   // 切换宠物"出来玩/回家"
   const togglePetVisible = (petId: string) => {
-    const wasHidden = hiddenPetIds.has(petId);
     setHiddenPetIds(prev => {
       const next = new Set(prev);
       if (next.has(petId)) next.delete(petId);
@@ -117,10 +113,6 @@ export function PetPage() {
       localStorage.setItem(hiddenIdsKey, JSON.stringify([...next]));
       return next;
     });
-    // 出来玩：重置宠物位置到底部菜单栏上方居中
-    if (wasHidden) {
-      setPositionResetPetId(petId);
-    }
   };
 
   // 进化宠物
@@ -331,8 +323,6 @@ export function PetPage() {
         onPetClick={(pet) => setActivePet(pet)}
         bgImage={bgImage}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
-        positionResetPetId={positionResetPetId}
-        onPositionResetDone={() => setPositionResetPetId(null)}
       />
 
       {/* 左上角功能按钮组：图鉴 / 我的宠物 / 签到（弹窗时隐藏，往中间靠） */}

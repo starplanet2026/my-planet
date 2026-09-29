@@ -8,6 +8,7 @@ import type { Pet, DogHouse, PetInventory, PetSubcategory, PetRarity } from '../
 import { expNeeded } from '../../../../api/types';
 import {
   interactWithPet, claimPetCoins, fetchPetInventory, checkPet,
+  fetchPetPositions, savePetPosition,
 } from '../../../../api/pets';
 import { PetLevelUpQuiz } from './PetLevelUpQuiz';
 
@@ -73,21 +74,16 @@ const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food', clean: 'clean', play: 'toy', heal: 'medicine',
 };
 
-// 宠物默认出现位置：底部菜单栏上方居中（留出间距避免与菜单栏重叠）
+// 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-// 每个用户独立存储宠物坐标，切换用户时不互相覆盖
-const positionsKey = (cid: string) => `pet-positions-${cid}`;
-
-export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionResetPetId, onPositionResetDone }: {
+export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   pets: Pet[];
   dogHouse: DogHouse | null;
   onPetClick?: (pet: Pet) => void;
   onDogHouseUpgraded?: () => void;
   bgImage?: string;
   onPetUpdate?: (updated: Pet) => void;
-  positionResetPetId?: string | null;
-  onPositionResetDone?: () => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -102,9 +98,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
   const [collapsedChats, setCollapsedChats] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('pet-collapsed-chats') || '[]')); } catch { return new Set(); }
   });
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>(() => {
-    try { return JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { return {}; }
-  });
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
   // 宠物图层顺序：数组末尾 = 最上层。双击宠物将其置顶。
   // 按用户独立存储，切换用户不互相覆盖
@@ -141,30 +135,42 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
     return 10 + idx;
   };
 
-  // 初始化宠物状态：直接使用 props 数据
+  // 初始化宠物状态 + 从数据库加载坐标
   useEffect(() => {
     const map: Record<string, Pet> = {};
     pets.forEach(p => { map[p.id] = p; });
     setPetStates(map);
-    // 仅为新出现的宠物补坐标，不覆盖已有/已拖拽的坐标
-    setPositions(prev => {
-      let saved: Record<string, { x: number; y: number }> = {};
-      try { saved = JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { saved = {}; }
-      const next = { ...prev };
-      pets.forEach((p) => {
-        if (next[p.id]) return; // 已有坐标（含拖拽），保留
-        const cur = saved[p.id];
-        if (cur) {
-          next[p.id] = {
-            x: Math.max(5, Math.min(95, cur.x)),
-            y: Math.max(10, Math.min(70, cur.y)),
-          };
-        } else {
-          next[p.id] = { ...DEFAULT_PET_POSITION };
-        }
+    // 从数据库加载已保存的坐标
+    if (childId) {
+      fetchPetPositions(childId).then(saved => {
+        setPositions(prev => {
+          const next = { ...prev };
+          pets.forEach(p => {
+            if (next[p.id]) return; // 已有坐标（含拖拽中），保留
+            const cur = saved[p.id];
+            if (cur) {
+              next[p.id] = {
+                x: Math.max(5, Math.min(95, cur.x)),
+                y: Math.max(10, Math.min(70, cur.y)),
+              };
+            } else {
+              // 新宠到家：首次出现，放置在默认位置
+              next[p.id] = { ...DEFAULT_PET_POSITION };
+            }
+          });
+          return next;
+        });
+      }).catch(() => {
+        // 数据库读取失败时用默认位置
+        setPositions(prev => {
+          const next = { ...prev };
+          pets.forEach(p => {
+            if (!next[p.id]) next[p.id] = { ...DEFAULT_PET_POSITION };
+          });
+          return next;
+        });
       });
-      return next;
-    });
+    }
     loadInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pets, childId]);
@@ -179,21 +185,6 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
   }, [childId]);
 
   useEffect(() => { loadInventory(); }, [loadInventory]);
-
-  // 保存位置到当前用户的独立 storage，切换用户不互相覆盖
-  useEffect(() => {
-    localStorage.setItem(positionsKey(childId), JSON.stringify(positions));
-  }, [positions, childId]);
-
-  // "出来玩" 时重置指定宠物位置到底部居中默认位置
-  useEffect(() => {
-    if (!positionResetPetId) return;
-    setPositions(prev => ({
-      ...prev,
-      [positionResetPetId]: { ...DEFAULT_PET_POSITION },
-    }));
-    onPositionResetDone?.();
-  }, [positionResetPetId, onPositionResetDone]);
 
   // 保存折叠状态
   useEffect(() => {
@@ -364,7 +355,13 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
   const onPointerUp = () => {
     if (!dragRef.current) return;
     const { petId, moved } = dragRef.current;
-    if (!moved) {
+    if (moved) {
+      // 拖拽结束：保存最新坐标到数据库
+      const pos = positions[petId];
+      if (pos && childId) {
+        savePetPosition(childId, petId, pos.x, pos.y).catch(() => {});
+      }
+    } else {
       // 点击：切换互动面板 + 互动音效
       playPetClick();
       setInteractingPetId(prev => prev === petId ? null : petId);

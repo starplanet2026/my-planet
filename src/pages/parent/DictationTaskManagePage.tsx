@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
-import { useModeStore } from '../../store/modeStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Select } from '../../components/common/Input';
@@ -34,10 +33,10 @@ const SUBJECT_OPTIONS: { key: DictationSubject; label: string }[] = [
 export function DictationTaskManagePage() {
   const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
-  const currentChildId = useModeStore(s => s.currentChildId);
   const toast = useToastStore();
 
-  const children = members.filter(m => m.role === 'child');
+  const children = useMemo(() => members.filter(m => m.role === 'child'), [members]);
+  const childIds = useMemo(() => children.map(c => c.id).join(','), [children]);
   // 用户筛选：空字符串 = 全部用户
   const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<DictationSubject | ''>('');
@@ -64,19 +63,17 @@ export function DictationTaskManagePage() {
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
-      // 全部用户：不传 memberId，按 family 查询；指定用户：按 member_id 查询
       if (selectedChildId) {
         const list = await listTasks(selectedChildId, subjectFilter || undefined);
         setTasks(list);
       } else {
-        // 全部用户：查询 family 下所有孩子的任务
-        const childIds = children.map(c => c.id);
+        // 全部用户：查询所有孩子的任务
+        const ids = childIds.split(',').filter(Boolean);
         const all: DictationTask[] = [];
-        for (const cid of childIds) {
+        for (const cid of ids) {
           const list = await listTasks(cid, subjectFilter || undefined);
           all.push(...list);
         }
-        // 按创建时间倒序
         all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setTasks(all);
       }
@@ -86,7 +83,7 @@ export function DictationTaskManagePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId, subjectFilter, children]);
+  }, [selectedChildId, subjectFilter, childIds]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 

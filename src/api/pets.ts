@@ -620,6 +620,36 @@ export async function migrateBase64ToStorage(
 
 // ====== RPC ======
 
+// 宠物位置持久化
+export interface PetPosition {
+  pet_id: string;
+  pos_x: number;
+  pos_y: number;
+}
+
+export async function fetchPetPositions(memberId: string): Promise<Record<string, { x: number; y: number }>> {
+  const { data, error } = await supabase
+    .from('pet_positions')
+    .select('pet_id, pos_x, pos_y')
+    .eq('member_id', memberId);
+  if (error) throw error;
+  const map: Record<string, { x: number; y: number }> = {};
+  for (const r of data ?? []) {
+    map[r.pet_id] = { x: Number(r.pos_x), y: Number(r.pos_y) };
+  }
+  return map;
+}
+
+export async function savePetPosition(memberId: string, petId: string, x: number, y: number): Promise<void> {
+  const { error } = await supabase
+    .from('pet_positions')
+    .upsert(
+      { member_id: memberId, pet_id: petId, pos_x: x, pos_y: y, updated_at: new Date().toISOString() },
+      { onConflict: 'member_id,pet_id' }
+    );
+  if (error) throw error;
+}
+
 export async function buyPetItem(memberId: string, itemId: string): Promise<BuyPetItemResult> {
   const { data, error } = await supabase.rpc('buy_pet_item', {
     p_member_id: memberId,

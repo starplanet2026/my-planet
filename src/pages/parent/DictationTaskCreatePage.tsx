@@ -1,7 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
-import { useModeStore } from '../../store/modeStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Select } from '../../components/common/Input';
@@ -10,7 +9,8 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Sparkles, Upload, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   listWords, listWordTextbooks, listWordUnits, createWord,
   listDueErrorWords, createTask, addTaskWords, deleteTask,
@@ -36,9 +36,12 @@ interface AddedWord {
 export function DictationTaskCreatePage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const family = useFamilyStore(s => s.family);
-  const currentChildId = useModeStore(s => s.currentChildId);
-  const childId = currentChildId ?? '';
+  const members = useFamilyStore(s => s.members);
   const toast = useToastStore();
+
+  const childMembers = useMemo(() => members.filter(m => m.role === 'child'), [members]);
+  const [selectedChildId, setSelectedChildId] = useState('');
+  const childId = selectedChildId;
 
   const [subject, setSubject] = useState<DictationSubject>('english');
   const [title, setTitle] = useState('英语家默');
@@ -58,6 +61,8 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
 
   // 已加入
   const [added, setAdded] = useState<AddedWord[]>([]);
+  // 临时新增词条（独立列表，非本次任务）
+  const [tempWords, setTempWords] = useState<AddedWord[]>([]);
 
   // 临时词条弹窗
   const [showTemp, setShowTemp] = useState(false);
@@ -65,6 +70,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
     textbook_name: '', unit_no: 0, unit_name: '', pinyin: '', answer: '',
     chinese_meaning: '', part_of_speech: '', save_to_library: false,
   });
+  const tempFileRef = useRef<HTMLInputElement>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -100,6 +106,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
     setLibSelected(new Set());
     setErrSelected(new Set());
     setAdded([]);
+    setTempWords([]);
     setFilterBook('');
     setFilterUnit('');
   };
@@ -144,36 +151,101 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
       page_no: null, chinese_meaning: subject === 'english' ? tempForm.chinese_meaning || null : null,
       part_of_speech: subject === 'english' ? tempForm.part_of_speech || null : null,
       pinyin: subject === 'chinese' ? tempForm.pinyin || null : null,
-      answer: tempForm.answer.trim(), is_temporary: true, save_to_library: tempForm.save_to_library,
+      answer: tempForm.answer.trim(), is_temporary: true, save_to_library: false,
     };
-    // 若选择保存到长期词条库，先创建词条
-    if (tempForm.save_to_library && family) {
-      try {
-        const created = await createWord(family.id, {
-          subject, textbook_name: tempForm.textbook_name, unit_no: tempForm.unit_no,
-          unit_name: tempForm.unit_name, page_no: null,
-          chinese_meaning: subject === 'english' ? tempForm.chinese_meaning || null : null,
-          part_of_speech: subject === 'english' ? tempForm.part_of_speech || null : null,
-          pinyin: subject === 'chinese' ? tempForm.pinyin || null : null,
-          answer: tempForm.answer.trim(),
-        });
-        newWord.word_id = created.id;
-        newWord.is_temporary = false;
-      } catch (e: any) {
-        toast.error('保存到词条库失败：' + e.message);
-        return;
-      }
-    }
-    setAdded(prev => [...prev, newWord]);
+    setTempWords(prev => [...prev, newWord]);
     setShowTemp(false);
     setTempForm({ textbook_name: '', unit_no: 0, unit_name: '', pinyin: '', answer: '', chinese_meaning: '', part_of_speech: '', save_to_library: false });
-    toast.success('已添加');
+    toast.success('已添加到临时词条');
   };
 
   const removeAdded = (key: string) => setAdded(prev => prev.filter(a => a.key !== key));
 
+  // 临时词条操作
+  const removeTempWord = (key: string) => setTempWords(prev => prev.filter(a => a.key !== key));
+
+  // 将临时词条加入本次任务
+  const moveTempToTask = (key: string) => {
+    const w = tempWords.find(a => a.key === key);
+    if (!w) return;
+    if (added.some(a => a.answer === w.answer)) { toast.error('该词条已在任务中'); return; }
+    setAdded(prev => [...prev, w]);
+    setTempWords(prev => prev.filter(a => a.key !== key));
+    toast.success('已加入本次任务');
+  };
+
+  // 将临时词条保存到长期词条库
+  const saveTempToLibrary = async (key: string) => {
+    const w = tempWords.find(a => a.key === key);
+    if (!w || !family) return;
+    try {
+      const created = await createWord(family.id, {
+        subject, textbook_name: w.textbook_name, unit_no: w.unit_no,
+        unit_name: w.unit_name, page_no: w.page_no ?? null,
+        chinese_meaning: w.chinese_meaning ?? null, part_of_speech: w.part_of_speech ?? null,
+        pinyin: w.pinyin ?? null, answer: w.answer,
+      });
+      setTempWords(prev => prev.filter(a => a.key !== key));
+      toast.success('已保存到词条库');
+    } catch (e: any) {
+      toast.error('保存失败：' + e.message);
+    }
+  };
+
+  // 下载临时词条导入模板（同家默词条库模板）
+  const downloadTempTemplate = () => {
+    const cols = subject === 'english'
+      ? ['课本名称', '单元序号', '单元名字', '页码', '中文释义', '词性', '英文答案']
+      : ['课本名称', '单元序号', '单元名字', '拼音', '汉字答案'];
+    const ws = XLSX.utils.aoa_to_sheet([cols]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '临时词条');
+    XLSX.writeFile(wb, `临时词条模板-${subject === 'english' ? '英语' : '语文'}.xlsx`);
+  };
+
+  // Excel 批量导入临时词条（进入临时词条框，非本次任务）
+  const onTempFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json<any>(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      const newWords: AddedWord[] = [];
+      let dupCount = 0;
+      for (const r of rows) {
+        const answer = subject === 'english' ? String(r['英文答案'] ?? '') : String(r['汉字答案'] ?? '');
+        if (!answer.trim()) continue;
+        const key = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        // 去重：临时词条列表中同答案的跳过
+        if (tempWords.some(a => a.answer === answer.trim())) { dupCount++; continue; }
+        newWords.push({
+          key,
+          word_id: null, error_word_id: null,
+          textbook_name: String(r['课本名称'] ?? ''),
+          unit_no: Number(r['单元序号']) || 0,
+          unit_name: String(r['单元名字'] ?? ''),
+          page_no: subject === 'english' ? (r['页码'] ? Number(r['页码']) : null) : null,
+          chinese_meaning: subject === 'english' ? String(r['中文释义'] ?? '') || null : null,
+          part_of_speech: subject === 'english' ? String(r['词性'] ?? '') || null : null,
+          pinyin: subject === 'chinese' ? String(r['拼音'] ?? '') || null : null,
+          answer: answer.trim(),
+          is_temporary: true, save_to_library: false,
+        });
+      }
+      if (newWords.length > 0) {
+        setTempWords(prev => [...prev, ...newWords]);
+      }
+      toast.success(`导入完成：新增 ${newWords.length} 条${dupCount > 0 ? `，重复跳过 ${dupCount} 条` : ''}`);
+    } catch (err: any) {
+      toast.error('导入失败：' + err.message);
+    } finally {
+      if (tempFileRef.current) tempFileRef.current.value = '';
+    }
+  };
+
   const publish = async () => {
-    if (!family || !childId) return;
+    if (!family || !childId) { toast.error('请选择用户'); return; }
     if (added.length === 0) { toast.error('请至少加入一条词条'); return; }
     setSubmitting(true);
     try {
@@ -218,7 +290,14 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
 
       {/* 基础配置 */}
       <Card className="p-4 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="text-xs text-slate-500">选择用户</label>
+            <Select value={selectedChildId} onChange={e => setSelectedChildId(e.target.value)}>
+              <option value="">请选择孩子</option>
+              {childMembers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </div>
           <div>
             <label className="text-xs text-slate-500">学科</label>
             <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
@@ -336,10 +415,40 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
         {/* 临时新增 */}
         <Card className="p-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-medium text-sm">临时新增词条</h3>
-            <Button size="sm" onClick={() => setShowTemp(true)}><Plus className="w-3 h-3" />新增</Button>
+            <h3 className="font-medium text-sm">临时新增词条（{tempWords.length}）</h3>
+            <div className="flex gap-1">
+              <Button size="sm" variant="secondary" onClick={downloadTempTemplate}><Download className="w-3 h-3" />模板</Button>
+              <Button size="sm" variant="secondary" onClick={() => tempFileRef.current?.click()}><Upload className="w-3 h-3" />导入</Button>
+              <Button size="sm" onClick={() => setShowTemp(true)}><Plus className="w-3 h-3" />新增</Button>
+            </div>
           </div>
-          <p className="text-xs text-slate-400">可添加本次任务专用的临时词条，可选择保存到长期词条库。</p>
+          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。每条可选择加入本次任务或保存到词条库。</p>
+          <input ref={tempFileRef} type="file" accept=".xlsx,.xls" onChange={onTempFileChange} className="hidden" />
+          {tempWords.length > 0 && (
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {tempWords.map(w => (
+                <div key={w.key} className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-slate-100">
+                  <div className="text-xs min-w-0 flex-1">
+                    <div className="font-medium truncate">{w.answer}</div>
+                    <div className="text-slate-400 truncate">
+                      {subject === 'english' ? w.chinese_meaning : w.pinyin}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="success" onClick={() => moveTempToTask(w.key)} className="h-7 px-2 text-xs">
+                      加入任务
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => saveTempToLibrary(w.key)} className="h-7 px-2 text-xs">
+                      存词条库
+                    </Button>
+                    <button onClick={() => removeTempWord(w.key)} className="p-1 text-red-400 hover:text-red-600">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
@@ -416,10 +525,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               </div>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={tempForm.save_to_library} onChange={e => setTempForm({ ...tempForm, save_to_library: e.target.checked })} />
-            同时保存到长期词条库
-          </label>
+          <p className="text-xs text-slate-400">词条添加后可选择加入本次任务或保存到词条库</p>
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="secondary" onClick={() => setShowTemp(false)}>取消</Button>
             <Button onClick={addTemp}>添加</Button>
