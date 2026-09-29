@@ -11,11 +11,16 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { Plus, ArrowLeft, Upload, Download, AlertCircle } from 'lucide-react';
-import { listErrorWords, createErrorWord, importErrorWords } from '../../api/dictation';
+import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Square } from 'lucide-react';
+import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
 const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
+
+const SUBJECT_OPTIONS: { key: DictationSubject; label: string }[] = [
+  { key: 'english', label: '英语' },
+  { key: 'chinese', label: '语文' },
+];
 
 export function DictationErrorWordPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
@@ -26,6 +31,9 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
   const [subject, setSubject] = useState<DictationSubject | ''>('');
   const [words, setWords] = useState<DictationErrorWord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showDelete, setShowDelete] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -41,6 +49,7 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
     try {
       const list = await listErrorWords(childId, subject || undefined);
       setWords(list);
+      setSelected(new Set());
     } catch (e: any) {
       toast.error('加载失败：' + e.message);
     } finally {
@@ -111,6 +120,49 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === words.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(words.map(w => w.id)));
+    }
+  };
+
+  // 单条删除
+  const onSingleDelete = (id: string) => setPendingDeleteId(id);
+
+  const confirmSingleDelete = async () => {
+    if (!pendingDeleteId) return;
+    try {
+      await deleteErrorWords([pendingDeleteId]);
+      setWords(prev => prev.filter(w => w.id !== pendingDeleteId));
+      setSelected(prev => { const n = new Set(prev); n.delete(pendingDeleteId); return n; });
+      toast.success('已删除');
+    } catch (e: any) {
+      toast.error('删除失败：' + e.message);
+    } finally {
+      setPendingDeleteId(null);
+    }
+  };
+
+  // 批量删除
+  const confirmBatchDelete = async () => {
+    try {
+      await deleteErrorWords([...selected]);
+      setWords(prev => prev.filter(w => !selected.has(w.id)));
+      toast.success(`已删除 ${selected.size} 条错词`);
+      setSelected(new Set());
+    } catch (e: any) {
+      toast.error('批量删除失败：' + e.message);
+    } finally {
+      setShowDelete(false);
+    }
+  };
+
   if (loading) return <Loading />;
 
   return (
@@ -126,17 +178,37 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
 
       <Card className="p-4 mb-4">
         <div className="flex flex-wrap gap-2 items-center">
-          <Select value={subject} onChange={e => setSubject(e.target.value as DictationSubject | '')}>
-            <option value="">全部学科</option>
-            <option value="english">英语</option>
-            <option value="chinese">语文</option>
-          </Select>
+          {/* 学科筛选：横向按钮，默认全部 */}
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              onClick={() => setSubject('')}
+              className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                subject === '' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+            >
+              全部
+            </button>
+            {SUBJECT_OPTIONS.map(s => (
+              <button
+                key={s.key}
+                onClick={() => setSubject(s.key)}
+                className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  subject === s.key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
           <Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4" />手动添加错词</Button>
           {subject && (
             <>
               <Button variant="secondary" onClick={downloadTemplate}><Download className="w-4 h-4" />下载模板</Button>
               <Button variant="secondary" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4" />批量导入</Button>
             </>
+          )}
+          {selected.size > 0 && (
+            <Button size="sm" variant="danger" onClick={() => setShowDelete(true)} className="ml-auto">
+              <Trash2 className="w-3 h-3" />删除选中({selected.size})
+            </Button>
           )}
           <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onFileChange} className="hidden" />
         </div>
@@ -150,6 +222,11 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
+                  <th className="p-2 text-left w-8">
+                    <button onClick={toggleSelectAll}>
+                      {selected.size === words.length ? <CheckSquare className="w-4 h-4 text-rose-500" /> : <Square className="w-4 h-4 text-slate-300" />}
+                    </button>
+                  </th>
                   <th className="p-2 text-left">学科</th>
                   <th className="p-2 text-left">答案</th>
                   {subject !== 'chinese' && <th className="p-2 text-left">中文释义</th>}
@@ -157,11 +234,17 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                   <th className="p-2 text-left">当前节点</th>
                   <th className="p-2 text-left">下次家默日</th>
                   <th className="p-2 text-left">状态</th>
+                  <th className="p-2 text-left">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {words.map(w => (
                   <tr key={w.id} className="border-t border-slate-100">
+                    <td className="p-2">
+                      <button onClick={() => toggleSelect(w.id)}>
+                        {selected.has(w.id) ? <CheckSquare className="w-4 h-4 text-rose-500" /> : <Square className="w-4 h-4 text-slate-300" />}
+                      </button>
+                    </td>
                     <td className="p-2">{w.subject === 'english' ? '英语' : '语文'}</td>
                     <td className="p-2 font-medium">{w.answer}</td>
                     {subject !== 'chinese' && <td className="p-2">{w.chinese_meaning ?? '-'}</td>}
@@ -174,6 +257,15 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                         {w.status === 'in_progress' ? '进行中' : '已完成'}
                       </span>
                     </td>
+                    <td className="p-2">
+                      <button
+                        onClick={() => onSingleDelete(w.id)}
+                        className="p-1 text-red-400 hover:text-red-600"
+                        title="删除错词"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -181,6 +273,28 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
           </div>
         )}
       </Card>
+
+      {/* 单条删除确认 */}
+      <Modal open={pendingDeleteId !== null} onClose={() => setPendingDeleteId(null)} title="确认删除错词">
+        <div className="py-4">
+          <p className="text-sm text-slate-600">确认删除该错词记录？删除后不影响基础词条库数据。</p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => setPendingDeleteId(null)}>取消</Button>
+          <Button variant="danger" onClick={confirmSingleDelete}>确认删除</Button>
+        </div>
+      </Modal>
+
+      {/* 批量删除确认 */}
+      <Modal open={showDelete} onClose={() => setShowDelete(false)} title="确认批量删除错词">
+        <div className="py-4">
+          <p className="text-sm text-slate-600">确认删除选中的 <span className="font-bold text-rose-600">{selected.size}</span> 条错词记录？删除后不影响基础词条库数据。</p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => setShowDelete(false)}>取消</Button>
+          <Button variant="danger" onClick={confirmBatchDelete}>确认删除</Button>
+        </div>
+      </Modal>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="手动添加错词">
         <div className="space-y-3">

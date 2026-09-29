@@ -221,10 +221,22 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="text-xs text-slate-500">学科</label>
-            <Select value={subject} onChange={e => onSubjectChange(e.target.value as DictationSubject)}>
-              <option value="english">英语</option>
-              <option value="chinese">语文</option>
-            </Select>
+            <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => onSubjectChange('english')}
+                className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  subject === 'english' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+              >
+                英语
+              </button>
+              <button
+                onClick={() => onSubjectChange('chinese')}
+                className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  subject === 'chinese' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+              >
+                语文
+              </button>
+            </div>
           </div>
           <div>
             <label className="text-xs text-slate-500">任务标题</label>
@@ -243,9 +255,21 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
         <Card className="p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-sm">从词条库选择</h3>
-            {libSelected.size > 0 && (
-              <Button size="sm" onClick={addFromLibrary}>加入({libSelected.size})</Button>
-            )}
+            <div className="flex gap-1">
+              <Button size="sm" variant="secondary" onClick={() => {
+                // 全选当前页 / 取消全选
+                if (libSelected.size === libraryWords.length) {
+                  setLibSelected(new Set());
+                } else {
+                  setLibSelected(new Set(libraryWords.map(w => w.id)));
+                }
+              }}>
+                {libSelected.size === libraryWords.length && libraryWords.length > 0 ? '取消全选' : '全选'}
+              </Button>
+              {libSelected.size > 0 && (
+                <Button size="sm" onClick={addFromLibrary}>加入({libSelected.size})</Button>
+              )}
+            </div>
           </div>
           <div className="flex gap-1 mb-2">
             <Select value={filterBook} onChange={e => { setFilterBook(e.target.value); setFilterUnit(''); }} className="flex-1 text-xs">
@@ -277,9 +301,21 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
         <Card className="p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-sm">到期错词复习</h3>
-            {errSelected.size > 0 && (
-              <Button size="sm" onClick={addFromErrors}>加入({errSelected.size})</Button>
-            )}
+            <div className="flex gap-1">
+              <Button size="sm" variant="secondary" onClick={() => {
+                // 全选当前页 / 取消全选
+                if (errSelected.size === dueErrors.length) {
+                  setErrSelected(new Set());
+                } else {
+                  setErrSelected(new Set(dueErrors.map(w => w.id)));
+                }
+              }}>
+                {errSelected.size === dueErrors.length && dueErrors.length > 0 ? '取消全选' : '全选'}
+              </Button>
+              {errSelected.size > 0 && (
+                <Button size="sm" onClick={addFromErrors}>加入({errSelected.size})</Button>
+              )}
+            </div>
           </div>
           <div className="max-h-72 overflow-y-auto space-y-1">
             {dueErrors.length === 0 && <p className="text-xs text-slate-400 py-4 text-center">暂无到期错词</p>}

@@ -93,33 +93,36 @@ export function DictationPlayPage() {
 
   return (
     <div className="h-[calc(100dvh-4rem-4rem-env(safe-area-inset-bottom))] -mt-6 -mb-24 -mx-4 sm:-mx-6 lg:-mx-8 px-2 sm:px-4 flex flex-col overflow-hidden">
-      {/* 网格 flex-1 填满到按钮，行高均分；词条多则行矮字小、少则行高字大，全部一屏无滚动 */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 [grid-auto-rows:minmax(0,1fr)]">
-        {words.map((w, i) => {
-          const isCorrect = correct.has(w.id);
-          const prompt = subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-');
-          return (
-            <Card
-              key={w.id}
-              onClick={() => grading && toggleCorrect(w.id)}
-              className={cn(
-                'w-full p-2 flex flex-col justify-center items-center text-center [container-type:size] min-h-0 overflow-hidden transition-colors',
-                grading && 'cursor-pointer',
-                grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
-              )}
-            >
-              <div className="text-[10px] text-slate-400">{i + 1}</div>
-              <div className="font-bold text-slate-800 leading-tight [font-size:clamp(1.2rem,12cqh,4.5rem)] break-all">
-                {prompt}
-              </div>
-              {grading && (
-                <div className="text-emerald-500 font-extrabold leading-tight mt-1 [font-size:clamp(1.1rem,11cqh,3.9rem)] break-all">
-                  {w.answer}
+      {/* 卡片自适应宽高，固定字号，自动换行，最大宽高限制 */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex flex-wrap gap-2 justify-start">
+          {words.map((w, i) => {
+            const isCorrect = correct.has(w.id);
+            const prompt = subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-');
+            return (
+              <Card
+                key={w.id}
+                onClick={() => grading && toggleCorrect(w.id)}
+                className={cn(
+                  'p-2 flex flex-col justify-center items-center text-center transition-colors',
+                  'min-w-[5rem] max-w-[12rem] min-h-[3rem] max-h-[8rem]',
+                  grading && 'cursor-pointer',
+                  grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
+                )}
+              >
+                <div className="text-[10px] text-slate-400">{i + 1}</div>
+                <div className="font-bold text-slate-800 leading-tight text-sm break-all whitespace-normal">
+                  {prompt}
                 </div>
-              )}
-            </Card>
-          );
-        })}
+                {grading && (
+                  <div className="text-emerald-500 font-extrabold leading-tight mt-1 text-xs break-all whitespace-normal">
+                    {w.answer}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {/* 底部操作栏 */}

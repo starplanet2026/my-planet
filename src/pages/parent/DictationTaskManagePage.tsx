@@ -8,9 +8,9 @@ import { Modal } from '../../components/common/Modal';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles, CheckSquare, Square } from 'lucide-react';
 import {
-  listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus,
+  listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus, deleteTask,
 } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject, DictationTaskStatus } from '../../api/types';
 
@@ -25,6 +25,12 @@ const STATUS_COLOR: Record<DictationTaskStatus, string> = {
   completed: 'bg-blue-100 text-blue-700',
 };
 
+// 学科筛选按钮数据
+const SUBJECT_OPTIONS: { key: DictationSubject; label: string }[] = [
+  { key: 'english', label: '英语' },
+  { key: 'chinese', label: '语文' },
+];
+
 export function DictationTaskManagePage() {
   const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
@@ -32,7 +38,8 @@ export function DictationTaskManagePage() {
   const toast = useToastStore();
 
   const children = members.filter(m => m.role === 'child');
-  const [selectedChildId, setSelectedChildId] = useState(currentChildId ?? children[0]?.id ?? '');
+  // 用户筛选：空字符串 = 全部用户
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<DictationSubject | ''>('');
 
   const [tasks, setTasks] = useState<DictationTask[]>([]);
@@ -40,6 +47,11 @@ export function DictationTaskManagePage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [taskWords, setTaskWords] = useState<DictationTaskWord[]>([]);
   const [wordsLoading, setWordsLoading] = useState(false);
+
+  // 批量删除
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // 添加词条弹窗
   const [showAddWord, setShowAddWord] = useState(false);
@@ -50,17 +62,31 @@ export function DictationTaskManagePage() {
   });
 
   const loadTasks = useCallback(async () => {
-    if (!selectedChildId) return;
     setLoading(true);
     try {
-      const list = await listTasks(selectedChildId, subjectFilter || undefined);
-      setTasks(list);
+      // 全部用户：不传 memberId，按 family 查询；指定用户：按 member_id 查询
+      if (selectedChildId) {
+        const list = await listTasks(selectedChildId, subjectFilter || undefined);
+        setTasks(list);
+      } else {
+        // 全部用户：查询 family 下所有孩子的任务
+        const childIds = children.map(c => c.id);
+        const all: DictationTask[] = [];
+        for (const cid of childIds) {
+          const list = await listTasks(cid, subjectFilter || undefined);
+          all.push(...list);
+        }
+        // 按创建时间倒序
+        all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setTasks(all);
+      }
+      setSelectedTaskIds(new Set());
     } catch (e: any) {
       toast.error('加载任务失败：' + e.message);
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId, subjectFilter]);
+  }, [selectedChildId, subjectFilter, children]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
@@ -108,6 +134,57 @@ export function DictationTaskManagePage() {
     }
   };
 
+  // 单条删除任务
+  const onSingleDelete = (taskId: string) => {
+    setPendingDeleteId(taskId);
+  };
+
+  const confirmSingleDelete = async () => {
+    if (!pendingDeleteId) return;
+    try {
+      await deleteTask(pendingDeleteId);
+      setTasks(prev => prev.filter(t => t.id !== pendingDeleteId));
+      setSelectedTaskIds(prev => { const n = new Set(prev); n.delete(pendingDeleteId); return n; });
+      toast.success('任务已删除');
+    } catch (e: any) {
+      toast.error('删除失败：' + e.message);
+    } finally {
+      setPendingDeleteId(null);
+    }
+  };
+
+  // 批量删除
+  const toggleTaskSelect = (taskId: string) => {
+    setSelectedTaskIds(prev => {
+      const n = new Set(prev);
+      n.has(taskId) ? n.delete(taskId) : n.add(taskId);
+      return n;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTaskIds.size === tasks.length) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(tasks.map(t => t.id)));
+    }
+  };
+
+  const confirmBatchDelete = async () => {
+    try {
+      for (const id of selectedTaskIds) {
+        await deleteTask(id);
+      }
+      setTasks(prev => prev.filter(t => !selectedTaskIds.has(t.id)));
+      toast.success(`已删除 ${selectedTaskIds.size} 条任务`);
+      setSelectedTaskIds(new Set());
+    } catch (e: any) {
+      toast.error('批量删除失败：' + e.message);
+    } finally {
+      setShowBatchDelete(false);
+    }
+  };
+
   const openAddWord = (task: DictationTask) => {
     setAddWordTargetTask(task);
     setWordForm({
@@ -135,7 +212,6 @@ export function DictationTaskManagePage() {
         is_temporary: true,
         save_to_library: false,
       }]);
-      // 刷新词条列表
       await loadTaskWords(addWordTargetTask.id);
       setShowAddWord(false);
       toast.success('已添加');
@@ -163,18 +239,39 @@ export function DictationTaskManagePage() {
           onChange={e => { setSelectedChildId(e.target.value); setExpandedId(null); }}
           className="text-sm w-40"
         >
+          <option value="">全部用户</option>
           {children.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
-        <Select
-          value={subjectFilter}
-          onChange={e => { setSubjectFilter(e.target.value as DictationSubject | ''); setExpandedId(null); }}
-          className="text-sm w-28"
-        >
-          <option value="">全部学科</option>
-          <option value="english">英语</option>
-          <option value="chinese">语文</option>
-        </Select>
+        {/* 学科筛选：横向按钮，默认不选中=全部 */}
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+          <button
+            onClick={() => { setSubjectFilter(''); setExpandedId(null); }}
+            className={cn(
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              subjectFilter === '' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            )}
+          >
+            全部
+          </button>
+          {SUBJECT_OPTIONS.map(s => (
+            <button
+              key={s.key}
+              onClick={() => { setSubjectFilter(s.key); setExpandedId(null); }}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                subjectFilter === s.key ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         <span className="text-xs text-slate-400">共 {tasks.length} 条任务</span>
+        {selectedTaskIds.size > 0 && (
+          <Button size="sm" variant="danger" onClick={() => setShowBatchDelete(true)} className="ml-auto">
+            <Trash2 className="w-3 h-3" />删除选中({selectedTaskIds.size})
+          </Button>
+        )}
       </div>
 
       {/* 任务列表 */}
@@ -185,17 +282,35 @@ export function DictationTaskManagePage() {
         </div>
       ) : (
         <div className="space-y-2">
+          {/* 全选行 */}
+          <div className="flex items-center gap-2 px-1">
+            <button onClick={toggleSelectAll} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
+              {selectedTaskIds.size === tasks.length && tasks.length > 0
+                ? <CheckSquare className="w-4 h-4 text-emerald-500" />
+                : <Square className="w-4 h-4" />}
+              {selectedTaskIds.size === tasks.length && tasks.length > 0 ? '取消全选' : '全选'}
+            </button>
+          </div>
           {tasks.map(task => {
             const isExpanded = expandedId === task.id;
             const isEnglish = task.subject === 'english';
             const canManage = task.status !== 'completed';
+            const isSelected = selectedTaskIds.has(task.id);
+            const memberName = children.find(c => c.id === task.member_id)?.name ?? '';
             return (
-              <Card key={task.id} className="p-0 overflow-hidden">
+              <Card key={task.id} className={cn('p-0 overflow-hidden', isSelected && 'ring-2 ring-rose-200')}>
                 {/* 任务头部 */}
                 <div
                   className="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50"
                   onClick={() => toggleExpand(task)}
                 >
+                  {/* 批量选择复选框 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleTaskSelect(task.id); }}
+                    className="shrink-0"
+                  >
+                    {isSelected ? <CheckSquare className="w-4 h-4 text-rose-500" /> : <Square className="w-4 h-4 text-slate-300" />}
+                  </button>
                   <button className="text-slate-400 shrink-0">
                     {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </button>
@@ -203,6 +318,7 @@ export function DictationTaskManagePage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm truncate">{task.title}</span>
                       <span className="text-xs text-slate-400">{isEnglish ? '英语' : '语文'}</span>
+                      {memberName && <span className="text-xs text-slate-400">· {memberName}</span>}
                       <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_COLOR[task.status])}>
                         {STATUS_LABEL[task.status]}
                       </span>
@@ -226,6 +342,14 @@ export function DictationTaskManagePage() {
                         : <><Power className="w-3 h-3" />上线</>}
                     </button>
                   )}
+                  {/* 单条删除 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onSingleDelete(task.id); }}
+                    className="p-1 text-red-400 hover:text-red-600 shrink-0"
+                    title="删除任务"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* 展开内容：词条列表 */}
@@ -326,6 +450,28 @@ export function DictationTaskManagePage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 单条删除确认弹窗 */}
+      <Modal open={pendingDeleteId !== null} onClose={() => setPendingDeleteId(null)} title="确认删除任务">
+        <div className="py-4">
+          <p className="text-sm text-slate-600">确认删除该家默任务？删除后不可恢复，但基础词条库数据不受影响。</p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => setPendingDeleteId(null)}>取消</Button>
+          <Button variant="danger" onClick={confirmSingleDelete}>确认删除</Button>
+        </div>
+      </Modal>
+
+      {/* 批量删除确认弹窗 */}
+      <Modal open={showBatchDelete} onClose={() => setShowBatchDelete(false)} title="确认批量删除任务">
+        <div className="py-4">
+          <p className="text-sm text-slate-600">确认删除选中的 <span className="font-bold text-rose-600">{selectedTaskIds.size}</span> 条家默任务？删除后不可恢复，但基础词条库数据不受影响。</p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => setShowBatchDelete(false)}>取消</Button>
+          <Button variant="danger" onClick={confirmBatchDelete}>确认删除</Button>
+        </div>
       </Modal>
     </div>
   );

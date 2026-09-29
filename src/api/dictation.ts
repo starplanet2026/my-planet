@@ -194,6 +194,13 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
   return data as DictationErrorWord;
 }
 
+// 批量删除错词（仅删除个人错词记录，不影响基础词条库）
+export async function deleteErrorWords(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase.from('dictation_error_words').delete().in('id', ids);
+  if (error) throw error;
+}
+
 export async function importErrorWords(
   memberId: string,
   subject: DictationSubject,

@@ -47,8 +47,8 @@ export function FillBlankQuestion({ question: q, answer, setAnswer, showResult, 
     setAnswer(next.join('||'));
   };
 
-  // 数字键盘按键
-  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '+', '-', '×', '÷', '⌫'];
+  // 数字键盘按键（含括号、省略号）
+  const keys = ['7', '8', '9', '(', ')', '4', '5', '6', '+', '-', '1', '2', '3', '×', '÷', '0', '.', '……', '⌫'];
 
   const handleKey = (key: string) => {
     if (activeBlank === null) return;
@@ -152,7 +152,7 @@ export function FillBlankQuestion({ question: q, answer, setAnswer, showResult, 
               收起
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {keys.map(k => (
               <button
                 key={k}
