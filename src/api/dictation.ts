@@ -301,6 +301,15 @@ export async function updateTaskStatus(taskId: string, status: 'active' | 'offli
   if (error) throw error;
 }
 
+// 修改任务星光值（仅当前任务，不影响基础词条库）
+export async function updateTaskStarPerWord(taskId: string, starPerWord: number): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_tasks')
+    .update({ star_per_word: starPerWord })
+    .eq('id', taskId);
+  if (error) throw error;
+}
+
 export async function addTaskWords(taskId: string, words: TaskWordInput[]): Promise<void> {
   if (words.length === 0) return;
   const rows = words.map(w => ({ task_id: taskId, ...w }));
@@ -316,6 +325,22 @@ export async function listTaskWords(taskId: string): Promise<DictationTaskWord[]
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data as DictationTaskWord[];
+}
+
+// 批量获取多个任务的词条数量
+export async function getTaskWordCounts(taskIds: string[]): Promise<Record<string, number>> {
+  if (taskIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('dictation_task_words')
+    .select('task_id')
+    .in('task_id', taskIds);
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  (data ?? []).forEach(row => {
+    const tid = row.task_id as string;
+    counts[tid] = (counts[tid] ?? 0) + 1;
+  });
+  return counts;
 }
 
 export async function removeTaskWord(id: string): Promise<void> {

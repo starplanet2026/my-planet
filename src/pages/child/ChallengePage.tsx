@@ -28,12 +28,12 @@ import {
   startChallengeSession, flushChallengeSession,
   createQuestionReport,
 } from '../../api/challenges';
-import { listTasks as listDictationTasks } from '../../api/dictation';
+import { listTasks as listDictationTasks, getTaskWordCounts } from '../../api/dictation';
 import { listStudentInstances, getTaskMaxStars } from '../../api/recitation';
 import type {
   ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, SetWithLevels, LevelWithProgress,
-  WrongQuestionStat, WrongBattlePoolItem, ChallengeSubject, RecitationInstance,
+  WrongQuestionStat, WrongBattlePoolItem, ChallengeSubject, RecitationInstance, DictationTask,
 } from '../../api/types';
 
 // ====== 板块配置 ======
@@ -110,6 +110,10 @@ export function ChallengePage() {
   const [activeBoard, setActiveBoard] = useState<ChallengeBoardType>('today_review');
   // 有 active 家默任务的学科集合（用于控制今日复习入口卡片展示）
   const [activeDictationSubjects, setActiveDictationSubjects] = useState<Set<string>>(new Set());
+  // active 家默任务列表（用于卡片展示标题与总星光值）
+  const [activeDictTasks, setActiveDictTasks] = useState<DictationTask[]>([]);
+  // 家默任务词条数量（taskId → count）
+  const [dictWordCounts, setDictWordCounts] = useState<Record<string, number>>({});
   // 待作答的背诵任务实例（用于今日复习板块展示背诵入口）
   const [pendingRecitations, setPendingRecitations] = useState<RecitationInstance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,8 +137,16 @@ export function ChallengePage() {
         setBoards(data);
         // 仅 status=active 的家默任务才在前台展示入口
         const activeSubjects = new Set<string>();
-        dictTasks.filter(t => t.status === 'active').forEach(t => activeSubjects.add(t.subject));
+        const activeTasks = dictTasks.filter(t => t.status === 'active');
+        activeTasks.forEach(t => activeSubjects.add(t.subject));
         setActiveDictationSubjects(activeSubjects);
+        setActiveDictTasks(activeTasks);
+        // 获取家默任务词条数量
+        if (activeTasks.length > 0) {
+          getTaskWordCounts(activeTasks.map(t => t.id))
+            .then(setDictWordCounts)
+            .catch(() => setDictWordCounts({}));
+        }
         setPendingRecitations(recInstances);
       } catch (e) {
         // 迁移未执行时回退到旧逻辑
@@ -363,6 +375,8 @@ export function ChallengePage() {
                 standaloneLevels={board?.levels ?? []}
                 childId={child?.id ?? ''}
                 activeDictationSubjects={activeDictationSubjects}
+                activeDictTasks={activeDictTasks}
+                dictWordCounts={dictWordCounts}
                 pendingRecitations={pendingRecitations}
                 onSelectSet={(s) => {
                   // 清除旧快照，进入新题集
@@ -414,7 +428,7 @@ export function ChallengePage() {
 // ================================================================
 // 板块组件：标题 + 题集卡片网格
 // ================================================================
-function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, activeDictationSubjects, pendingRecitations, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
+function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelectSet, onSelectLevel, childId, activeDictationSubjects, activeDictTasks, dictWordCounts, pendingRecitations, onWrongRetry, onStartBattle, onViewSetQuestions, onViewLevelQuestions }: {
   boardType: ChallengeBoardType;
   label: string;
   icon: string;
@@ -424,6 +438,8 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   onSelectLevel: (lv: LevelWithProgress) => void;
   childId: string;
   activeDictationSubjects: Set<string>;
+  activeDictTasks: DictationTask[];
+  dictWordCounts: Record<string, number>;
   pendingRecitations: RecitationInstance[];
   onWrongRetry: (setId: string, setTitle: string, questionIds: string[]) => void;
   onStartBattle: () => void;
@@ -460,21 +476,49 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
         {boardType === 'today_review' && activeDictationSubjects.has('english') && (
           <div
             onClick={() => navigate('/challenge/dictation/english')}
-            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+            className="cursor-pointer rounded-2xl p-3 flex flex-col bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative"
           >
-            <span className="text-3xl mb-1">📝</span>
-            <span className="text-sm font-bold">英语家默</span>
-            <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+            {/* 学科Tag标签（左上角带底色） */}
+            <span className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+              英语家默
+            </span>
+            <div className="flex-1 flex flex-col items-center justify-center mt-3">
+              <span className="text-2xl mb-1">📝</span>
+              {activeDictTasks.filter(t => t.subject === 'english').slice(0, 1).map(t => {
+                const count = dictWordCounts[t.id] ?? 0;
+                const total = t.star_per_word * count;
+                return (
+                  <div key={t.id} className="text-center">
+                    <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
+                    <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
         {boardType === 'today_review' && activeDictationSubjects.has('chinese') && (
           <div
             onClick={() => navigate('/challenge/dictation/chinese')}
-            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
+            className="cursor-pointer rounded-2xl p-3 flex flex-col bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative"
           >
-            <span className="text-3xl mb-1">✍️</span>
-            <span className="text-sm font-bold">语文家默</span>
-            <span className="text-[10px] mt-1 opacity-90">点击开始默写</span>
+            {/* 学科Tag标签（左上角带底色） */}
+            <span className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
+              语文家默
+            </span>
+            <div className="flex-1 flex flex-col items-center justify-center mt-3">
+              <span className="text-2xl mb-1">✍️</span>
+              {activeDictTasks.filter(t => t.subject === 'chinese').slice(0, 1).map(t => {
+                const count = dictWordCounts[t.id] ?? 0;
+                const total = t.star_per_word * count;
+                return (
+                  <div key={t.id} className="text-center">
+                    <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
+                    <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
         {/* 背诵任务入口卡片（每个待作答实例一张，点击进入录音作答页） */}

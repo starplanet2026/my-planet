@@ -5,6 +5,7 @@ import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { usePetUiStore } from '../../../../store/petUiStore';
+import { Minimize2 } from 'lucide-react';
 import type { Pet } from '../../../../api/types';
 import { supabase } from '../../../../api/client';
 import {
@@ -86,7 +87,10 @@ export function StudyCompanionModal({
   const persistedPaused = usePetUiStore(s => s.studyPaused);
   const setStudyState = usePetUiStore(s => s.setStudyState);
   const clearStudyState = usePetUiStore(s => s.clearStudyState);
+  const setShowStudy = usePetUiStore(s => s.setShowStudy);
   const restoredRef = useRef(false);
+  // 防止同一任务快速重复点击触发多次发奖（同步锁）
+  const rewardingRef = useRef<Set<string>>(new Set());
 
   // 首次挂载时从 store 恢复
   useEffect(() => {
@@ -138,6 +142,15 @@ export function StudyCompanionModal({
     clearStudyState();
     onClose();
   }, [clearStudyState, onClose]);
+
+  // 最小化：仅隐藏弹窗，不清空学习状态，用户可去其他页面；回来点陪伴学习按钮可恢复
+  const handleMinimize = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setStudying(false);
+    setPaused(true);
+    // 不调用 clearStudyState，保留学习进度到 store
+    setShowStudy(false);
+  }, [setShowStudy]);
 
   // 倒计时（暂停时停止）
   useEffect(() => {
@@ -241,29 +254,44 @@ export function StudyCompanionModal({
     setStep('timer');
   };
 
-  // 勾选/取消勾选任务
-  const handleToggleTask = async (taskId: number) => {
+  // 勾选/取消勾选任务（单任务只发一次星光值：首次完成发奖，后续恢复/再完成不重复发）
+  const handleToggleTask = async (taskId: string) => {
     const task = taskList.find(t => t.id === taskId);
     if (!task) return;
     const willBeDone = !task.done;
 
-    setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: willBeDone } : x));
+    // 首次完成 + 有奖励 + 未发过 + 未在发奖中：才触发发奖
+    const shouldReward = willBeDone && task.reward > 0 && !task.rewarded && !rewardingRef.current.has(taskId);
+    if (shouldReward) {
+      // 同步加锁，防止快速重复点击在 await 期间多次进入发奖分支
+      rewardingRef.current.add(taskId);
+    }
 
-    // 从未完成 → 完成：发放星光值奖励（且未发过）
-    if (willBeDone && task.reward > 0 && !task.rewarded) {
+    // 同步更新 done 与 rewarded（乐观标记 rewarded，避免重复发奖）
+    setTaskList(prev => prev.map(x => x.id === taskId ? {
+      ...x,
+      done: willBeDone,
+      rewarded: shouldReward ? true : x.rewarded,
+    } : x));
+
+    if (shouldReward) {
       try {
         const result = await studyTaskReward(childId, task.reward);
         if (result.success) {
           setTotalStarEarned(prev => prev + task.reward);
-          setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, rewarded: true } : x));
           toast.success(`完成任务！获得 ${task.reward} 星光值`);
           refreshMembers();
           onCompleted();
+        } else {
+          // 后端未成功：回退勾选与 rewarded
+          setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: false, rewarded: false } : x));
         }
       } catch (e: any) {
         toast.error(e?.message ?? '奖励领取失败');
-        // 失败则回退勾选状态
-        setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: false } : x));
+        // 失败则回退勾选状态与 rewarded
+        setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: false, rewarded: false } : x));
+      } finally {
+        rewardingRef.current.delete(taskId);
       }
     }
   };
@@ -565,7 +593,16 @@ export function StudyCompanionModal({
     const currentMessage = STUDY_MESSAGES[messageIdx];
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'linear-gradient(to bottom, #E8F5E9, #C8E6C9)' }}>
-        <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-20 w-full max-w-5xl">
+        {/* 最小化按钮（左上角） */}
+        <button
+          onClick={handleMinimize}
+          title="最小化（可去其他页面，回来点陪伴学习继续）"
+          className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/80 text-slate-600 text-sm font-medium hover:bg-white shadow-sm z-10"
+        >
+          <Minimize2 className="w-4 h-4" />
+          <span>最小化</span>
+        </button>
+        <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-20 w-full h-full max-w-5xl">
           {/* 左侧：时间（上）+ 对话框（中）+ 宠物（下） */}
           <div className="flex flex-col items-center gap-3 flex-shrink-0">
             {/* 倒计时（大） */}
@@ -599,17 +636,17 @@ export function StudyCompanionModal({
           </div>
 
           {/* 右侧：学习任务 + 按钮（更大） */}
-          <div className="flex flex-col items-center gap-5 md:flex-1 md:max-w-md w-full">
-            {/* 学习任务列表（可逐条勾选完成） */}
+          <div className="flex flex-col items-center gap-5 md:flex-1 md:max-w-md w-full h-full max-h-screen py-4 min-h-0">
+            {/* 学习任务列表（可逐条勾选完成，内部滚动，不会把按钮顶出画面） */}
             {taskList.length > 0 && (
-              <div className="w-full bg-white/80 rounded-2xl p-4 shadow-sm">
-                <p className="text-sm text-slate-500 mb-3 flex items-center justify-between">
+              <div className="w-full bg-white/80 rounded-2xl p-4 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+                <p className="text-sm text-slate-500 mb-3 flex items-center justify-between flex-shrink-0">
                   <span className="font-medium">📚 学习任务</span>
                   <span className="text-xs text-slate-400">
                     已完成 {taskList.filter(t => t.done).length}/{taskList.length}
                   </span>
                 </p>
-                <ul className="space-y-2.5">
+                <ul className="space-y-2.5 overflow-y-auto flex-1 min-h-0 pr-1">
                   {taskList.map(t => (
                     <li key={t.id}>
                       <button
@@ -639,8 +676,8 @@ export function StudyCompanionModal({
                 </ul>
               </div>
             )}
-            {/* 横向按钮 */}
-            <div className="flex gap-4 mt-2">
+            {/* 横向按钮（固定在底部，不被任务顶出画面） */}
+            <div className="flex gap-4 mt-2 flex-shrink-0">
               <button
                 onClick={() => setPaused(p => !p)}
                 className="px-8 py-3 rounded-xl bg-white/80 text-slate-700 text-base font-medium hover:bg-white shadow-sm"

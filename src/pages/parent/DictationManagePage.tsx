@@ -12,14 +12,14 @@ type Tab = 'words' | 'errors' | 'tasks';
 type TaskSubTab = 'publish' | 'manage';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: 'tasks', label: '家默任务', icon: <Sparkles className="w-4 h-4" /> },
   { key: 'words', label: '家默词条库', icon: <BookOpen className="w-4 h-4" /> },
   { key: 'errors', label: '家默错词库', icon: <AlertCircle className="w-4 h-4" /> },
-  { key: 'tasks', label: '家默任务', icon: <Sparkles className="w-4 h-4" /> },
 ];
 
 export function DictationManagePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('words');
+  const [tab, setTab] = useState<Tab>('tasks');
   const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>('publish');
 
   return (

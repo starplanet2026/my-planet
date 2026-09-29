@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles, CheckSquare, Square } from 'lucide-react';
 import {
   listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus, deleteTask,
+  updateTaskStarPerWord, createTask,
 } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject, DictationTaskStatus } from '../../api/types';
 
@@ -59,6 +60,17 @@ export function DictationTaskManagePage() {
     textbook_name: '', unit_no: 0, unit_name: '', pinyin: '',
     answer: '', chinese_meaning: '', part_of_speech: '',
   });
+
+  // 任务详情编辑
+  const [detailTask, setDetailTask] = useState<DictationTask | null>(null);
+  const [editStarPerWord, setEditStarPerWord] = useState(1);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+
+  // 重新推送
+  const [showRepush, setShowRepush] = useState(false);
+  const [repushTarget, setRepushTarget] = useState<DictationTask | null>(null);
+  const [repushChildId, setRepushChildId] = useState('');
+  const [repushing, setRepushing] = useState(false);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -217,6 +229,73 @@ export function DictationTaskManagePage() {
     }
   };
 
+  // 打开任务详情
+  const openDetail = (task: DictationTask) => {
+    setDetailTask(task);
+    setEditStarPerWord(task.star_per_word);
+    if (expandedId !== task.id) {
+      setExpandedId(task.id);
+      loadTaskWords(task.id);
+    }
+  };
+
+  // 保存星光值修改
+  const confirmSaveStar = async () => {
+    if (!detailTask) return;
+    try {
+      await updateTaskStarPerWord(detailTask.id, editStarPerWord);
+      setTasks(prev => prev.map(t => t.id === detailTask.id ? { ...t, star_per_word: editStarPerWord } : t));
+      setDetailTask({ ...detailTask, star_per_word: editStarPerWord });
+      toast.success('星光值已更新');
+    } catch (e: any) {
+      toast.error('保存失败：' + e.message);
+    } finally {
+      setShowSaveConfirm(false);
+    }
+  };
+
+  // 打开重新推送弹窗
+  const openRepush = (task: DictationTask) => {
+    setRepushTarget(task);
+    setRepushChildId('');
+    setShowRepush(true);
+  };
+
+  // 确认重新推送
+  const confirmRepush = async () => {
+    if (!repushTarget || !repushChildId || !family) return;
+    setRepushing(true);
+    try {
+      // 加载原任务词条
+      const words = await listTaskWords(repushTarget.id);
+      // 创建新任务到目标用户
+      const newTask = await createTask({
+        family_id: family.id,
+        member_id: repushChildId,
+        subject: repushTarget.subject,
+        title: repushTarget.title,
+        star_per_word: repushTarget.star_per_word,
+      });
+      // 复制词条到新任务
+      if (words.length > 0) {
+        await addTaskWords(newTask.id, words.map(w => ({
+          word_id: w.word_id, error_word_id: w.error_word_id,
+          textbook_name: w.textbook_name, unit_no: w.unit_no, unit_name: w.unit_name,
+          page_no: w.page_no, chinese_meaning: w.chinese_meaning,
+          part_of_speech: w.part_of_speech, pinyin: w.pinyin,
+          answer: w.answer, is_temporary: w.is_temporary, save_to_library: false,
+        })));
+      }
+      toast.success(`已推送给 ${children.find(c => c.id === repushChildId)?.name ?? '用户'}`);
+      setShowRepush(false);
+      await loadTasks();
+    } catch (e: any) {
+      toast.error('推送失败：' + e.message);
+    } finally {
+      setRepushing(false);
+    }
+  };
+
   if (loading) return <Loading />;
 
   if (children.length === 0) {
@@ -339,6 +418,20 @@ export function DictationTaskManagePage() {
                         : <><Power className="w-3 h-3" />上线</>}
                     </button>
                   )}
+                  {/* 详情编辑 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openDetail(task); }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-blue-100 text-blue-600 hover:bg-blue-200 shrink-0"
+                  >
+                    <Sparkles className="w-3 h-3" />详情
+                  </button>
+                  {/* 重新推送 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openRepush(task); }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-amber-100 text-amber-600 hover:bg-amber-200 shrink-0"
+                  >
+                    <Plus className="w-3 h-3" />推送
+                  </button>
                   {/* 单条删除 */}
                   <button
                     onClick={(e) => { e.stopPropagation(); onSingleDelete(task.id); }}
@@ -469,6 +562,108 @@ export function DictationTaskManagePage() {
           <Button variant="secondary" onClick={() => setShowBatchDelete(false)}>取消</Button>
           <Button variant="danger" onClick={confirmBatchDelete}>确认删除</Button>
         </div>
+      </Modal>
+
+      {/* 任务详情编辑弹窗 */}
+      <Modal open={detailTask !== null} onClose={() => setDetailTask(null)} title="任务详情" size="md">
+        {detailTask && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm">{detailTask.title}</span>
+              <span className="text-xs text-slate-400">{detailTask.subject === 'english' ? '英语' : '语文'}</span>
+              <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_COLOR[detailTask.status])}>
+                {STATUS_LABEL[detailTask.status]}
+              </span>
+            </div>
+            {/* 星光值编辑 */}
+            <div className="bg-slate-50 rounded-lg p-3">
+              <label className="text-xs text-slate-500 mb-1 block">每词星光值（仅影响本任务，不改动基础词条库）</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={editStarPerWord}
+                  onChange={e => setEditStarPerWord(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-24"
+                />
+                <span className="text-xs text-slate-400">星/词</span>
+                <Button size="sm" onClick={() => setShowSaveConfirm(true)}>保存</Button>
+              </div>
+            </div>
+            {/* 词条列表 */}
+            <div>
+              <div className="text-xs text-slate-500 mb-2">词条（{taskWords.length}）</div>
+              {wordsLoading ? (
+                <div className="text-center py-4 text-xs text-slate-400">加载中...</div>
+              ) : taskWords.length === 0 ? (
+                <div className="text-center py-4 text-xs text-slate-400">暂无词条</div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {taskWords.map(w => (
+                    <div key={w.id} className="p-1.5 bg-white rounded-lg border border-slate-100">
+                      <div className="text-xs font-medium truncate">{w.answer}</div>
+                      <div className="text-slate-400 text-xs truncate">
+                        {detailTask.subject === 'english' ? w.chinese_meaning : w.pinyin}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* 重新推送 */}
+            {detailTask.status !== 'completed' && (
+              <Button size="sm" variant="secondary" onClick={() => openRepush(detailTask)} className="w-full">
+                <Plus className="w-3 h-3" />重新推送给其他用户
+              </Button>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* 保存星光值二次确认 */}
+      <Modal open={showSaveConfirm} onClose={() => setShowSaveConfirm(false)} title="确认修改星光值">
+        <div className="py-4">
+          <p className="text-sm text-slate-600">
+            确认将本任务每词星光值修改为 <span className="font-bold text-amber-600">{editStarPerWord}</span> 星？
+            此修改仅影响当前任务，不改动基础词条库。
+          </p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={() => setShowSaveConfirm(false)}>取消</Button>
+          <Button onClick={confirmSaveStar}>确认保存</Button>
+        </div>
+      </Modal>
+
+      {/* 重新推送弹窗 */}
+      <Modal open={showRepush} onClose={() => { if (!repushing) setShowRepush(false); }} title="重新推送任务">
+        {repushTarget && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              将任务「{repushTarget.title}」（{repushTarget.subject === 'english' ? '英语' : '语文'}）重新推送给其他用户。
+              重新推送不会覆盖用户历史完成记录。
+            </p>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">选择用户</label>
+              <Select
+                value={repushChildId}
+                onChange={e => setRepushChildId(e.target.value)}
+                className="text-sm"
+              >
+                <option value="">请选择用户</option>
+                {children.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => setShowRepush(false)} disabled={repushing}>取消</Button>
+              <Button onClick={confirmRepush} disabled={!repushChildId || repushing}>
+                {repushing ? '推送中...' : '确认推送'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

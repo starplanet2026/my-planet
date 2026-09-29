@@ -63,6 +63,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   const [added, setAdded] = useState<AddedWord[]>([]);
   // 临时新增词条（独立列表，非本次任务）
   const [tempWords, setTempWords] = useState<AddedWord[]>([]);
+  const [tempSelected, setTempSelected] = useState<Set<string>>(new Set());
 
   // 临时词条弹窗
   const [showTemp, setShowTemp] = useState(false);
@@ -107,6 +108,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
     setErrSelected(new Set());
     setAdded([]);
     setTempWords([]);
+    setTempSelected(new Set());
     setFilterBook('');
     setFilterUnit('');
   };
@@ -162,34 +164,72 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   const removeAdded = (key: string) => setAdded(prev => prev.filter(a => a.key !== key));
 
   // 临时词条操作
-  const removeTempWord = (key: string) => setTempWords(prev => prev.filter(a => a.key !== key));
-
-  // 将临时词条加入本次任务
-  const moveTempToTask = (key: string) => {
-    const w = tempWords.find(a => a.key === key);
-    if (!w) return;
-    if (added.some(a => a.answer === w.answer)) { toast.error('该词条已在任务中'); return; }
-    setAdded(prev => [...prev, w]);
+  const removeTempWord = (key: string) => {
     setTempWords(prev => prev.filter(a => a.key !== key));
-    toast.success('已加入本次任务');
+    setTempSelected(prev => { const n = new Set(prev); n.delete(key); return n; });
   };
 
-  // 将临时词条保存到长期词条库
-  const saveTempToLibrary = async (key: string) => {
-    const w = tempWords.find(a => a.key === key);
-    if (!w || !family) return;
-    try {
-      const created = await createWord(family.id, {
-        subject, textbook_name: w.textbook_name, unit_no: w.unit_no,
-        unit_name: w.unit_name, page_no: w.page_no ?? null,
-        chinese_meaning: w.chinese_meaning ?? null, part_of_speech: w.part_of_speech ?? null,
-        pinyin: w.pinyin ?? null, answer: w.answer,
-      });
-      setTempWords(prev => prev.filter(a => a.key !== key));
-      toast.success('已保存到词条库');
-    } catch (e: any) {
-      toast.error('保存失败：' + e.message);
+  // 切换勾选
+  const toggleTempSelect = (key: string) => {
+    setTempSelected(prev => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  };
+
+  // 全选/取消全选当前临时词条
+  const toggleTempSelectAll = () => {
+    if (tempSelected.size === tempWords.length) {
+      setTempSelected(new Set());
+    } else {
+      setTempSelected(new Set(tempWords.map(w => w.key)));
     }
+  };
+
+  // 批量加入本次任务
+  const batchMoveTempToTask = () => {
+    if (tempSelected.size === 0) return;
+    const selected = tempWords.filter(w => tempSelected.has(w.key));
+    const moved: AddedWord[] = [];
+    let skip = 0;
+    selected.forEach(w => {
+      if (added.some(a => a.answer === w.answer)) { skip++; return; }
+      moved.push(w);
+    });
+    if (moved.length > 0) {
+      setAdded(prev => [...prev, ...moved]);
+      const movedKeys = new Set(moved.map(w => w.key));
+      setTempWords(prev => prev.filter(w => !movedKeys.has(w.key)));
+    }
+    setTempSelected(new Set());
+    toast.success(`已加入 ${moved.length} 条到本次任务${skip > 0 ? `，${skip} 条已在任务中跳过` : ''}`);
+  };
+
+  // 批量存入词条库
+  const batchSaveTempToLibrary = async () => {
+    if (tempSelected.size === 0 || !family) return;
+    const selected = tempWords.filter(w => tempSelected.has(w.key));
+    let success = 0, failed = 0;
+    for (const w of selected) {
+      try {
+        await createWord(family.id, {
+          subject, textbook_name: w.textbook_name, unit_no: w.unit_no,
+          unit_name: w.unit_name, page_no: w.page_no ?? null,
+          chinese_meaning: w.chinese_meaning ?? null, part_of_speech: w.part_of_speech ?? null,
+          pinyin: w.pinyin ?? null, answer: w.answer,
+        });
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    // 从临时列表移除已处理的词条
+    const processedKeys = new Set(selected.map(w => w.key));
+    setTempWords(prev => prev.filter(w => !processedKeys.has(w.key)));
+    setTempSelected(new Set());
+    toast.success(`已保存 ${success} 条到词条库${failed > 0 ? `，${failed} 条失败` : ''}`);
   };
 
   // 下载临时词条导入模板（同家默词条库模板）
@@ -422,32 +462,61 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               <Button size="sm" onClick={() => setShowTemp(true)}><Plus className="w-3 h-3" />新增</Button>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。每条可选择加入本次任务或保存到词条库。</p>
+          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。勾选后可批量加入任务或存入词条库。</p>
           <input ref={tempFileRef} type="file" accept=".xlsx,.xls" onChange={onTempFileChange} className="hidden" />
           {tempWords.length > 0 && (
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {tempWords.map(w => (
-                <div key={w.key} className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-slate-100">
-                  <div className="text-xs min-w-0 flex-1">
-                    <div className="font-medium truncate">{w.answer}</div>
-                    <div className="text-slate-400 truncate">
-                      {subject === 'english' ? w.chinese_meaning : w.pinyin}
+            <>
+              <div className="flex items-center gap-2 mb-1 px-1">
+                <button onClick={toggleTempSelectAll} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
+                  {tempSelected.size === tempWords.length && tempWords.length > 0
+                    ? <CheckSquare className="w-3.5 h-3.5 text-emerald-500" />
+                    : <Square className="w-3.5 h-3.5" />}
+                  {tempSelected.size === tempWords.length && tempWords.length > 0 ? '取消全选' : '全选'}
+                </button>
+                <span className="text-xs text-slate-400">已选 {tempSelected.size}/{tempWords.length}</span>
+              </div>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {tempWords.map(w => (
+                  <div key={w.key} className="flex items-center gap-2 p-1.5 bg-white rounded-lg border border-slate-100">
+                    <button onClick={() => toggleTempSelect(w.key)} className="shrink-0">
+                      {tempSelected.has(w.key)
+                        ? <CheckSquare className="w-4 h-4 text-emerald-500" />
+                        : <Square className="w-4 h-4 text-slate-300" />}
+                    </button>
+                    <div className="text-xs min-w-0 flex-1">
+                      <div className="font-medium truncate">{w.answer}</div>
+                      <div className="text-slate-400 truncate">
+                        {subject === 'english' ? w.chinese_meaning : w.pinyin}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="success" onClick={() => moveTempToTask(w.key)} className="h-7 px-2 text-xs">
-                      加入任务
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => saveTempToLibrary(w.key)} className="h-7 px-2 text-xs">
-                      存词条库
-                    </Button>
-                    <button onClick={() => removeTempWord(w.key)} className="p-1 text-red-400 hover:text-red-600">
+                    <button onClick={() => removeTempWord(w.key)} className="p-1 text-red-400 hover:text-red-600 shrink-0">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {/* 底部批量操作按钮 */}
+              <div className="flex gap-2 mt-2 pt-2 border-t border-slate-100">
+                <Button
+                  size="sm"
+                  variant="success"
+                  onClick={batchMoveTempToTask}
+                  disabled={tempSelected.size === 0}
+                  className="flex-1"
+                >
+                  加入本次任务（{tempSelected.size}）
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={batchSaveTempToLibrary}
+                  disabled={tempSelected.size === 0}
+                  className="flex-1"
+                >
+                  存入词条库（{tempSelected.size}）
+                </Button>
+              </div>
+            </>
           )}
         </Card>
       </div>
