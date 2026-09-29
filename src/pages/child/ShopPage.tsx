@@ -127,6 +127,8 @@ export function ShopPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [activeCat, setActiveCat] = useState<string>('全部');
   const [wheelOpen, setWheelOpen] = useState(false);
+  // 幸运大转盘入口图片加载失败兜底
+  const [wheelBgError, setWheelBgError] = useState(false);
 
   const members = useFamilyStore(s => s.members);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -230,16 +232,25 @@ export function ShopPage() {
           {/* 幸运大转盘入口 */}
           <div
             onClick={() => setWheelOpen(true)}
-            className="cursor-pointer rounded-2xl overflow-hidden border-2 border-amber-300 shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all aspect-[3/4] flex items-start justify-center pt-[26%]"
-            style={{
-              backgroundImage: 'url(/lucky-wheel-bg.jpg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
+            className="relative cursor-pointer rounded-2xl overflow-hidden border-2 border-amber-300 shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all aspect-[3/4]"
           >
-            <div className="bg-gradient-to-b from-amber-300 to-amber-500 px-4 py-2.5 rounded-full shadow-lg border-2 border-amber-200 text-center">
-              <h3 className="font-bold text-white text-sm leading-tight drop-shadow">幸运大转盘</h3>
-              <p className="text-[11px] text-amber-50 mt-0.5 font-medium">20金币/转盘券</p>
+            {wheelBgError ? (
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-200 via-amber-300 to-orange-400 flex items-center justify-center">
+                <span className="text-6xl">🎡</span>
+              </div>
+            ) : (
+              <img
+                src={`${import.meta.env.BASE_URL}lucky-wheel-bg.jpg`}
+                onError={() => setWheelBgError(true)}
+                alt="幸运大转盘"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
+            <div className="relative z-10 flex items-start justify-center pt-[26%]">
+              <div className="bg-gradient-to-b from-amber-300 to-amber-500 px-4 py-2.5 rounded-full shadow-lg border-2 border-amber-200 text-center">
+                <h3 className="font-bold text-white text-sm leading-tight drop-shadow">幸运大转盘</h3>
+                <p className="text-[11px] text-amber-50 mt-0.5 font-medium">20金币/转盘券</p>
+              </div>
             </div>
           </div>
           {filteredItems.map(item => (
