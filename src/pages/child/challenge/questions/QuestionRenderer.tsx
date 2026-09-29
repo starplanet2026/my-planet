@@ -5,6 +5,7 @@ import { MatchQuestion } from './MatchQuestion';
 import { ScrambleQuestion } from './ScrambleQuestion';
 import { ReciteQuestion } from './ReciteQuestion';
 import { CorrectQuestion } from './CorrectQuestion';
+import { FillBlankQuestion } from './FillBlankQuestion';
 import { Input } from '../../../../components/common/Input';
 
 export interface QuestionComponentProps {
@@ -22,6 +23,8 @@ export function QuestionRenderer(props: QuestionComponentProps) {
     case 'choice':
     case 'multi_choice':
       return <ChoiceQuestion {...props} />;
+    case 'fill_blank':
+      return <FillBlankQuestion {...props} />;
     case 'spell':
       return <SpellQuestion {...props} />;
     case 'match':

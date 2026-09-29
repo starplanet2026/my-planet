@@ -4,7 +4,7 @@ import { setMuted as setAudioMuted } from '../lib/audio';
 
 // 萌宠闯关任务类型（与 StudyCompanionModal 内部定义保持一致）
 export interface PersistedStudyTask {
-  id: number;
+  id: string;
   text: string;
   reward: number;
   done: boolean;

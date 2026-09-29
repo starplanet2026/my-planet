@@ -4,7 +4,7 @@ import type {
   AnswerQuestionResult, AnswerWordResult, ReviewWrongResult,
   ChallengeSetType, QuestionType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, LevelSnapshot, FinishLevelResult,
-  WrongBattlePoolItem, WrongQuestionStat,
+  WrongBattlePoolItem, WrongBattleOfflineItem, WrongQuestionStat,
   ChallengeLevel, ChallengeSubject, LevelTargetSection,
 } from './types';
 
@@ -211,6 +211,7 @@ export async function createQuestionsBatch(
     question_text: string;
     options?: string[];
     correct_answer: string;
+    answer2?: string;
     explanation?: string;
     difficulty?: Difficulty;
     display_order?: number;
@@ -645,17 +646,136 @@ export async function fetchWrongBattlePool(memberId: string): Promise<WrongBattl
   return (data ?? []) as WrongBattlePoolItem[];
 }
 
-// 获取错题统计（后台筛选用）
+// 获取已下线错题池
+export async function fetchWrongBattlePoolOffline(memberId: string): Promise<WrongBattleOfflineItem[]> {
+  const { data, error } = await supabase.rpc('get_wrong_battle_pool_offline', {
+    p_member_id: memberId,
+  });
+  if (error) throw error;
+  return (data ?? []) as WrongBattleOfflineItem[];
+}
+
+// 手动下线错题（从上线中池移到已下线池）
+export async function offlineWrongBattleQuestions(poolIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc('offline_wrong_battle_questions', {
+    p_pool_ids: poolIds,
+  });
+  if (error) throw error;
+  return data as number;
+}
+
+// 重新上线错题（从已下线池移回上线中池）
+export async function reonlineWrongBattleQuestions(poolIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc('reonline_wrong_battle_questions', {
+    p_pool_ids: poolIds,
+  });
+  if (error) throw error;
+  return data as number;
+}
+
+// 永久删除错题
+export async function deleteWrongBattleQuestions(poolIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc('delete_wrong_battle_questions', {
+    p_pool_ids: poolIds,
+  });
+  if (error) throw error;
+  return data as number;
+}
+
+// 获取错题统计（后台筛选用，支持按关卡筛选）
+// 直接从 wrong_questions 表查询，不依赖 RPC（避免 question_progress 无记录时漏数据）
 export async function fetchWrongQuestionStats(
   memberId?: string,
   challengeSetId?: string,
+  levelId?: string,
 ): Promise<WrongQuestionStat[]> {
-  const { data, error } = await supabase.rpc('get_wrong_question_stats', {
-    p_member_id: memberId ?? null,
-    p_challenge_set_id: challengeSetId ?? null,
-  });
-  if (error) throw error;
-  return (data ?? []) as WrongQuestionStat[];
+  // 1. 获取相关题目：按 challenge_set_id 或 level_id 匹配
+  // 题集通过 challenge_set_levels 关联表关联关卡，题目通过 level_id 关联关卡
+  let qQuery = supabase
+    .from('questions')
+    .select('id, question_text, difficulty, type, challenge_set_id, level_id');
+  if (levelId) {
+    qQuery = qQuery.eq('level_id', levelId);
+  } else if (challengeSetId) {
+    // 通过 challenge_set_levels 关联表查找题集下所有关卡 ID
+    const { data: junctionLevels } = await supabase
+      .from('challenge_set_levels')
+      .select('level_id')
+      .eq('challenge_set_id', challengeSetId);
+    const lvIds = (junctionLevels ?? []).map(l => l.level_id);
+    // 同时匹配直接绑定题集和通过关卡间接绑定题集的题目
+    if (lvIds.length > 0) {
+      const orParts = [`challenge_set_id.eq.${challengeSetId}`];
+      orParts.push(`level_id.in.(${lvIds.join(',')})`);
+      qQuery = qQuery.or(orParts.join(','));
+    } else {
+      qQuery = qQuery.eq('challenge_set_id', challengeSetId);
+    }
+  }
+  const { data: questions, error: qErr } = await qQuery;
+  if (qErr) throw qErr;
+  if (!questions || questions.length === 0) return [];
+
+  const qIds = questions.map(q => q.id);
+  const qMap = new Map(questions.map(q => [q.id, q]));
+
+  // 2. 查询 wrong_questions（直接读 wrong_count，不依赖 question_progress）
+  // 不限制 status，只看 wrong_count > 0 的记录，前端按 wrong_count > correct_count 过滤
+  let wQuery = supabase
+    .from('wrong_questions')
+    .select('question_id, wrong_count, correct_count, status')
+    .in('question_id', qIds)
+    .gt('wrong_count', 0);
+  if (memberId) wQuery = wQuery.eq('member_id', memberId);
+  const { data: wrongRecords, error: wErr } = await wQuery;
+  if (wErr) throw wErr;
+
+  // 3. 查询答题记录统计
+  const { data: records, error: rErr } = await supabase
+    .from('question_records')
+    .select('question_id, is_correct')
+    .in('question_id', qIds);
+  if (rErr) throw rErr;
+
+  const attemptMap = new Map<string, { attempt: number; correct: number }>();
+  for (const r of (records ?? []) as { question_id: string; is_correct: boolean }[]) {
+    const cur = attemptMap.get(r.question_id) ?? { attempt: 0, correct: 0 };
+    cur.attempt++;
+    if (r.is_correct) cur.correct++;
+    attemptMap.set(r.question_id, cur);
+  }
+
+  // 查询成员名
+  let memberName: string | null = null;
+  if (memberId) {
+    const { data: m } = await supabase.from('members').select('name').eq('id', memberId).single();
+    memberName = m?.name ?? null;
+  }
+
+  // 只返回 wrong_count > correct_count 的错题（做对次数超过错误次数后自动下线）
+  return ((wrongRecords ?? []) as any[])
+    .filter(w => (w.wrong_count as number) > (w.correct_count as number))
+    .map(w => {
+      const q = qMap.get(w.question_id);
+      const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
+      const total = stats.attempt;
+      return {
+        question_id: w.question_id,
+        challenge_set_id: q?.challenge_set_id ?? null,
+        question_text: q?.question_text ?? '',
+        type: q?.type ?? 'choice',
+        difficulty: q?.difficulty ?? 'medium',
+        display_order: 0,
+        attempt_count: total,
+        correct_count: w.correct_count as number,
+        wrong_count: w.wrong_count as number,
+        error_rate: total > 0 ? ((w.wrong_count as number) / total) * 100 : 0,
+        is_mastered: w.status === 'mastered',
+        member_id: memberId ?? null,
+        member_name: memberName,
+        level_id: q?.level_id ?? null,
+      } as unknown as WrongQuestionStat;
+    });
 }
 
 // 获取指定关卡的错题统计（用于"查看错题"和"挑战错题"）
@@ -674,12 +794,11 @@ export async function fetchLevelWrongQuestionStats(
   const qIds = questions.map(q => q.id);
   const qMap = new Map(questions.map(q => [q.id, q]));
 
-  // 2. 查询该成员对这些题目的错题记录（仅活跃错题，已掌握的不显示）
+  // 2. 查询该成员对这些题目的错题记录（含已掌握，前端判断显示）
   const { data: wrongRecords, error: wErr } = await supabase
     .from('wrong_questions')
     .select('question_id, wrong_count, correct_count, status')
     .eq('member_id', memberId)
-    .eq('status', 'active')
     .in('question_id', qIds);
   if (wErr) throw wErr;
 
@@ -699,8 +818,9 @@ export async function fetchLevelWrongQuestionStats(
     attemptMap.set(r.question_id, cur);
   }
 
+  // 只返回 wrong_count > correct_count 的错题（做对次数超过错误次数后自动下线）
   return ((wrongRecords ?? []) as any[])
-    .filter(w => w.wrong_count > 0)
+    .filter(w => (w.wrong_count as number) > (w.correct_count as number))
     .map(w => {
       const q = qMap.get(w.question_id);
       const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
@@ -713,9 +833,9 @@ export async function fetchLevelWrongQuestionStats(
         difficulty: q?.difficulty ?? 'medium',
         display_order: 0,
         attempt_count: total,
-        correct_count: stats.correct,
+        correct_count: w.correct_count as number,
         wrong_count: w.wrong_count as number,
-        error_rate: total > 0 ? (w.wrong_count / total) * 100 : 0,
+        error_rate: total > 0 ? ((w.wrong_count as number) / total) * 100 : 0,
         is_mastered: w.status === 'mastered',
         member_id: memberId,
         member_name: null,
@@ -816,6 +936,72 @@ export async function setQuestionsLevel(updates: { id: string; level_id: string 
       .in('id', ids);
     if (error) throw error;
   }
+}
+
+// 复制题目到目标关卡（原题保留，目标关卡生成副本）
+export async function copyQuestionToLevel(questionId: string, targetLevelId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('copy_question_to_level', {
+    p_question_id: questionId,
+    p_target_level_id: targetLevelId,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+// 批量复制题目到目标关卡
+export async function copyQuestionsToLevel(questionIds: string[], targetLevelId: string): Promise<number> {
+  let n = 0;
+  for (const id of questionIds) {
+    await copyQuestionToLevel(id, targetLevelId);
+    n++;
+  }
+  return n;
+}
+
+// ====== 题目报错 API ======
+
+export interface QuestionReport {
+  id: string;
+  question_id: string;
+  family_id: string | null;
+  member_id: string | null;
+  question_text_snapshot: string | null;
+  reason: string | null;
+  status: 'pending' | 'resolved';
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export async function createQuestionReport(report: {
+  question_id: string;
+  family_id?: string | null;
+  member_id?: string | null;
+  question_text_snapshot?: string;
+  reason?: string;
+}): Promise<void> {
+  const { error } = await supabase.from('question_reports').insert({
+    question_id: report.question_id,
+    family_id: report.family_id ?? null,
+    member_id: report.member_id ?? null,
+    question_text_snapshot: report.question_text_snapshot ?? null,
+    reason: report.reason ?? null,
+    status: 'pending',
+  });
+  if (error) throw error;
+}
+
+export async function fetchQuestionReports(): Promise<QuestionReport[]> {
+  const { data, error } = await supabase
+    .from('question_reports')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as QuestionReport[];
+}
+
+export async function deleteQuestionReport(id: string): Promise<void> {
+  const { error } = await supabase.from('question_reports').delete().eq('id', id);
+  if (error) throw error;
 }
 
 // ====== 全局关卡库 API ======

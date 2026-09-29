@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useFamilyStore } from '../../store/familyStore';
+import { useFamilyStore, safeName, safeAvatar } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Select } from '../../components/common/Input';
@@ -13,12 +13,13 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Pencil, Trash2, Eye, Mic } from 'lucide-react';
 import {
   listRecitationTasks, deleteRecitationTask,
-  listTaskSubmissions,
+  listTaskSubmissions, listFamilySubmissions,
 } from '../../api/recitation';
 import { compareRecitation } from '../../lib/recitationCompare';
-import type { RecitationTask, RecitationInstance } from '../../api/types';
+import type { RecitationTask, RecitationInstance, RecitationSubject } from '../../api/types';
 
 type Tab = 'templates' | 'submissions';
+type SubjectFilter = '' | RecitationSubject; // '' = 全部
 
 const STATUS_LABELS: Record<string, string> = {
   saved: '已保存',
@@ -40,21 +41,25 @@ export function RecitationManagePage() {
   const [tab, setTab] = useState<Tab>('templates');
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<RecitationTask[]>([]);
+  // 学科筛选：''=全部，'chinese'=语文，'english'=英语
+  const [subjectFilter, setSubjectFilter] = useState<SubjectFilter>('');
 
   // 新建/编辑：内嵌 RecitationCreatePage
   const [editing, setEditing] = useState<RecitationTask | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  // 提交查看：选任务 → 实例列表 → 详情
+  // 提交查看：选任务 → 筛选；不选则显示家庭全部提交
   const [subTaskId, setSubTaskId] = useState<string>('');
   const [submissions, setSubmissions] = useState<RecitationInstance[]>([]);
+  const [subLoading, setSubLoading] = useState(false);
   const [viewing, setViewing] = useState<RecitationInstance | null>(null);
 
   const reload = async () => {
     if (!family) return;
     setLoading(true);
     try {
-      const list = await listRecitationTasks(family.id);
+      const opts = subjectFilter ? { subject: subjectFilter as RecitationSubject } : undefined;
+      const list = await listRecitationTasks(family.id, opts);
       setTasks(list);
     } catch (e: any) {
       toast.error('加载失败：' + e.message);
@@ -63,13 +68,17 @@ export function RecitationManagePage() {
     }
   };
 
-  useEffect(() => { reload(); }, [family?.id]);
+  useEffect(() => { reload(); }, [family?.id, subjectFilter]);
 
-  // 提交查看：加载实例
+  // 提交查看：不选任务显示家庭全部提交，选任务则筛选
   useEffect(() => {
-    if (!subTaskId) { setSubmissions([]); return; }
-    listTaskSubmissions(subTaskId).then(setSubmissions).catch(e => toast.error(e.message));
-  }, [subTaskId]);
+    if (!family) return;
+    setSubLoading(true);
+    const p = subTaskId
+      ? listTaskSubmissions(subTaskId)
+      : listFamilySubmissions(family.id);
+    p.then(setSubmissions).catch(e => toast.error(e.message)).finally(() => setSubLoading(false));
+  }, [subTaskId, family?.id]);
 
   const onDelete = async (t: RecitationTask) => {
     if (!confirm(`确认删除模板《${t.title}》？已提交的作答记录会保留（30天清理）。`)) return;
@@ -111,13 +120,13 @@ export function RecitationManagePage() {
         <button onClick={() => navigate(ROUTES.PARENT_DASHBOARD)} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-xl font-bold flex items-center gap-2">📖 背诵任务管理</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">📖 背诵任务库</h1>
       </div>
 
       {/* Tab */}
       <div className="flex gap-1 mb-4 p-1 bg-slate-100 rounded-xl">
         {[
-          { key: 'templates' as Tab, label: '任务模板' },
+          { key: 'templates' as Tab, label: '背诵任务库' },
           { key: 'submissions' as Tab, label: '学生提交' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -130,6 +139,27 @@ export function RecitationManagePage() {
 
       {tab === 'templates' && (
         <div>
+          {/* 学科筛选按钮组 */}
+          <div className="flex gap-2 mb-3">
+            {[
+              { key: '' as SubjectFilter, label: '全部' },
+              { key: 'chinese' as SubjectFilter, label: '语文' },
+              { key: 'english' as SubjectFilter, label: '英语' },
+            ].map(s => (
+              <button
+                key={s.key}
+                onClick={() => setSubjectFilter(s.key)}
+                className={cn(
+                  'px-4 py-1.5 rounded-full text-sm font-medium transition-colors',
+                  subjectFilter === s.key
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
           <div className="flex justify-end mb-3">
             <Button onClick={onNew}><Plus className="w-4 h-4" /> 新建背诵任务</Button>
           </div>
@@ -174,26 +204,30 @@ export function RecitationManagePage() {
       {tab === 'submissions' && (
         <div>
           <div className="mb-3">
-            <label className="text-xs text-slate-500">选择任务模板</label>
+            <label className="text-xs text-slate-500">按任务筛选（可选，不选显示全部）</label>
             <Select value={subTaskId} onChange={e => setSubTaskId(e.target.value)}>
-              <option value="">请选择...</option>
+              <option value="">全部任务</option>
               {tasks.map(t => <option key={t.id} value={t.id}>{t.title}（{t.subject === 'chinese' ? '语文' : '英语'}）</option>)}
             </Select>
           </div>
-          {!subTaskId ? (
-            <EmptyState title="请先选择任务" description="选择任务模板后查看学生提交情况" />
+          {subLoading ? (
+            <Loading />
           ) : submissions.length === 0 ? (
-            <EmptyState title="暂无学生实例" description="该任务尚未推送给学生" />
+            <EmptyState title="暂无学生提交" description="学生完成背诵后会显示在这里" />
           ) : (
             <div className="space-y-2">
               {submissions.map(inst => {
                 const m = members.find(x => x.id === inst.member_id);
+                const taskTitle = inst.task?.title ?? '（模板已删除）';
                 return (
                   <Card key={inst.id} className="p-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{m?.avatar_emoji ?? '👤'}</span>
+                      <span className="text-2xl">{safeAvatar(m?.avatar_emoji)}</span>
                       <div>
-                        <p className="font-medium">{m?.name ?? '未知'}</p>
+                        <p className="font-medium">{safeName(m?.name)}</p>
+                        <p className="text-xs text-slate-500">
+                          《{taskTitle}》
+                        </p>
                         <p className="text-xs text-slate-500">
                           {inst.status === 'submitted'
                             ? `已提交 · ${inst.score}分 · ${inst.passed ? '通过' : '未通过'} · +${inst.awarded_stars}⭐`

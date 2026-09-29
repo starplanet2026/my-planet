@@ -6,7 +6,7 @@ import { useModeStore } from '../../../../store/modeStore';
 import { cn } from '../../../../lib/utils';
 import {
   buyBoardingCard, setBoardingSelection, getBoardingStatus,
-  fetchPets, checkPet, fetchPetShopItems, runBoardingCare,
+  fetchPets, checkPet, fetchPetShopItems,
 } from '../../../../api/pets';
 import type { Pet, BoardingStatus, PetShopItem } from '../../../../api/types';
 import { BoardingHistoryModal } from './BoardingHistoryModal';
@@ -53,8 +53,7 @@ export function PetBoardingModal({ onClose, onBoarded }: {
 
   useEffect(() => {
     loadData();
-    // 懒加载兜底：触发今日托管养护（cron 每日0点也会执行）
-    if (childId) runBoardingCare(childId).catch(() => {});
+    // 托管养护由 pg_cron 每日0点（北京时间）自动执行，前端不再触发
   }, [childId]);
 
   const handleBuyCard = async (itemId: string) => {

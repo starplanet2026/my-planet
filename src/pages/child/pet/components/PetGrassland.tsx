@@ -143,28 +143,28 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, positionRes
 
   // 初始化宠物状态：直接使用 props 数据
   useEffect(() => {
-    console.log('[PetGrassland] pets prop updated:', pets.map(p => ({ id: p.id, name: p.name, hunger: p.hunger, clean: p.clean, happiness: p.happiness })));
     const map: Record<string, Pet> = {};
     pets.forEach(p => { map[p.id] = p; });
     setPetStates(map);
-    // 从当前用户的 localStorage 读取已保存坐标（切换用户时读对应用户的坐标，不重置）
-    let saved: Record<string, { x: number; y: number }> = {};
-    try { saved = JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { saved = {}; }
-    const fixed: Record<string, { x: number; y: number }> = {};
-    pets.forEach((p) => {
-      const cur = saved[p.id];
-      if (cur) {
-        fixed[p.id] = {
-          x: Math.max(5, Math.min(95, cur.x)),
-          y: Math.max(10, Math.min(70, cur.y)),
-        };
-      } else {
-        // 首次领养 / 无历史位置：底部菜单栏上方居中
-        fixed[p.id] = { ...DEFAULT_PET_POSITION };
-      }
+    // 仅为新出现的宠物补坐标，不覆盖已有/已拖拽的坐标
+    setPositions(prev => {
+      let saved: Record<string, { x: number; y: number }> = {};
+      try { saved = JSON.parse(localStorage.getItem(positionsKey(childId)) || '{}'); } catch { saved = {}; }
+      const next = { ...prev };
+      pets.forEach((p) => {
+        if (next[p.id]) return; // 已有坐标（含拖拽），保留
+        const cur = saved[p.id];
+        if (cur) {
+          next[p.id] = {
+            x: Math.max(5, Math.min(95, cur.x)),
+            y: Math.max(10, Math.min(70, cur.y)),
+          };
+        } else {
+          next[p.id] = { ...DEFAULT_PET_POSITION };
+        }
+      });
+      return next;
     });
-    setPositions(fixed);
-    // 问题2: 购买用品后刷新背包
     loadInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pets, childId]);

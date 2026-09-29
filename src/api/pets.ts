@@ -725,6 +725,70 @@ export async function fetchStudyRecords(memberId: string, limit = 50): Promise<S
   return (data ?? []) as StudyRecord[];
 }
 
+// 陪伴学习任务模板（多端同步）
+export interface StudyTaskTemplate {
+  id: string;
+  member_id: string;
+  text: string;
+  reward: number;
+  selected: boolean;
+  display_order: number;
+  created_at: string;
+}
+
+export async function fetchStudyTaskTemplates(memberId: string): Promise<StudyTaskTemplate[]> {
+  const { data, error } = await supabase
+    .from('study_task_templates')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as StudyTaskTemplate[];
+}
+
+export async function addStudyTaskTemplates(
+  memberId: string,
+  items: { text: string; reward: number }[],
+): Promise<StudyTaskTemplate[]> {
+  if (items.length === 0) return [];
+  // 获取当前最大 display_order
+  const { data: existing } = await supabase
+    .from('study_task_templates')
+    .select('display_order')
+    .eq('member_id', memberId)
+    .order('display_order', { ascending: false })
+    .limit(1);
+  let maxOrder = 0;
+  if (existing && existing.length > 0) maxOrder = (existing[0] as any).display_order ?? 0;
+  const rows = items.map((it, i) => ({
+    member_id: memberId,
+    text: it.text,
+    reward: it.reward,
+    selected: true,
+    display_order: maxOrder + 1 + i,
+  }));
+  const { data, error } = await supabase
+    .from('study_task_templates')
+    .insert(rows)
+    .select('*');
+  if (error) throw error;
+  return (data ?? []) as StudyTaskTemplate[];
+}
+
+export async function updateStudyTaskTemplate(
+  id: string,
+  patch: Partial<Pick<StudyTaskTemplate, 'selected' | 'text' | 'reward'>>,
+): Promise<void> {
+  const { error } = await supabase.from('study_task_templates').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteStudyTaskTemplate(id: string): Promise<void> {
+  const { error } = await supabase.from('study_task_templates').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ====== 托管系统 ======
 
 export async function buyBoardingCard(memberId: string, itemId: string): Promise<BuyBoardingCardResult> {

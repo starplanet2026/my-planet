@@ -285,6 +285,15 @@ export async function deleteTask(taskId: string): Promise<void> {
   if (error) throw error;
 }
 
+// 上线/下线任务（active / offline）
+export async function updateTaskStatus(taskId: string, status: 'active' | 'offline'): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_tasks')
+    .update({ status })
+    .eq('id', taskId);
+  if (error) throw error;
+}
+
 export async function addTaskWords(taskId: string, words: TaskWordInput[]): Promise<void> {
   if (words.length === 0) return;
   const rows = words.map(w => ({ task_id: taskId, ...w }));

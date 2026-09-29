@@ -9,17 +9,26 @@ import type {
 
 export async function listRecitationTasks(
   familyId: string,
-  status?: RecitationTaskStatus,
+  opts?: { status?: RecitationTaskStatus; subject?: RecitationSubject },
 ): Promise<RecitationTask[]> {
   let q = supabase
     .from('recitation_tasks')
     .select('*')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
-  if (status) q = q.eq('status', status);
+  if (opts?.status) q = q.eq('status', opts.status);
+  if (opts?.subject) q = q.eq('subject', opts.subject);
   const { data, error } = await q;
   if (error) throw error;
   return data as RecitationTask[];
+}
+
+// 从模板档位配置计算最高星光奖励（服务端计算，前端直接渲染）
+export function getTaskMaxStars(task: RecitationTask | null | undefined): number {
+  if (!task) return 0;
+  const stars = [task.reward_tier1_stars, task.reward_tier2_stars, task.reward_tier3_stars]
+    .filter((s): s is number => s !== null && s !== undefined);
+  return stars.length > 0 ? Math.max(...stars) : 0;
 }
 
 export async function getRecitationTask(id: string): Promise<RecitationTask> {
@@ -85,6 +94,17 @@ export async function listTaskSubmissions(taskId: string): Promise<RecitationIns
     .from('recitation_instances')
     .select('*, task:recitation_tasks(*)')
     .eq('task_id', taskId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as RecitationInstance[];
+}
+
+// 家长查看家庭下所有学生的提交/未提交实例（不按任务筛选）
+export async function listFamilySubmissions(familyId: string): Promise<RecitationInstance[]> {
+  const { data, error } = await supabase
+    .from('recitation_instances')
+    .select('*, task:recitation_tasks(*)')
+    .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as RecitationInstance[];

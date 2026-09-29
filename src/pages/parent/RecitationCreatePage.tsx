@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFamilyStore } from '../../store/familyStore';
+import { useFamilyStore, safeName, safeAvatar } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Select } from '../../components/common/Input';
@@ -291,9 +291,9 @@ export function RecitationCreatePage({ embedded = false, editingTask = null, onS
                   return next;
                 });
               }} className="w-full flex items-center gap-2 p-3 rounded-lg hover:bg-slate-50 border border-slate-200">
-                {checked ? <CheckSquare className="w-5 h-5 text-emerald-500" /> : <Square className="w-5 h-5 text-slate-300" />}
-                <span className="text-2xl">{m.avatar_emoji}</span>
-                <span className="font-medium">{m.name}</span>
+                {checked ? <CheckSquare className="w-5 h-5 text-emerald-500 flex-shrink-0" /> : <Square className="w-5 h-5 text-slate-300 flex-shrink-0" />}
+                <span className="text-2xl flex-shrink-0">{safeAvatar(m.avatar_emoji)}</span>
+                <span className="font-medium whitespace-nowrap text-slate-800">{safeName(m.name)}</span>
               </button>
             );
           })}

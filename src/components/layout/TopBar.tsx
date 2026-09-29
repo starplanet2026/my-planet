@@ -456,10 +456,10 @@ export function TopBar() {
         open={showTodayCompleted}
         onClose={() => setShowTodayCompleted(false)}
         title={completedRange === 'today' ? '今日达成 ' + todayCompleted.length : '近30天达成 ' + todayCompleted.length}
-        size="sm"
+        size="md"
       >
         {/* 时间范围切换 */}
-        <div className="flex gap-1 mb-3 p-1 bg-slate-100 rounded-lg">
+        <div className="flex gap-1 mb-2 p-1 bg-slate-100 rounded-lg">
           {(['today', '30days'] as const).map(r => (
             <button
               key={r}
@@ -478,7 +478,7 @@ export function TopBar() {
             {completedRange === 'today' ? '今天还没有达成的任务' : '近30天暂无达成记录'}
           </p>
         ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="grid grid-cols-1 gap-1.5">
             {todayCompleted.map(t => {
               const iconUrl = getTaskIconUrl(t.icon);
               const isPending = t.status === 'pending_approval';
@@ -486,23 +486,23 @@ export function TopBar() {
                 <div
                   key={t.id}
                   className={cn(
-                    'flex items-center gap-3 p-3 rounded-xl border-2',
+                    'flex items-center gap-2 px-2.5 py-1.5 rounded-lg border',
                     isPending
                       ? 'bg-amber-50 border-amber-200'
                       : 'bg-emerald-50 border-emerald-200'
                   )}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-white overflow-hidden flex items-center justify-center flex-shrink-0">
                     {iconUrl ? (
                       <img src={iconUrl} alt={t.title} className="w-full h-full object-contain" />
                     ) : (
-                      <span className="text-xl">{TASK_CATEGORIES[t.category].emoji}</span>
+                      <span className="text-base">{TASK_CATEGORIES[t.category].emoji}</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-slate-800 line-clamp-1">{t.title}</p>
-                    <p className="text-xs text-slate-400">
-                      {isPending ? '⏳ 待家长确认' : ('+' + t.reward_coins + ' 星光值')}
+                    <p className="font-medium text-xs text-slate-800 line-clamp-1">{t.title}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {isPending ? '⏳ 待确认' : ('+' + t.reward_coins + ' 星光')}
                     </p>
                   </div>
                 </div>

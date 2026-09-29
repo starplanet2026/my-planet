@@ -1,96 +1,146 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '../../../../lib/utils';
-import { Mic, Square, Volume2 } from 'lucide-react';
+import { Mic, Square, Volume2, Pause, Play } from 'lucide-react';
 import { Button } from '../../../../components/common/Button';
+import { blobToAudioBuffer, audioBufferToWavBase64, deduplicateText, getAsrApiUrl } from '../../../../lib/asr';
 import type { QuestionComponentProps } from './QuestionRenderer';
-
-// Web Speech API 类型声明
-interface SpeechRecognitionEventLike {
-  results: { [key: number]: { 0: { transcript: string }; isFinal: boolean }[] };
-}
-interface SpeechRecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-}
-
-function getRecognition(): SpeechRecognitionLike | null {
-  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  if (!SR) return null;
-  const rec = new SR();
-  rec.lang = 'zh-CN';
-  rec.continuous = true;
-  rec.interimResults = true;
-  return rec as SpeechRecognitionLike;
-}
 
 export function ReciteQuestion({ question: q, answer, setAnswer, showResult, isCorrect, disabled }: QuestionComponentProps) {
   const [recording, setRecording] = useState(false);
-  const [interim, setInterim] = useState('');
-  const recRef = useRef<SpeechRecognitionLike | null>(null);
-  const finalRef = useRef('');
+  const [paused, setPaused] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
 
-  // 初始化识别器
-  const ensureRec = useCallback(() => {
-    if (recRef.current) return recRef.current;
-    const rec = getRecognition();
-    if (!rec) return null;
-    rec.onresult = (e) => {
-      let finalText = finalRef.current;
-      let interimText = '';
-      for (let i = 0; i < Object.keys(e.results).length; i++) {
-        const result = e.results[i];
-        if (result[0]) {
-          if (result.isFinal) {
-            finalText += result[0].transcript;
-          } else {
-            interimText += result[0].transcript;
-          }
-        }
-      }
-      finalRef.current = finalText;
-      setInterim(interimText);
-      setAnswer(finalText);
-    };
-    rec.onend = () => {
-      setRecording(false);
-    };
-    rec.onerror = () => {
-      setRecording(false);
-    };
-    recRef.current = rec;
-    return rec;
-  }, [setAnswer]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finalRef = useRef(answer || '');
 
-  const startRecording = () => {
-    if (showResult || disabled) return;
-    const rec = ensureRec();
-    if (!rec) {
-      // 不支持语音识别，提示手动输入
-      alert('当前浏览器不支持语音识别，请手动输入背诵内容');
-      return;
+  // 调用豆包ASR接口识别音频
+  const recognizeAudio = useCallback(async (blob: Blob): Promise<string> => {
+    const audioBuffer = await blobToAudioBuffer(blob);
+    const base64 = await audioBufferToWavBase64(audioBuffer, 16000);
+    const res = await fetch(getAsrApiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio: base64, format: 'wav', rate: 16000, subject: 'chinese' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `识别失败(${res.status})`);
     }
+    const data = await res.json();
+    return data.text || '';
+  }, []);
+
+  // 清理所有录音资源
+  const cleanupRecording = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    audioChunksRef.current = [];
+    setPaused(false);
+    setRecordSeconds(0);
+  }, []);
+
+  useEffect(() => () => cleanupRecording(), [cleanupRecording]);
+
+  const startRecording = async () => {
+    if (showResult || disabled) return;
+    cleanupRecording();
     finalRef.current = answer || '';
+
     try {
-      rec.start();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.start(500);
       setRecording(true);
-    } catch {
-      // 已在录音中
+      setPaused(false);
+      setRecordSeconds(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordSeconds(s => s + 1);
+      }, 1000);
+    } catch (e: any) {
+      if (e?.name === 'NotAllowedError' || e?.name === 'PermissionDeniedError') {
+        alert('请在浏览器设置中开启麦克风权限后重试');
+      } else {
+        alert('录音启动失败：' + (e?.message || '未知错误'));
+      }
+      cleanupRecording();
     }
   };
 
-  const stopRecording = () => {
-    const rec = recRef.current;
-    if (rec) {
-      try { rec.stop(); } catch {}
+  const togglePause = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    if (paused) {
+      recorder.resume();
+      setPaused(false);
+      timerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
+    } else {
+      recorder.pause();
+      setPaused(true);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    }
+  };
+
+  const stopRecording = async () => {
+    const recorder = mediaRecorderRef.current;
+    const stream = streamRef.current;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (recorder && recorder.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+        try { recorder.stop(); } catch { resolve(); }
+      });
+    }
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
     setRecording(false);
+    setPaused(false);
+
+    if (audioChunksRef.current.length === 0) return;
+    const blob = new Blob(audioChunksRef.current, { type: recorder?.mimeType || 'audio/webm' });
+    setRecognizing(true);
+    try {
+      let text = await recognizeAudio(blob);
+      text = deduplicateText(text);
+      finalRef.current = text;
+      setAnswer(text);
+    } catch {
+      // 最终识别失败，保留已有内容
+    } finally {
+      setRecognizing(false);
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+    }
   };
 
   // 播放参考文本（仅提交后可听）
@@ -103,8 +153,6 @@ export function ReciteQuestion({ question: q, answer, setAnswer, showResult, isC
     }
   };
 
-  const displayText = answer + (recording ? interim : '');
-
   return (
     <div>
       {/* 提示 */}
@@ -113,22 +161,21 @@ export function ReciteQuestion({ question: q, answer, setAnswer, showResult, isC
       )}
 
       {/* 识别中状态 */}
-      {recording && (
+      {(recording || recognizing) && (
         <div className="mb-3 flex items-center justify-center gap-2 text-red-500 text-sm">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          正在录音...
+          {recognizing ? '识别中，请稍候...' : paused ? '已暂停' : `正在录音 ${String(Math.floor(recordSeconds/60)).padStart(2,'0')}:${String(recordSeconds%60).padStart(2,'0')}`}
         </div>
       )}
 
       {/* 文本编辑区 */}
       <textarea
-        value={displayText}
+        value={finalRef.current}
         onChange={e => {
           finalRef.current = e.target.value;
-          setInterim('');
           setAnswer(e.target.value);
         }}
-        disabled={showResult || disabled}
+        disabled={showResult || disabled || recording}
         placeholder="点击麦克风开始背诵，或手动输入"
         rows={4}
         className="w-full p-4 rounded-xl border-2 border-slate-200 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-star-400 focus:border-transparent transition-all resize-none disabled:bg-slate-50"
@@ -152,15 +199,26 @@ export function ReciteQuestion({ question: q, answer, setAnswer, showResult, isC
 
       {/* 录音按钮 */}
       {!showResult && (
-        <div className="mt-4 flex justify-center">
-          <Button
-            onClick={recording ? stopRecording : startRecording}
-            variant={recording ? 'danger' : 'primary'}
-            className="flex items-center gap-2"
-          >
-            {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            {recording ? '停止录音' : '开始录音'}
-          </Button>
+        <div className="mt-4 flex justify-center gap-2 flex-wrap">
+          {!recording ? (
+            <Button
+              onClick={startRecording}
+              variant="primary"
+              className="flex items-center gap-2"
+              disabled={recognizing}
+            >
+              <Mic className="w-5 h-5" /> 开始录音
+            </Button>
+          ) : (
+            <>
+              <Button onClick={togglePause} variant="secondary" className="flex items-center gap-2">
+                {paused ? <><Play className="w-4 h-4" /> 继续</> : <><Pause className="w-4 h-4" /> 暂停</>}
+              </Button>
+              <Button onClick={stopRecording} variant="danger" className="flex items-center gap-2">
+                <Square className="w-5 h-5" /> 停止录音
+              </Button>
+            </>
+          )}
         </div>
       )}
     </div>

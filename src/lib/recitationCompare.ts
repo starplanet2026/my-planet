@@ -22,8 +22,8 @@ export interface CompareResult {
 // 语文语气助词/常见口语冗余词，fuzzy 模式预处理剔除（不扣分）
 const CN_FILLER_CHARS = new Set(['啊', '呢', '吧', '了', '的', '呀', '哦', '哈', '嘛', '哎', '嗯', '呃']);
 
-// 标点符号集合
-const PUNCT_RE = /[\s.,;:!?'，。；：！？、""''（）()【】《》\-—…]/g;
+// 标点符号集合（不含空白符，空白由分词器处理）
+const PUNCT_RE = /[.,;:!?'，。；：！？、""''（）()【】《》\-—…]/g;
 
 function cleanText(text: string): string {
   return (text || '').replace(PUNCT_RE, '');
@@ -35,8 +35,8 @@ function tokenize(text: string, subject: RecitationSubject): string[] {
   if (subject === 'english') {
     return cleaned.split(/\s+/).filter(Boolean).map(w => w.toLowerCase());
   }
-  // 语文按字符拆分（已去标点空白）
-  return Array.from(cleaned).filter(Boolean);
+  // 语文按字符拆分（过滤空白字符）
+  return Array.from(cleaned).filter(c => c.trim() !== '');
 }
 
 // 语文 fuzzy 模式：剔除语气助词后比对，避免少量助词大幅扣分
@@ -44,15 +44,15 @@ function stripCnFiller(tokens: string[]): string[] {
   return tokens.filter(t => !CN_FILLER_CHARS.has(t));
 }
 
-// LCS 长度（动态规划）
-function lcsLength(a: string[], b: string[]): number {
+// LCS 长度（动态规划），eq 为自定义相等判断（默认严格相等）
+function lcsLength(a: string[], b: string[], eq?: (x: string, y: string) => boolean): number {
+  const equal = eq ?? ((x, y) => x === y);
   const m = a.length, n = b.length;
-  // 用一维滚动数组节省内存
   let prev = new Array<number>(n + 1).fill(0);
   let curr = new Array<number>(n + 1).fill(0);
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) {
+      if (equal(a[i - 1], b[j - 1])) {
         curr[j] = prev[j - 1] + 1;
       } else {
         curr[j] = Math.max(prev[j], curr[j - 1]);
@@ -67,25 +67,24 @@ function lcsLength(a: string[], b: string[]): number {
 //   matched：标准答案该 token 在识别文本中匹配到 → 绿
 //   missing：标准答案该 token 未在识别文本中匹配到 → 红（漏背）
 //   extra：识别文本中多出的 token（不在标准答案） → 灰
-function buildLcsDiff(standard: string[], recognized: string[]): DiffToken[] {
+function buildLcsDiff(standard: string[], recognized: string[], eq?: (x: string, y: string) => boolean): DiffToken[] {
+  const equal = eq ?? ((x, y) => x === y);
   const m = standard.length, n = recognized.length;
-  // dp 表
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      if (standard[i - 1] === recognized[j - 1]) {
+      if (equal(standard[i - 1], recognized[j - 1])) {
         dp[i][j] = dp[i - 1][j - 1] + 1;
       } else {
         dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
       }
     }
   }
-  // 回溯：从标准答案视角产出 diff
   const diff: DiffToken[] = [];
   const matchedRecognized: boolean[] = new Array(n).fill(false);
   let i = m, j = n;
   while (i > 0 && j > 0) {
-    if (standard[i - 1] === recognized[j - 1]) {
+    if (equal(standard[i - 1], recognized[j - 1])) {
       diff.unshift({ text: standard[i - 1], status: 'matched' });
       matchedRecognized[j - 1] = true;
       i--; j--;
@@ -166,9 +165,39 @@ export function compareRecitation(
     return { score: 0, diff: [], standardDiff: [] };
   }
 
+  // 英文：保留原始文本（大小写、标点、空格、换行）用于显示
+  // 比对时大小写不敏感，评分取单词级与字符级较高者
+  if (subject === 'english') {
+    const eqCI = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+    // 单词级评分（按空白分词，保留原始单词）
+    const stdWords = standardText.trim().split(/\s+/).filter(Boolean);
+    const recWords = recognizedText.trim().split(/\s+/).filter(Boolean);
+    const wordTotal = stdWords.length;
+    const wordLcs = lcsLength(stdWords, recWords, eqCI);
+    const wordScore = wordTotal === 0 ? 0 : (wordLcs === wordTotal ? 100 : Math.round((wordLcs / wordTotal) * 100));
+
+    // 字符级评分+显示（保留原始字符，含空格、换行、标点、大小写）
+    const stdChars = Array.from(standardText);
+    const recChars = Array.from(recognizedText);
+    const charTotal = stdChars.length;
+    const charLcs = lcsLength(stdChars, recChars, eqCI);
+    const charScore = charTotal === 0 ? 0 : (charLcs === charTotal ? 100 : Math.round((charLcs / charTotal) * 100));
+
+    const finalScore = Math.max(wordScore, charScore);
+
+    // 用字符级 diff 显示，保留原始文本的大小写、标点、空格、换行
+    const charDiff = buildLcsDiff(stdChars, recChars, eqCI);
+    return {
+      score: clampScore(finalScore),
+      diff: charDiff,
+      standardDiff: charDiff.filter(t => t.status !== 'extra'),
+    };
+  }
+
   if (mode === 'strict') {
     const { diff, matched } = buildStrictDiff(standard, recognized);
-    const score = Math.round((matched / total) * 100);
+    const score = matched === total ? 100 : Math.round((matched / total) * 100);
     return {
       score: clampScore(score),
       diff,
@@ -178,7 +207,7 @@ export function compareRecitation(
 
   // fuzzy 模式：基于 LCS 相似度
   const lcs = lcsLength(standard, recognized);
-  const score = Math.round((lcs / total) * 100);
+  const score = lcs === total ? 100 : Math.round((lcs / total) * 100);
   const diff = buildLcsDiff(standard, recognized);
   return {
     score: clampScore(score),

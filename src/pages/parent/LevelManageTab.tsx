@@ -423,9 +423,10 @@ interface ParsedLevelItem {
   levelName: string;
   questionText: string;
   answer: string;
+  answer2: string;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
-  type: 'choice' | 'multi_choice' | 'math';
+  type: 'choice' | 'multi_choice' | 'math' | 'fill_blank';
   options: string[];
 }
 
@@ -448,7 +449,26 @@ function BatchImportLevelsModal({ subjects, onClose, onImported }: {
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
+      // 先按 2D 数组读取，自动识别表头行（兼容第 1 行为标题行的情况）
+      const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+      const HEADER_KEYWORDS = ['题型', '题目', '正确答案', '选项A', '难度', '关卡'];
+      let headerRowIdx = 0;
+      for (let i = 0; i < Math.min(aoa.length, 10); i++) {
+        const rowCells = aoa[i].map(c => String(c ?? '').trim());
+        const hits = HEADER_KEYWORDS.filter(k => rowCells.some(c => c === k || c.includes(k))).length;
+        if (hits >= 2) { headerRowIdx = i; break; }
+      }
+      const headerRow = aoa[headerRowIdx].map(c => String(c ?? '').trim());
+      const rows: Record<string, any>[] = [];
+      for (let i = headerRowIdx + 1; i < aoa.length; i++) {
+        const rawRow = aoa[i];
+        if (!rawRow || rawRow.every(c => c === '' || c == null)) continue;
+        const obj: Record<string, any> = {};
+        headerRow.forEach((h, idx) => {
+          if (h) obj[h] = rawRow[idx] ?? '';
+        });
+        rows.push(obj);
+      }
 
       // 识别解析列（含"解析"二字）
       let explKey: string | null = null;
@@ -469,8 +489,9 @@ function BatchImportLevelsModal({ subjects, onClose, onImported }: {
         if (!qText) continue;
 
         const rawType = String(row['题型'] ?? row['类型'] ?? '单选').trim();
-        const type: 'choice' | 'multi_choice' | 'math' =
+        const type: 'choice' | 'multi_choice' | 'math' | 'fill_blank' =
           /多选/.test(rawType) ? 'multi_choice' :
+          /填空/.test(rawType) ? 'fill_blank' :
           /数学|计算|math/i.test(rawType) ? 'math' : 'choice';
 
         const rawDiff = String(row['难度'] ?? '中等').trim();
@@ -478,7 +499,10 @@ function BatchImportLevelsModal({ subjects, onClose, onImported }: {
           /简单|易|easy/i.test(rawDiff) ? 'easy' :
           /困难|难|hard/i.test(rawDiff) ? 'hard' : 'medium';
 
-        const answer = String(row['正确答案'] ?? row['答案'] ?? '').trim();
+        // 正确答案：填空题优先用"正确答案1"，其次"正确答案"/"答案"
+        const answer1Col = String(row['正确答案1'] ?? '').trim();
+        const answer = answer1Col || String(row['正确答案'] ?? row['答案'] ?? '').trim();
+        const answer2 = String(row['正确答案2'] ?? '').trim();
         const expl = explKey ? String(row[explKey] ?? '').trim() : '';
 
         // 解析选项（选项A、选项B... 或 选项列用换行/分号分隔）
@@ -496,7 +520,7 @@ function BatchImportLevelsModal({ subjects, onClose, onImported }: {
           }
         }
 
-        items.push({ levelName: effectiveLevel, questionText: qText, answer, explanation: expl, difficulty, type, options });
+        items.push({ levelName: effectiveLevel, questionText: qText, answer, answer2, explanation: expl, difficulty, type, options });
       }
 
       setParsed(items);
@@ -548,6 +572,7 @@ function BatchImportLevelsModal({ subjects, onClose, onImported }: {
           question_text: q.questionText,
           options: q.options.length > 0 ? q.options : null,
           correct_answer: q.answer,
+          answer2: q.answer2 || null,
           explanation: q.explanation || null,
           difficulty: q.difficulty,
           display_order: i + 1,

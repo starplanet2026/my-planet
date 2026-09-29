@@ -15,7 +15,7 @@ import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { useToastStore } from '../../store/toastStore';
 import { formatCoins, formatDate, isExpired, timeAgo } from '../../lib/utils';
-import { MessageSquare, ChevronDown, Pencil, CornerDownRight, Upload, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, CornerDownRight, Upload, Trash2, ListChecks } from 'lucide-react';
 import { CHILD_EMOJIS, PURCHASE_STATUS_LABELS, COIN_ICON_SM, STAR_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { CoinRecord, Purchase } from '../../api/types';
@@ -33,7 +33,7 @@ function CardStar({ className }: { className?: string }) {
 export function ProfilePage() {
   const members = useFamilyStore(s => s.members);
   const currentChildId = useModeStore(s => s.currentChildId);
-  const updateMemberStore = useFamilyStore(s => s.updateMember);
+  const patchMember = useFamilyStore(s => s.patchMember);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const toast = useToastStore();
   const child = members.find(m => m.id === currentChildId && m.role === 'child')
@@ -115,6 +115,8 @@ export function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 消息展开
   const [showRecords, setShowRecords] = useState(false);
+  // 使用记录弹窗
+  const [showUsageHistory, setShowUsageHistory] = useState(false);
   // 回复弹窗
   const [replyTarget, setReplyTarget] = useState<CoinRecord | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -168,7 +170,7 @@ export function ProfilePage() {
       // 自定义图优先：存为 data URL 写入 avatar_emoji；否则写入所选 emoji
       const avatarValue = editAvatarImage ?? editEmoji;
       const updated = await updateMember(child.id, { name: editName.trim(), avatar_emoji: avatarValue });
-      updateMemberStore(child.id, {
+      patchMember(child.id, {
         name: updated.name,
         avatar_emoji: updated.avatar_emoji,
       });
@@ -267,6 +269,15 @@ export function ProfilePage() {
       {/* 双货币 Hero */}
       <Card className="bg-gradient-to-br from-amber-500 to-star-600 text-white border-0">
         <div className="p-6 sm:p-8 text-center relative">
+          {/* 左上角：资产明细 */}
+          <button
+            onClick={toggleRecords}
+            className="absolute top-4 left-4 flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors text-xs font-medium"
+          >
+            <MessageSquare className="w-4 h-4 text-white" />
+            <span className="text-white">资产明细</span>
+          </button>
+          {/* 右上角：设置我的资料 */}
           <button
             onClick={startEdit}
             className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
@@ -308,7 +319,17 @@ export function ProfilePage() {
 
       {/* 背包：特权卡展示 */}
       <div>
-        <h3 className="text-sm font-medium text-slate-500 mb-3 px-1">🎒 我的背包</h3>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h3 className="text-sm font-medium text-slate-500">🎒 我的背包</h3>
+          {usedPurchases.length > 0 && (
+            <button
+              onClick={() => setShowUsageHistory(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium transition-colors"
+            >
+              <ListChecks className="w-3.5 h-3.5" />使用记录
+            </button>
+          )}
+        </div>
         {purchasesLoading && pendingPurchases.length === 0 ? (
           <Loading />
         ) : pendingPurchases.length === 0 ? (
@@ -390,52 +411,10 @@ export function ProfilePage() {
             })}
           </div>
         )}
-
-        {/* 已使用/已出售 */}
-        {usedPurchases.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-xs font-medium text-slate-400 mb-2 px-1">已使用 / 已出售</h4>
-            <div className="space-y-2">
-              {usedPurchases.slice(0, 10).map(p => (
-                <Card key={p.id} className="p-3 opacity-60">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm line-through">{p.item_name_snapshot}</span>
-                      {p.quantity > 1 && <span className="text-xs text-slate-400">x{p.quantity}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'text-xs px-2 py-0.5 rounded-full',
-                        p.status === 'sold' ? 'bg-amber-50 text-amber-500' : 'bg-slate-100 text-slate-400'
-                      )}>
-                        {PURCHASE_STATUS_LABELS[p.status]}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {p.redeemed_at ? formatDate(p.redeemed_at) : ''}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* 资产明细：点击展开 + 星光/金币 切换 */}
-      <div>
-        <button
-          onClick={toggleRecords}
-          className="w-full flex items-center justify-between px-1 py-2"
-        >
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-500">
-            <MessageSquare className="w-4 h-4" /> 资产明细
-          </span>
-          <ChevronDown className={cn('w-4 h-4 text-slate-400 transition-transform', showRecords && 'rotate-180')} />
-        </button>
-
-        {showRecords && (
-          <div className="mt-2">
+      {/* 资产明细弹窗（触发按钮在 Hero 左上角） */}
+      <Modal open={showRecords} onClose={() => setShowRecords(false)} title="资产明细">
             {/* 分类切换 */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex bg-slate-100 rounded-lg p-0.5">
@@ -473,7 +452,7 @@ export function ProfilePage() {
             ) : assetLogs.length === 0 ? (
               <EmptyState icon="📬" title="暂无记录" description="完成任务后这里会有流水" />
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {assetLogs.map(record => {
                   const isReject = record.category === 'task_reject';
                   const isManual = record.category === 'manual_adjust';
@@ -548,9 +527,7 @@ export function ProfilePage() {
                 )}
               </div>
             )}
-          </div>
-        )}
-      </div>
+      </Modal>
 
       {/* 使用确认弹窗 */}
       <Modal
@@ -785,6 +762,50 @@ export function ProfilePage() {
             className="bg-star-400 hover:bg-star-500 text-white">
             保存
           </Button>
+        </div>
+      </Modal>
+
+      {/* 使用记录弹窗：已使用 / 已出售 */}
+      <Modal
+        open={showUsageHistory}
+        onClose={() => setShowUsageHistory(false)}
+        title="使用记录"
+      >
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {usedPurchases.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">暂无使用记录</p>
+          ) : (
+            usedPurchases.map(p => (
+              <Card key={p.id} className="p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                      {p.items?.image_url ? (
+                        <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-base">🎴</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{p.item_name_snapshot}</div>
+                      {p.quantity > 1 && <span className="text-xs text-slate-400">x{p.quantity}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded-full',
+                      p.status === 'sold' ? 'bg-amber-50 text-amber-500' : 'bg-slate-100 text-slate-400'
+                    )}>
+                      {PURCHASE_STATUS_LABELS[p.status]}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {p.redeemed_at ? formatDate(p.redeemed_at) : ''}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
         </div>
       </Modal>
     </div>

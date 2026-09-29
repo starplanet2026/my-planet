@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ListTodo, ShoppingBag, Ticket } from 'lucide-react';
+import { LayoutDashboard, ListTodo, ShoppingBag, BookOpen, Flag } from 'lucide-react';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 
@@ -7,7 +7,8 @@ const navItems = [
   { to: ROUTES.PARENT_DASHBOARD, icon: LayoutDashboard, label: '概览' },
   { to: ROUTES.PARENT_TASKS, icon: ListTodo, label: '任务管理' },
   { to: ROUTES.PARENT_SHOP, icon: ShoppingBag, label: '特权管理' },
-  { to: ROUTES.PARENT_REDEEM, icon: Ticket, label: '特权记录' },
+  { to: ROUTES.PARENT_WORD_CHALLENGE, icon: BookOpen, label: '萌宠闯关管理' },
+  { to: ROUTES.PARENT_QUESTION_REPORTS, icon: Flag, label: '题目报错' },
 ];
 
 export function SideNav() {

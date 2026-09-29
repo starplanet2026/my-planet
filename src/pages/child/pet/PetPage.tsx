@@ -7,7 +7,7 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, runBoardingCare } from '../../../api/pets';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
 import { expNeeded, TRAIT_DESC } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
@@ -87,19 +87,16 @@ export function PetPage() {
   // 出来玩时重置位置的信号（传递给 PetGrassland）
   const [positionResetPetId, setPositionResetPetId] = useState<string | null>(null);
 
-  // 新登录初始化：用户首次进入时，所有宠物默认"回家"（隐藏），不渲染到页面
-  // 仅在用户无历史 hidden 记录时触发一次，避免覆盖已"出来玩"的宠物
-  const initKey = `pet-hidden-initialized-${currentChildId ?? ''}`;
+  // 每次登录/刷新：所有宠物默认"回家"（隐藏），不渲染到页面
+  // 用户可在"我的宠物"中手动点击"出来玩"让宠物显示
+  // 注意：依赖 currentChildId 而非 child 对象引用，避免 refreshMembers 导致 child 引用变化而重复隐藏
   useEffect(() => {
-    if (!child || pets.length === 0) return;
-    if (localStorage.getItem(initKey)) return;
-    // 首次登录：全部宠物标记为隐藏
+    if (!currentChildId || pets.length === 0) return;
     const allHidden = new Set(pets.map(p => p.id));
-    localStorage.setItem(initKey, '1');
     localStorage.setItem(hiddenIdsKey, JSON.stringify([...allHidden]));
     setHiddenPetIds(allHidden);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [child, pets.length]);
+  }, [currentChildId, pets.length]);
 
   // 切换用户时重新读取对应用户的 hidden 集合
   useEffect(() => {
@@ -246,9 +243,7 @@ export function PetPage() {
     if (!child) return;
     setLoading(true);
     try {
-      // 懒加载兜底：每次进入宠物页触发当日托管结算（cron 每日0点也会执行）
-      // 函数对当日已结算宠物幂等跳过，不会重复发属性/经验
-      try { await runBoardingCare(child.id); } catch { /* 静默：不影响页面加载 */ }
+      // 托管养护由 pg_cron 每日0点（北京时间）自动执行，前端不再触发
       const [petsData, houseData] = await Promise.all([
         fetchPets(child.id),
         getDogHouse(child.id),
@@ -587,6 +582,7 @@ export function PetPage() {
                 <div className="space-y-2">
                   {petMessages.map(msg => {
                     const icon = msg.event_type === 'level_up' ? '⬆️'
+                      : msg.event_type === 'level_reward' ? '🎁'
                       : msg.event_type === 'coin_harvest' ? '💰'
                       : msg.event_type === 'sick' ? '🤒'
                       : '🐾';

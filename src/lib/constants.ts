@@ -79,6 +79,10 @@ export const ROUTES = {
   PARENT_MEMBERS: '/parent/members',
   PARENT_CHALLENGES: '/parent/challenges',
   PARENT_PETS: '/parent/pets',
+  // 萌宠闯关管理（原"单词管理"，从萌宠星球管理提取至外层）
+  PARENT_WORD_CHALLENGE: '/parent/word-challenge',
+  // 题目报错管理
+  PARENT_QUESTION_REPORTS: '/parent/question-reports',
   // 家默管理（一级板块，内含词条库/错词库/任务三个 Tab）
   PARENT_DICTATION: '/parent/dictation',
   // 背诵任务管理（一级板块，模板列表 + 学生提交查看）

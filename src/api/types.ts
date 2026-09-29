@@ -16,7 +16,7 @@ export type ChallengeSetType = 'word_vocab' | 'math' | 'choice';
 export type ChallengeSetStatus = 'draft' | 'active';
 export type ChallengeBoardType = 'today_review' | 'gap_check' | 'wrong_battle' | 'advance';
 // 七种题型 + math（兼容存量）+ word_vocab 走 words 表独立流程
-export type QuestionType = 'choice' | 'multi_choice' | 'spell' | 'match' | 'scramble' | 'recite' | 'correct' | 'math';
+export type QuestionType = 'choice' | 'multi_choice' | 'spell' | 'match' | 'scramble' | 'recite' | 'correct' | 'math' | 'fill_blank';
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type WordQuestionType = 'en2cn' | 'cn2en' | 'listen' | 'spell';
 
@@ -37,6 +37,7 @@ export interface Member {
   avatar_emoji: string;
   coin_balance: number;
   star_value: number;
+  free_deduct_count: number;
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -217,6 +218,7 @@ export interface Question {
   question_text: string;
   options: string[] | null;
   correct_answer: string;
+  answer2: string | null;
   explanation: string | null;
   difficulty: Difficulty;
   display_order: number;
@@ -329,6 +331,28 @@ export interface WrongBattlePoolItem {
   type: string;
   difficulty: string;
   metadata: Record<string, any> | null;
+  wrong_count: number;
+  attempt_count: number;
+  error_rate: number;
+}
+
+// 已下线错题池条目
+export interface WrongBattleOfflineItem {
+  pool_id: string;
+  question_id: string;
+  source_challenge_set_id: string | null;
+  offline_reason: string | null;
+  offlined_at: string | null;
+  added_at: string;
+  question_text: string;
+  options: string[] | null;
+  correct_answer: string;
+  explanation: string | null;
+  type: string;
+  difficulty: string;
+  wrong_count: number;
+  attempt_count: number;
+  error_rate: number;
 }
 
 // 错题统计（后台筛选用）
@@ -346,6 +370,7 @@ export interface WrongQuestionStat {
   is_mastered: boolean;
   member_id: string | null;
   member_name: string | null;
+  level_id: string | null;
 }
 
 export interface Word {
@@ -724,13 +749,10 @@ export interface LevelRewardConfig {
   baseReward: number;
 }
 
-// 根据关卡号获取单词数和基础奖励（奖励=词数）
+// 根据关卡号获取单词数和基础奖励
+// 统一规则：每关5个单词配对，奖励5星光值；每通过5关额外奖励5星光值（由后端RPC计算）
 export function getLevelConfig(level: number): LevelRewardConfig {
-  if (level >= 1 && level <= 20) return { wordCount: 5, baseReward: 5 };
-  if (level >= 21 && level <= 40) return { wordCount: 8, baseReward: 8 };
-  if (level >= 41 && level <= 60) return { wordCount: 10, baseReward: 10 };
-  if (level >= 61 && level <= 80) return { wordCount: 12, baseReward: 12 };
-  return { wordCount: 15, baseReward: 15 }; // 81-100
+  return { wordCount: 5, baseReward: 5 };
 }
 
 // ====== 萌宠星球：特质 / 托管 / 进修 ======
@@ -880,7 +902,7 @@ export interface DictationErrorWord {
   updated_at: string;
 }
 
-export type DictationTaskStatus = 'active' | 'completed';
+export type DictationTaskStatus = 'active' | 'offline' | 'completed';
 
 export interface DictationTask {
   id: string;

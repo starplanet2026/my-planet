@@ -13,6 +13,7 @@ import { formatCoins, formatDate, isExpired } from '../../lib/utils';
 import { COIN_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { Item } from '../../api/types';
+import { LuckyWheelModal } from '../../components/lucky-wheel/LuckyWheelModal';
 
 // 特权卡装饰星星（SVG）
 function CardStar({ className }: { className?: string }) {
@@ -125,6 +126,7 @@ export function ShopPage() {
   const [quantity, setQuantity] = useState(1);
   const [purchasing, setPurchasing] = useState(false);
   const [activeCat, setActiveCat] = useState<string>('全部');
+  const [wheelOpen, setWheelOpen] = useState(false);
 
   const members = useFamilyStore(s => s.members);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -225,6 +227,21 @@ export function ShopPage() {
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+          {/* 幸运大转盘入口 */}
+          <div
+            onClick={() => setWheelOpen(true)}
+            className="cursor-pointer rounded-2xl overflow-hidden border-2 border-amber-300 shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all aspect-[3/4] flex items-start justify-center pt-[26%]"
+            style={{
+              backgroundImage: 'url(/lucky-wheel-bg.jpg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            <div className="bg-gradient-to-b from-amber-300 to-amber-500 px-4 py-2.5 rounded-full shadow-lg border-2 border-amber-200 text-center">
+              <h3 className="font-bold text-white text-sm leading-tight drop-shadow">幸运大转盘</h3>
+              <p className="text-[11px] text-amber-50 mt-0.5 font-medium">20金币/转盘券</p>
+            </div>
+          </div>
           {filteredItems.map(item => (
             <PrivilegeCard
               key={item.id}
@@ -234,6 +251,9 @@ export function ShopPage() {
           ))}
         </div>
       )}
+
+      {/* 幸运大转盘弹窗 */}
+      <LuckyWheelModal open={wheelOpen} onClose={() => setWheelOpen(false)} />
 
       {/* 兑换确认弹层 */}
       <Modal

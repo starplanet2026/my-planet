@@ -79,3 +79,25 @@ export async function deletePurchase(purchaseId: string): Promise<void> {
   const { error } = await supabase.from('purchases').delete().eq('id', purchaseId);
   if (error) throw error;
 }
+
+// 后台直接给用户发放特权卡（不扣金币）
+export async function grantPurchase(
+  familyId: string,
+  memberId: string,
+  itemId: string,
+  itemName: string,
+  quantity: number = 1
+): Promise<void> {
+  const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+  const { error } = await supabase.from('purchases').insert({
+    family_id: familyId,
+    member_id: memberId,
+    item_id: itemId,
+    item_name_snapshot: itemName,
+    price_paid: 0,
+    quantity,
+    code,
+    status: 'pending',
+  });
+  if (error) throw error;
+}

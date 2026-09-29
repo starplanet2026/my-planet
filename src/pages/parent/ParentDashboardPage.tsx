@@ -13,9 +13,9 @@ import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { changePassword, resetAllData } from '../../api/family';
+import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { ListTodo, ShoppingBag, Ticket, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, Mic } from 'lucide-react';
+import { ListTodo, ShoppingBag, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, Mic, KeyRound, Gamepad2, Flag } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -55,6 +55,10 @@ export function ParentDashboardPage() {
   const [showChangePwd, setShowChangePwd] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [changingPwd, setChangingPwd] = useState(false);
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [changingPin, setChangingPin] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -135,6 +139,23 @@ export function ParentDashboardPage() {
     }
   };
 
+  const handleChangePin = async () => {
+    if (newPin.length < 4) { toast.error('PIN 码至少 4 位'); return; }
+    if (newPin !== confirmPin) { toast.error('两次 PIN 码不一致'); return; }
+    setChangingPin(true);
+    try {
+      await setParentPin(newPin);
+      toast.success('PIN 码已修改');
+      setShowChangePin(false);
+      setNewPin('');
+      setConfirmPin('');
+    } catch (e: any) {
+      toast.error(e?.message ?? '修改失败');
+    } finally {
+      setChangingPin(false);
+    }
+  };
+
   const handleReset = async () => {
     setResetting(true);
     try {
@@ -154,9 +175,10 @@ export function ParentDashboardPage() {
     { label: '任务管理', icon: ListTodo, route: ROUTES.PARENT_TASKS, color: 'blue' },
     { label: '验证申请', icon: CheckCircle, route: ROUTES.PARENT_VERIFICATION, color: 'green' },
     { label: '特权管理', icon: ShoppingBag, route: ROUTES.PARENT_SHOP, color: 'purple' },
-    { label: '特权记录', icon: Ticket, route: ROUTES.PARENT_REDEEM, color: 'emerald' },
     { label: '智慧星战', icon: BookOpen, route: ROUTES.PARENT_CHALLENGES, color: 'star' },
     { label: '萌宠星球', icon: PawPrint, route: ROUTES.PARENT_PETS, color: 'amber' },
+    { label: '萌宠闯关', icon: Gamepad2, route: ROUTES.PARENT_WORD_CHALLENGE, color: 'emerald' },
+    { label: '题目报错', icon: Flag, route: ROUTES.PARENT_QUESTION_REPORTS, color: 'red' },
   ];
 
   return (
@@ -360,6 +382,17 @@ export function ParentDashboardPage() {
             </div>
           </button>
 
+          {/* 修改 PIN 码 */}
+          <button
+            onClick={() => setShowChangePin(true)}
+            className="w-full flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg"
+          >
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-medium">修改家长 PIN 码</span>
+            </div>
+          </button>
+
           <div className="border-t border-slate-100" />
 
           {/* 重置所有数据 */}
@@ -433,6 +466,30 @@ export function ParentDashboardPage() {
             autoFocus
           />
           <Button fullWidth loading={changingPwd} onClick={handleChangePwd}>
+            确认修改
+          </Button>
+        </div>
+      </Modal>
+
+      {/* 修改 PIN 码弹窗 */}
+      <Modal open={showChangePin} onClose={() => !changingPin && setShowChangePin(false)} title="修改家长 PIN 码" size="sm">
+        <div className="space-y-4">
+          <Input
+            label="新 PIN 码"
+            type="password"
+            placeholder="至少 4 位"
+            value={newPin}
+            onChange={e => setNewPin(e.target.value)}
+            autoFocus
+          />
+          <Input
+            label="确认 PIN 码"
+            type="password"
+            placeholder="再次输入"
+            value={confirmPin}
+            onChange={e => setConfirmPin(e.target.value)}
+          />
+          <Button fullWidth loading={changingPin} onClick={handleChangePin}>
             确认修改
           </Button>
         </div>

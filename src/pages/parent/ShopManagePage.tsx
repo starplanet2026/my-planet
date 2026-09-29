@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useItems } from '../../hooks/useItems';
 import { Card } from '../../components/common/Card';
@@ -11,10 +11,12 @@ import { useToastStore } from '../../store/toastStore';
 import { formatCoins, formatDate, isExpired } from '../../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../lib/constants';
-import { Plus, Edit2, Trash2, Coins, ArrowLeft, Upload, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Coins, ArrowLeft, Upload, X, Dices, Users, Gift } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { Item } from '../../api/types';
+import type { Item, Purchase } from '../../api/types';
 import { uploadImageToStorage } from '../../lib/storage';
+import { LuckyWheelConfigModal } from '../../components/lucky-wheel/LuckyWheelConfigModal';
+import { fetchPurchases, deletePurchase, grantPurchase } from '../../api/purchases';
 
 interface ItemFormData {
   name: string;
@@ -71,6 +73,19 @@ export function ShopManagePage() {
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [wheelConfigOpen, setWheelConfigOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'items' | 'users'>('items');
+
+  // 用户特权卡管理
+  const children = members.filter(m => m.role === 'child');
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
+  const [userPurchases, setUserPurchases] = useState<Purchase[]>([]);
+  const [purchasesLoading, setPurchasesLoading] = useState(false);
+  const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<Purchase | null>(null);
+  const [grantOpen, setGrantOpen] = useState(false);
+  const [grantItemId, setGrantItemId] = useState<string>('');
+  const [grantQty, setGrantQty] = useState(1);
+  const [granting, setGranting] = useState(false);
 
   const [form, setForm] = useState<ItemFormData>({
     name: '', description: '', price: '', expires_at: '',
@@ -162,6 +177,56 @@ export function ShopManagePage() {
     }
   };
 
+  // 加载选中孩子的特权卡
+  useEffect(() => {
+    if (!selectedChildId || !family) {
+      setUserPurchases([]);
+      return;
+    }
+    setPurchasesLoading(true);
+    fetchPurchases(family.id, selectedChildId, 'pending')
+      .then(setUserPurchases)
+      .catch(e => toast.error(e?.message ?? '加载失败'))
+      .finally(() => setPurchasesLoading(false));
+  }, [selectedChildId, family, toast]);
+
+  // 删除用户特权卡
+  const handleDeletePurchase = async () => {
+    if (!deletePurchaseTarget) return;
+    try {
+      await deletePurchase(deletePurchaseTarget.id);
+      toast.success('已删除该特权卡');
+      setDeletePurchaseTarget(null);
+      if (selectedChildId && family) {
+        const list = await fetchPurchases(family.id, selectedChildId, 'pending');
+        setUserPurchases(list);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+    }
+  };
+
+  // 发放特权卡给用户
+  const handleGrant = async () => {
+    if (!family || !selectedChildId || !grantItemId) return;
+    const item = items.find(i => i.id === grantItemId);
+    if (!item) return;
+    setGranting(true);
+    try {
+      await grantPurchase(family.id, selectedChildId, item.id, item.name, grantQty);
+      toast.success(`已发放 ${item.name} x${grantQty}`);
+      setGrantOpen(false);
+      setGrantItemId('');
+      setGrantQty(1);
+      const list = await fetchPurchases(family.id, selectedChildId, 'pending');
+      setUserPurchases(list);
+    } catch (e: any) {
+      toast.error(e?.message ?? '发放失败');
+    } finally {
+      setGranting(false);
+    }
+  };
+
   const validItems = items.filter(i => i.status !== 'deleted');
 
   return (
@@ -176,11 +241,43 @@ export function ShopManagePage() {
           </button>
           <h1 className="text-xl font-bold">特权管理</h1>
         </div>
-        <Button size="sm" onClick={openCreate} className="bg-star-400 hover:bg-star-500 text-white">
-          <Plus className="w-4 h-4" /> 上架特权
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setWheelConfigOpen(true)}>
+            <Dices className="w-4 h-4" /> 转盘权重
+          </Button>
+          <Button size="sm" onClick={openCreate} className="bg-star-400 hover:bg-star-500 text-white">
+            <Plus className="w-4 h-4" /> 上架特权
+          </Button>
+        </div>
       </div>
 
+      {/* 转盘权重配置弹窗 */}
+      <LuckyWheelConfigModal open={wheelConfigOpen} onClose={() => setWheelConfigOpen(false)} />
+
+      {/* 标签页 */}
+      <div className="flex gap-2 border-b border-slate-100">
+        <button
+          onClick={() => setActiveTab('items')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+            activeTab === 'items' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+          )}
+        >
+          特权商品
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+            activeTab === 'users' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+          )}
+        >
+          <Users className="w-4 h-4 inline mr-1" />用户特权卡
+        </button>
+      </div>
+
+      {activeTab === 'items' ? (
+      <>
       {loading && items.length === 0 ? (
         <EmptyState icon="🎴" title="加载中..." />
       ) : validItems.length === 0 ? (
@@ -244,6 +341,83 @@ export function ShopManagePage() {
             );
           })}
         </div>
+      )}
+      </>
+      ) : (
+      /* 用户特权卡管理 */
+      <div className="space-y-4">
+        {children.length === 0 ? (
+          <EmptyState icon="👶" title="还没有孩子账号" description="请先在概览页添加孩子" />
+        ) : (
+          <>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-sm text-slate-500">选择孩子：</label>
+              <select
+                value={selectedChildId}
+                onChange={e => setSelectedChildId(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+              >
+                <option value="">请选择</option>
+                {children.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {selectedChildId && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setGrantItemId(''); setGrantQty(1); setGrantOpen(true); }}
+                >
+                  <Gift className="w-4 h-4" /> 发放特权卡
+                </Button>
+              )}
+            </div>
+
+            {selectedChildId && (
+              purchasesLoading ? (
+                <EmptyState icon="🎴" title="加载中..." />
+              ) : userPurchases.length === 0 ? (
+                <EmptyState icon="🎴" title="该用户暂无特权卡" />
+              ) : (
+                <div className="grid gap-3">
+                  {userPurchases.map(p => {
+                    const expired = p.expires_at ? isExpired(p.expires_at) : false;
+                    return (
+                      <Card key={p.id} className="!p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-lg bg-star-50 flex items-center justify-center text-2xl flex-shrink-0">
+                            🎁
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium truncate">{p.item_name_snapshot}</h3>
+                              {p.quantity > 1 && (
+                                <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full">x{p.quantity}</span>
+                              )}
+                              {expired && (
+                                <span className="text-xs px-2 py-0.5 bg-red-50 text-red-500 rounded-full">已过期</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              {p.expires_at ? `有效期至 ${formatDate(p.expires_at)}` : '永久有效'} · 获得于 {formatDate(p.created_at)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setDeletePurchaseTarget(p)}
+                            className="p-2 text-slate-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </>
+        )}
+      </div>
       )}
 
       {/* 特权表单 */}
@@ -369,6 +543,63 @@ export function ShopManagePage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
       />
+
+      {/* 删除用户特权卡确认 */}
+      <ConfirmDialog
+        open={!!deletePurchaseTarget}
+        title="删除特权卡？"
+        message={`确认删除「${deletePurchaseTarget?.item_name_snapshot ?? ''}」？该操作不可恢复。`}
+        confirmText="删除"
+        variant="danger"
+        onConfirm={handleDeletePurchase}
+        onClose={() => setDeletePurchaseTarget(null)}
+      />
+
+      {/* 发放特权卡弹窗 */}
+      <Modal
+        open={grantOpen}
+        onClose={() => !granting && setGrantOpen(false)}
+        title="发放特权卡"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-700">选择特权</label>
+            <select
+              value={grantItemId}
+              onChange={e => setGrantItemId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+            >
+              <option value="">请选择特权</option>
+              {validItems.map(i => (
+                <option key={i.id} value={i.id}>{i.name}（{formatCoins(i.price)}）</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-700">数量</label>
+            <input
+              type="number"
+              min={1}
+              value={grantQty}
+              onChange={e => setGrantQty(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setGrantOpen(false)} disabled={granting}>
+              取消
+            </Button>
+            <Button
+              onClick={handleGrant}
+              loading={granting}
+              disabled={!grantItemId}
+              className="bg-star-400 hover:bg-star-500 text-white"
+            >
+              <Gift className="w-4 h-4" /> 确认发放
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

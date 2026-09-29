@@ -60,8 +60,11 @@ alter table public.recitation_tasks enable row level security;
 alter table public.recitation_instances enable row level security;
 
 -- 简化策略：authenticated 可读写（数据隔离由应用层 family_id/member_id 过滤保证）
+-- 幂等：先 drop 再 create，避免重复执行时报 42710 policy already exists
+drop policy if exists "recitation_tasks_auth_all" on public.recitation_tasks;
 create policy "recitation_tasks_auth_all" on public.recitation_tasks
   for all to authenticated using (true) with check (true);
+drop policy if exists "recitation_instances_auth_all" on public.recitation_instances;
 create policy "recitation_instances_auth_all" on public.recitation_instances
   for all to authenticated using (true) with check (true);
 
@@ -186,7 +189,7 @@ begin
       (family_id, member_id, amount, balance_after, reason, category, ref_type, ref_id, created_by, balance_type)
     values
       (v_family_id, p_member_id, v_award, v_new_star,
-       v_reward_text, 'recitation', 'recitation_instance', p_instance_id::text, p_member_id::text, 'star');
+       v_reward_text, 'recitation', 'recitation_instance', p_instance_id, p_member_id, 'star');
   else
     v_new_star := v_member.star_value;
   end if;

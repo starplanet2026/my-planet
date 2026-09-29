@@ -13,9 +13,10 @@ import { ParentDashboardPage } from '../pages/parent/ParentDashboardPage';
 import { TaskManagePage } from '../pages/parent/TaskManagePage';
 import { VerificationPage } from '../pages/parent/VerificationPage';
 import { ShopManagePage } from '../pages/parent/ShopManagePage';
-import { PurchaseRedeemPage } from '../pages/parent/PurchaseRedeemPage';
 import { ChallengeManagePage } from '../pages/parent/ChallengeManagePage';
 import { PetManagePage } from '../pages/parent/PetManagePage';
+import { WordChallengeManagePage } from '../pages/parent/WordChallengeManagePage';
+import { QuestionReportManagePage } from '../pages/parent/QuestionReportManagePage';
 import { DictationManagePage } from '../pages/parent/DictationManagePage';
 import { RecitationManagePage } from '../pages/parent/RecitationManagePage';
 import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
@@ -53,9 +54,10 @@ export function AppRoutes() {
           <Route path="tasks" element={<TaskManagePage />} />
           <Route path="verification" element={<VerificationPage />} />
           <Route path="shop" element={<ShopManagePage />} />
-          <Route path="redeem" element={<PurchaseRedeemPage />} />
           <Route path="challenges" element={<ChallengeManagePage />} />
           <Route path="pets" element={<PetManagePage />} />
+          <Route path="word-challenge" element={<WordChallengeManagePage />} />
+          <Route path="question-reports" element={<QuestionReportManagePage />} />
           <Route path="dictation" element={<DictationManagePage />} />
           <Route path="recitation" element={<RecitationManagePage />} />
         </Route>

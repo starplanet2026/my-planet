@@ -7,7 +7,11 @@ import { useModeStore } from '../../../../store/modeStore';
 import { usePetUiStore } from '../../../../store/petUiStore';
 import type { Pet } from '../../../../api/types';
 import { supabase } from '../../../../api/client';
-import { studyTaskReward, fetchStudyRecords } from '../../../../api/pets';
+import {
+  studyTaskReward, fetchStudyRecords,
+  fetchStudyTaskTemplates, addStudyTaskTemplates,
+  updateStudyTaskTemplate, deleteStudyTaskTemplate,
+} from '../../../../api/pets';
 import type { StudyRecord } from '../../../../api/pets';
 
 // 心情恢复 = 分钟数（1分钟=1心情值）
@@ -33,33 +37,12 @@ const STUDY_MESSAGES = [
 ];
 
 interface StudyTask {
-  id: number;
+  id: string;
   text: string;
   reward: number;
   done: boolean;
   rewarded: boolean; // 是否已发放奖励（防止重复）
   selected?: boolean; // 任务模板是否被勾选（选择页使用）
-}
-
-// 任务模板本地存储 key（关闭弹窗后仍保留）
-const TASK_TEMPLATES_KEY = 'pet-study-task-templates';
-
-function loadTaskTemplates(): StudyTask[] {
-  try {
-    const raw = localStorage.getItem(TASK_TEMPLATES_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as StudyTask[];
-  } catch {
-    return [];
-  }
-}
-
-function saveTaskTemplates(list: StudyTask[]) {
-  try {
-    localStorage.setItem(TASK_TEMPLATES_KEY, JSON.stringify(list));
-  } catch {
-    // 忽略写入失败
-  }
 }
 
 export function StudyCompanionModal({
@@ -81,7 +64,8 @@ export function StudyCompanionModal({
   const [minutes, setMinutes] = useState(15);
   const [studyTask, setStudyTask] = useState('');
   const [taskList, setTaskList] = useState<StudyTask[]>([]);
-  const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>(() => loadTaskTemplates());
+  const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [studying, setStudying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -136,6 +120,18 @@ export function StudyCompanionModal({
     });
   }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, setStudyState]);
 
+  // 从数据库加载任务模板（多端同步）
+  useEffect(() => {
+    if (!childId || templatesLoaded) return;
+    fetchStudyTaskTemplates(childId).then(list => {
+      setTaskTemplates(list.map(t => ({
+        id: t.id, text: t.text, reward: t.reward,
+        done: false, rewarded: false, selected: t.selected,
+      })));
+      setTemplatesLoaded(true);
+    }).catch(() => setTemplatesLoaded(true));
+  }, [childId, templatesLoaded]);
+
   // 用户主动关闭：清空 store 中的学习状态，下次打开从 select 开始
   const handleClose = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -162,8 +158,8 @@ export function StudyCompanionModal({
     };
   }, [studying, paused]);
 
-  // 自动生成任务：将输入框每行解析为任务条目，追加到现有任务列表
-  const handleGenerateTasks = () => {
+  // 自动生成任务：将输入框每行解析为任务条目，写入数据库（多端同步）
+  const handleGenerateTasks = async () => {
     const lines = studyTask
       .split(/\r?\n/)
       .map(s => s.trim())
@@ -172,32 +168,59 @@ export function StudyCompanionModal({
       toast.info('请在输入框中输入任务，每行一个');
       return;
     }
-    const maxId = taskTemplates.reduce((m, t) => Math.max(m, t.id), 0);
-    const newTasks: StudyTask[] = lines.map((line, i) => {
+    const items = lines.map(line => {
       const { label, reward } = parseReward(line);
-      return { id: maxId + 1 + i, text: label, reward, done: false, rewarded: false, selected: true };
+      return { text: label, reward };
     });
-    const next = [...taskTemplates, ...newTasks];
-    setTaskTemplates(next);
-    saveTaskTemplates(next);
-    setStudyTask(''); // 清空输入框，方便继续追加
-    toast.success(`已生成 ${newTasks.length} 个任务`);
+    try {
+      const created = await addStudyTaskTemplates(childId, items);
+      setTaskTemplates(prev => [...prev, ...created.map(t => ({
+        id: t.id, text: t.text, reward: t.reward,
+        done: false, rewarded: false, selected: t.selected,
+      }))]);
+      setStudyTask('');
+      toast.success(`已生成 ${created.length} 个任务`);
+    } catch (e: any) {
+      toast.error(e?.message ?? '生成失败');
+    }
   };
 
   // 勾选/取消勾选任务模板
-  const handleToggleSelect = (taskId: number) => {
-    const next = taskTemplates.map(t =>
-      t.id === taskId ? { ...t, selected: !t.selected } : t
-    );
-    setTaskTemplates(next);
-    saveTaskTemplates(next);
+  const handleToggleSelect = async (taskId: string) => {
+    const task = taskTemplates.find(t => t.id === taskId);
+    if (!task) return;
+    const newSelected = !task.selected;
+    setTaskTemplates(prev => prev.map(t =>
+      t.id === taskId ? { ...t, selected: newSelected } : t
+    ));
+    try {
+      await updateStudyTaskTemplate(taskId, { selected: newSelected });
+    } catch (e: any) {
+      // 失败回退
+      setTaskTemplates(prev => prev.map(t =>
+        t.id === taskId ? { ...t, selected: !newSelected } : t
+      ));
+      toast.error(e?.message ?? '更新失败');
+    }
   };
 
   // 删除单个任务模板
-  const handleDeleteTask = (taskId: number) => {
-    const next = taskTemplates.filter(t => t.id !== taskId);
-    setTaskTemplates(next);
-    saveTaskTemplates(next);
+  const handleDeleteTask = async (taskId: string) => {
+    setTaskTemplates(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await deleteStudyTaskTemplate(taskId);
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+      // 重新加载
+      if (childId) {
+        fetchStudyTaskTemplates(childId).then(list => {
+          setTaskTemplates(list.map(t => ({
+            id: t.id, text: t.text, reward: t.reward,
+            done: false, rewarded: false, selected: t.selected,
+          })));
+        });
+      }
+    }
   };
 
   const handleStart = () => {
@@ -209,7 +232,7 @@ export function StudyCompanionModal({
       return;
     }
     const tasks: StudyTask[] = selectedTasks.map((t, i) => ({
-      id: i, text: t.text, reward: t.reward, done: false, rewarded: false,
+      id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false,
     }));
     setTaskList(tasks);
     setTotalStarEarned(0);

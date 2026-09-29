@@ -33,3 +33,7 @@ enable_confirmations = false
 
 [realtime]
 enabled = true
+
+[functions]
+[functions.asr]
+verify_jwt = false

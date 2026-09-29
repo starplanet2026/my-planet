@@ -12,7 +12,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { playClick, playCorrect, playWrong } from '../../lib/audio';
 import { cn } from '../../lib/utils';
-import { BookOpen, Calculator, ListChecks, Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight, AlertCircle, Layers, Eye } from 'lucide-react';
+import { Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight, AlertCircle, Layers, Eye, Flag } from 'lucide-react';
 import { QuestionRenderer } from './challenge/questions/QuestionRenderer';
 import {
   fetchChallengeSets, fetchQuestions, fetchWords, fetchWordProgress,
@@ -26,9 +26,10 @@ import {
   fetchLevelWrongQuestionStats,
   fetchSetQuestionsAll,
   startChallengeSession, flushChallengeSession,
+  createQuestionReport,
 } from '../../api/challenges';
 import { listTasks as listDictationTasks } from '../../api/dictation';
-import { listStudentInstances } from '../../api/recitation';
+import { listStudentInstances, getTaskMaxStars } from '../../api/recitation';
 import type {
   ChallengeSet, Question, Word, WordQuestionType, ChallengeSetType, Difficulty, ChallengeAnalysisItem,
   ChallengeBoard, ChallengeBoardType, SetWithLevels, LevelWithProgress,
@@ -42,12 +43,6 @@ const BOARD_CONFIG: { type: ChallengeBoardType; label: string; icon: string }[] 
   { type: 'wrong_battle', label: '错题大混战', icon: '⚔️' },
   { type: 'advance', label: '超前拓展', icon: '🚀' },
 ];
-
-const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  word_vocab: { label: '单词背诵', icon: <BookOpen className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />, color: 'from-blue-400 to-blue-500' },
-  math: { label: '数学计算', icon: <Calculator className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />, color: 'from-emerald-400 to-emerald-500' },
-  choice: { label: '知识挑战', icon: <ListChecks className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />, color: 'from-purple-400 to-purple-500' },
-};
 
 // 学科标签颜色映射
 const SUBJECT_COLORS: Record<string, string> = {
@@ -436,7 +431,14 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
   onViewLevelQuestions: (levelId: string, title: string) => void;
 }) {
   const [wrongSet, setWrongSet] = useState<{ id: string; title: string; levelId?: string } | null>(null);
+  const [battlePoolCount, setBattlePoolCount] = useState(0);
   const navigate = useNavigate();
+
+  // 获取错题混战池题目数量
+  useEffect(() => {
+    if (boardType !== 'wrong_battle') return;
+    fetchWrongBattlePool(childId).then(data => setBattlePoolCount(data.length)).catch(() => setBattlePoolCount(0));
+  }, [boardType, childId]);
 
   const hasDictationEntry = boardType === 'today_review' && activeDictationSubjects.size > 0;
   const hasRecitationEntry = boardType === 'today_review' && pendingRecitations.length > 0;
@@ -476,30 +478,47 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
           </div>
         )}
         {/* 背诵任务入口卡片（每个待作答实例一张，点击进入录音作答页） */}
-        {boardType === 'today_review' && pendingRecitations.map(inst => (
-          <div
-            key={inst.id}
-            onClick={() => navigate(`/challenge/recitation/${inst.id}`)}
-            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-400 to-teal-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
-          >
-            <span className="text-3xl mb-1">🎙️</span>
-            <span className="text-sm font-bold text-center line-clamp-2">{inst.task?.title ?? '背诵任务'}</span>
-            <span className="text-[10px] mt-1 opacity-90">{inst.task?.subject === 'english' ? '英语' : '语文'}背诵</span>
-          </div>
-        ))}
+        {boardType === 'today_review' && pendingRecitations.map(inst => {
+          const subject = inst.task?.subject;
+          const maxStars = getTaskMaxStars(inst.task ?? undefined);
+          const isEnglish = subject === 'english';
+          return (
+            <div
+              key={inst.id}
+              onClick={() => navigate(`/challenge/recitation/${inst.id}`)}
+              className="cursor-pointer rounded-2xl p-3 flex flex-col bg-gradient-to-br from-emerald-400 to-teal-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative"
+            >
+              {/* 学科Tag标签（左上角带底色） */}
+              <span className={cn(
+                'absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded',
+                isEnglish ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700',
+              )}>
+                {isEnglish ? '英语背诵' : '语文背诵'}
+              </span>
+              <div className="flex-1 flex flex-col items-center justify-center pt-3">
+                <span className="text-3xl mb-1">🎙️</span>
+                <span className="text-sm font-bold text-center line-clamp-2 leading-tight">{inst.task?.title ?? '背诵任务'}</span>
+              </div>
+              {/* 最高星光奖励（卡片底部） */}
+              <span className="text-[10px] mt-1 opacity-95 text-center">
+                {maxStars > 0 ? `最高可获得：${maxStars}星光值` : '无星光奖励'}
+              </span>
+            </div>
+          );
+        })}
         {/* 错题混战池入口（仅错题大混战板块显示） */}
         {boardType === 'wrong_battle' && (
           <div
             onClick={onStartBattle}
-            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-purple-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow"
+            className="cursor-pointer rounded-2xl p-4 flex flex-col items-center justify-center bg-gradient-to-br from-purple-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square"
           >
             <span className="text-3xl mb-1">⚔️</span>
-            <span className="text-sm font-bold">错题混战池</span>
-            <span className="text-[10px] mt-1 opacity-90">点击开始挑战</span>
+            <span className="text-sm font-bold">错题大混战</span>
+            <span className="text-[10px] mt-1 opacity-90">剩余 {battlePoolCount} 题</span>
+            <span className="mt-2 px-3 py-1 rounded-full bg-white/25 text-xs font-medium backdrop-blur-sm">去挑战</span>
           </div>
         )}
         {sets.map(set => {
-          const cfg = TYPE_CONFIG[set.type] ?? TYPE_CONFIG.choice;
           // 汇总整个题集的进度
           const total = set.levels.reduce((s, l) => s + l.total, 0);
           const mastered = set.levels.reduce((s, l) => s + l.mastered, 0);
@@ -509,6 +528,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
           // 状态判断: 3=全新未做(mastered===0), 2=全消除(allCleared), 1=进行中
           const state: 1 | 2 | 3 = allCleared ? 2 : (mastered > 0 ? 1 : 3);
           const leftLabel = state === 2 ? '查看题集' : (state === 1 ? '继续挑战' : '开始挑战');
+
+          // 科目：题集自身有则用题集的，否则从关卡中取第一个有科目的
+          const subject = set.subject || set.levels.find(l => l.subject)?.subject || '未分类';
 
           const fakeSet: ChallengeSet = {
             id: set.id, title: set.title, description: set.description,
@@ -535,10 +557,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                   ✓
                 </span>
               )}
-              {/* ① 左上角学科标签 + 右上角icon */}
+              {/* ① 左上角学科标签（与关卡统一） */}
               <div className="flex items-center justify-between mb-1">
-                <span className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium', subjectColor(set.subject || cfg.label))}>{set.subject || cfg.label}</span>
-                {cfg.icon}
+                <span className={cn('px-1.5 py-0.5 rounded-md text-[9px] font-medium', subjectColor(subject))}>{subject}</span>
               </div>
               {/* 内容区：垂直居中 */}
               <div className="flex-1 flex flex-col justify-center">
@@ -704,8 +725,8 @@ function WrongQuestionsModal({ childId, setId, setTitle, levelId, onClose, onRet
         const data = levelId
           ? await fetchLevelWrongQuestionStats(childId, levelId)
           : await fetchWrongQuestionStats(childId, setId);
-        // 只展示有错误记录的题
-        setStats(data.filter(s => s.wrong_count > 0));
+        // API 已过滤 wrong_count > correct_count，直接使用
+        setStats(data);
       } catch {
         setStats([]);
       } finally {
@@ -786,6 +807,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
   const [totalReward, setTotalReward] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
   useChallengeSession(childId, setId, undefined, setTitle);
 
   useEffect(() => {
@@ -817,10 +839,16 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
       setTotalReward(r => r + (result.reward ?? 0));
       if (result.is_correct) playCorrect(); else playWrong();
       if (result.is_correct) {
+        if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
         toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
       } else {
         toast.error('答错了，再试一次');
+      }
+      // 若该错题已达标（答对次数 ≥ 错误次数+1），从本地错题列表移除
+      if (result.is_mastered) {
+        setQuestions(prev => prev.filter((_, i) => i !== idx));
+        toast.info('该错题已掌握，自动下线');
       }
     } catch (e: any) {
       toast.error(e?.message ?? '提交失败');
@@ -830,6 +858,15 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
   };
 
   const handleNext = () => {
+    if (idx >= questions.length) {
+      if (questions.length === 0) {
+        setShowFinal(true);
+      } else {
+        setAnswer('');
+        setShowResult(false);
+      }
+      return;
+    }
     if (idx < questions.length - 1) {
       setAnswer('');
       setShowResult(false);
@@ -912,9 +949,12 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
-          {q.type === 'multi_choice' && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.type === 'multi_choice' && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
+            )}
+            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+          </div>
         </div>
         {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
           <div className="space-y-3">
@@ -991,6 +1031,7 @@ function WrongBattlePlayer({ childId, onBack }: {
   const [totalReward, setTotalReward] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
   useChallengeSession(childId, undefined, undefined, '错题大混战');
 
   useEffect(() => {
@@ -1020,9 +1061,18 @@ function WrongBattlePlayer({ childId, onBack }: {
       setTotalReward(r => r + (result.reward ?? 0));
       if (result.is_correct) playCorrect(); else playWrong();
       if (result.is_correct) {
+        if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         toast.success(`答对了！+${result.reward} 星光值`);
       } else {
         toast.error('答错了，继续加油');
+      }
+      // 若该题已达标自动下线，从本地混战池中移除
+      if (result.is_mastered) {
+        setPool(prev => {
+          const next = prev.filter((_, i) => i !== idx);
+          return next;
+        });
+        toast.info('该错题已掌握，自动从混战池下线');
       }
     } catch (e: any) {
       toast.error(e?.message ?? '提交失败');
@@ -1032,6 +1082,16 @@ function WrongBattlePlayer({ childId, onBack }: {
   };
 
   const handleNext = () => {
+    // 若当前题已被下线（pool 长度变化），直接进入下一题或结算
+    if (idx >= pool.length) {
+      if (pool.length === 0) {
+        setShowFinal(true);
+      } else {
+        setAnswer('');
+        setShowResult(false);
+      }
+      return;
+    }
     if (idx < pool.length - 1) {
       setAnswer('');
       setShowResult(false);
@@ -1123,9 +1183,12 @@ function WrongBattlePlayer({ childId, onBack }: {
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
-          {q.type === 'multi_choice' && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.type === 'multi_choice' && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
+            )}
+            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+          </div>
         </div>
         {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
           <div className="space-y-3">
@@ -1315,6 +1378,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   const patchLevelSnapshot = useChallengeUiStore(s => s.patchLevelSnapshot);
   const clearLevel = useChallengeUiStore(s => s.clearLevel);
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
 
   // 原始题目列表（关卡内全部题，按 display_order 排序）
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
@@ -1418,6 +1482,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
       setTotalReward(r => r + (result.reward ?? 0));
       if (result.is_correct) playCorrect(); else playWrong();
       if (result.is_correct) {
+        if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         // 答对：题目永久消失（加入 clearedIds）
         setClearedIds(prev => [...prev, q.id]);
         const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
@@ -1476,6 +1541,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   const handleLevelClear = async () => {
     try {
       const result = await finishChallengeLevel(childId, levelId);
+      if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
       if (result.level_awarded) {
         setLevelBonus(result.level_reward ?? 0);
         onDone();
@@ -1668,9 +1734,12 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
-          {q.type === 'multi_choice' && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.type === 'multi_choice' && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
+            )}
+            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+          </div>
         </div>
 
         <QuestionRenderer
@@ -1983,6 +2052,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
   const [totalBonus, setTotalBonus] = useState(restoreSnapshot?.totalBonus ?? 0);
   const [showChallengeResult, setShowChallengeResult] = useState(restoreSnapshot?.showChallengeResult ?? false);
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
   const q = questions[idx];
   useChallengeSession(childId, set.id, undefined, set.title);
 
@@ -2002,6 +2072,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
       setTotalReward(r => r + (result.reward ?? 0));
       setTotalBonus(b => b + (result.bonus_reward ?? 0));
       if (result.is_correct) {
+        if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
         toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
       } else {
@@ -2060,9 +2131,12 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
-          {q.type === 'multi_choice' && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0 ml-2">多选</span>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.type === 'multi_choice' && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
+            )}
+            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+          </div>
         </div>
         {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
           <div className="space-y-3">
@@ -2127,6 +2201,7 @@ function ChallengeResult({ set, childId, correctCount, totalCount, totalReward, 
   totalReward: number; totalBonus: number; onBack: () => void; onRedo: () => void; onDone: () => void;
 }) {
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
   const [analysis, setAnalysis] = useState<ChallengeAnalysisItem[] | null>(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [bonusAwarded, setBonusAwarded] = useState(false);
@@ -2150,6 +2225,7 @@ function ChallengeResult({ set, childId, correctCount, totalCount, totalReward, 
       try {
         const r = await awardPerfectChallengeBonus(childId, set.id);
         if (r.awarded) {
+          if (r.new_star != null) patchMember(childId, { star_value: r.new_star });
           setBonusAwarded(true);
           toast.success(`🏆 100% 正确率！额外 +${r.bonus} 星光值`);
           onDone();
@@ -2371,6 +2447,7 @@ function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = nul
   const [isCorrect, setIsCorrect] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const toast = useToastStore();
+  const patchMember = useFamilyStore(s => s.patchMember);
   const word = words[idx];
   const progress = word?.progress;
   const mastered = progress?.is_mastered;
@@ -2414,6 +2491,7 @@ function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = nul
       setShowResult(true);
       onDone();
       if (result.is_correct) {
+        if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         toast.success(`答对了！+${result.reward} 星光值`);
         if (result.is_mastered) toast.success('🎉 已掌握该单词！');
       } else {
@@ -2540,5 +2618,65 @@ function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = nul
         ))}
       </div>
     </div>
+  );
+}
+
+// ====== 举报错题按钮（做题页面右上角） ======
+function ReportQuestionButton({ questionId, questionText }: { questionId: string; questionText: string }) {
+  const familyId = useFamilyStore(s => s.family?.id);
+  const memberId = useFamilyStore(s => s.currentChildId);
+  const toast = useToastStore();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await createQuestionReport({
+        question_id: questionId,
+        family_id: familyId ?? null,
+        member_id: memberId ?? null,
+        question_text_snapshot: questionText,
+        reason: reason.trim() || null,
+      });
+      toast.success('已提交，感谢反馈！');
+      setOpen(false);
+      setReason('');
+    } catch (e: any) {
+      toast.error(e?.message ?? '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+        title="举报错题"
+      >
+        <Flag className="w-4 h-4" />
+      </button>
+      {open && (
+        <Modal open onClose={() => setOpen(false)} title="举报错题" size="sm">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">题目内容：</p>
+            <p className="text-sm text-slate-800 bg-slate-50 rounded-lg p-3 max-h-32 overflow-y-auto">{questionText}</p>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">问题描述（选填）</label>
+              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="如：答案错误、题目有错别字…" />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>取消</Button>
+              <Button className="flex-1" loading={submitting} onClick={handleSubmit}>
+                <Flag className="w-4 h-4" /> 提交
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
