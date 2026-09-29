@@ -85,12 +85,24 @@ export function StudyCompanionModal({
   const persistedRemaining = usePetUiStore(s => s.studyRemaining);
   const persistedStudying = usePetUiStore(s => s.studyStudying);
   const persistedPaused = usePetUiStore(s => s.studyPaused);
+  const persistedEndsAt = usePetUiStore(s => s.studyEndsAt);
+  const persistedPausedAccumMs = usePetUiStore(s => s.studyPausedAccumMs);
+  const persistedPauseStartAt = usePetUiStore(s => s.studyPauseStartAt);
+  const persistedMinimized = usePetUiStore(s => s.studyMinimized);
+  const persistedTotalStar = usePetUiStore(s => s.studyTotalStarEarned);
   const setStudyState = usePetUiStore(s => s.setStudyState);
   const clearStudyState = usePetUiStore(s => s.clearStudyState);
-  const setShowStudy = usePetUiStore(s => s.setShowStudy);
   const restoredRef = useRef(false);
   // 防止同一任务快速重复点击触发多次发奖（同步锁）
   const rewardingRef = useRef<Set<string>>(new Set());
+  // 时间戳驱动：学习应结束的绝对时间（ms），null 表示未在学习
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  // 累计已暂停时长（ms）
+  const [pausedAccumMs, setPausedAccumMs] = useState(0);
+  // 本次暂停开始时间戳（ms），null 表示未暂停
+  const [pauseStartAt, setPauseStartAt] = useState<number | null>(null);
+  // 最小化标志
+  const [minimized, setMinimized] = useState(false);
 
   // 首次挂载时从 store 恢复
   useEffect(() => {
@@ -101,12 +113,31 @@ export function StudyCompanionModal({
       setMinutes(persistedMinutes);
       setStudyTask(persistedTaskText);
       setTaskList(persistedTaskList as StudyTask[]);
-      setRemaining(persistedRemaining);
-      // studying 在组件卸载时已停止，回来后默认暂停，让用户手动继续
-      setStudying(false);
-      setPaused(true);
+      setTotalStarEarned(persistedTotalStar);
+      setEndsAt(persistedEndsAt);
+      setPausedAccumMs(persistedPausedAccumMs);
+      setPauseStartAt(persistedPauseStartAt);
+      setMinimized(persistedMinimized);
       const pet = pets.find(p => p.id === persistedPetId);
       if (pet) setSelectedPet(pet);
+      // 时间戳驱动恢复：若 endsAt 在未来，继续倒计时（不暂停）
+      if (persistedEndsAt) {
+        const now = Date.now();
+        if (now < persistedEndsAt) {
+          setRemaining(Math.max(0, Math.round((persistedEndsAt - now) / 1000)));
+          setStudying(true);
+          setPaused(false);
+        } else {
+          // 最小化/切走期间已到期，留待 timer effect 触发结算
+          setRemaining(0);
+          setStudying(true);
+          setPaused(false);
+        }
+      } else {
+        setRemaining(persistedRemaining);
+        setStudying(false);
+        setPaused(true);
+      }
     }
   }, []);
 
@@ -121,8 +152,13 @@ export function StudyCompanionModal({
       studyRemaining: remaining,
       studyStudying: studying,
       studyPaused: paused,
+      studyEndsAt: endsAt,
+      studyPausedAccumMs: pausedAccumMs,
+      studyPauseStartAt: pauseStartAt,
+      studyMinimized: minimized,
+      studyTotalStarEarned: totalStarEarned,
     });
-  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, setStudyState]);
+  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, totalStarEarned, setStudyState]);
 
   // 从数据库加载任务模板（多端同步）
   useEffect(() => {
@@ -143,33 +179,36 @@ export function StudyCompanionModal({
     onClose();
   }, [clearStudyState, onClose]);
 
-  // 最小化：仅隐藏弹窗，不清空学习状态，用户可去其他页面；回来点陪伴学习按钮可恢复
+  // 最小化：仅隐藏为小浮窗，倒计时与心情奖励继续（不暂停、不清状态）
   const handleMinimize = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setStudying(false);
-    setPaused(true);
-    // 不调用 clearStudyState，保留学习进度到 store
-    setShowStudy(false);
-  }, [setShowStudy]);
+    setMinimized(true);
+  }, []);
 
-  // 倒计时（暂停时停止）
+  // 从最小化恢复完整视图
+  const handleRestore = useCallback(() => {
+    setMinimized(false);
+  }, []);
+
+  // 倒计时（时间戳驱动；暂停时停止累计。最小化期间继续）
   useEffect(() => {
-    if (!studying || paused) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining(prev => {
-        if (prev <= 1) {
-          clearInterval(intervalRef.current!);
-          setStudying(false);
-          handleComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!studying || paused || !endsAt) return;
+    // 立即校验是否已到期
+    const tick = () => {
+      const rem = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      setRemaining(rem);
+      if (rem <= 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setStudying(false);
+        handleComplete();
+      }
+    };
+    tick();
+    intervalRef.current = setInterval(tick, 1000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [studying, paused]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studying, paused, endsAt]);
 
   // 自动生成任务：将输入框每行解析为任务条目，写入数据库（多端同步）
   const handleGenerateTasks = async () => {
@@ -247,10 +286,16 @@ export function StudyCompanionModal({
     const tasks: StudyTask[] = selectedTasks.map((t, i) => ({
       id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false,
     }));
+    const totalSec = minutes * 60;
     setTaskList(tasks);
     setTotalStarEarned(0);
-    setRemaining(minutes * 60);
+    setRemaining(totalSec);
+    setPausedAccumMs(0);
+    setPauseStartAt(null);
+    setMinimized(false);
+    setEndsAt(Date.now() + totalSec * 1000);
     setStudying(true);
+    setPaused(false);
     setStep('timer');
   };
 
@@ -300,6 +345,8 @@ export function StudyCompanionModal({
   const finishStudy = async (actualMinutes: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     setStudying(false);
+    setMinimized(false);
+    setEndsAt(null);
     // 实际学习分钟数至少为 0（不足 1 分钟不记录不发奖）
     const minutes2 = Math.max(0, Math.round(actualMinutes));
     if (minutes2 <= 0) {
@@ -332,7 +379,7 @@ export function StudyCompanionModal({
   };
 
   const handleComplete = async () => {
-    // 倒计时归零，实际学习 = 设置的时长
+    // 倒计时归零，实际学习 = 设置的时长（不含暂停）
     await finishStudy(minutes);
   };
 
@@ -349,10 +396,41 @@ export function StudyCompanionModal({
     }
   };
 
+  // 计算实际学习分钟数（总时长 - 已暂停累计 - 当前正在暂停的时长）
+  const computeActualMinutes = () => {
+    if (!endsAt) return 0;
+    const now = Date.now();
+    const totalMs = minutes * 60 * 1000;
+    const elapsedMs = Math.min(totalMs, Math.max(0, now - (endsAt - totalMs)));
+    let pausedMs = pausedAccumMs;
+    if (paused && pauseStartAt) {
+      pausedMs += now - pauseStartAt;
+    }
+    const studyMs = Math.max(0, elapsedMs - pausedMs);
+    return studyMs / 1000 / 60;
+  };
+
+  const handlePauseToggle = () => {
+    if (!endsAt) return;
+    if (paused) {
+      // 恢复：累计本次暂停时长，并把 endsAt 后移（补回暂停时间）
+      if (pauseStartAt) {
+        const pausedMs = Date.now() - pauseStartAt;
+        setPausedAccumMs(prev => prev + pausedMs);
+        setEndsAt(prev => prev ? prev + pausedMs : prev);
+      }
+      setPauseStartAt(null);
+      setPaused(false);
+    } else {
+      // 暂停：记录开始时间
+      setPauseStartAt(Date.now());
+      setPaused(true);
+    }
+  };
+
   const handleQuit = async () => {
     // 用户主动结束：按实际学习分钟数结算（学了多久就恢复多少心情值，且记录一次）
-    const actualSeconds = minutes * 60 - remaining;
-    const actualMinutes = actualSeconds / 60;
+    const actualMinutes = computeActualMinutes();
     if (actualMinutes >= 1) {
       toast.info(`学习了 ${Math.round(actualMinutes)} 分钟，已记录并恢复心情`);
     } else {
@@ -366,6 +444,23 @@ export function StudyCompanionModal({
     const s = sec % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
+
+  // 最小化浮窗：学习继续，仅显示剩余时间，点击恢复
+  if (minimized && step === 'timer' && endsAt) {
+    return (
+      <button
+        onClick={handleRestore}
+        title="点击恢复陪伴学习"
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full bg-white shadow-lg border border-green-200 hover:bg-green-50 transition-colors"
+      >
+        <span className="text-lg">📚</span>
+        <div className="flex flex-col items-start leading-tight">
+          <span className="text-[10px] text-slate-400">陪伴学习中</span>
+          <span className="text-sm font-bold text-green-600 tabular-nums">{formatTime(remaining)}</span>
+        </div>
+      </button>
+    );
+  }
 
   // 选择宠物+时长
   if (step === 'select') {
@@ -679,7 +774,7 @@ export function StudyCompanionModal({
             {/* 横向按钮（固定在底部，不被任务顶出画面） */}
             <div className="flex gap-4 mt-2 flex-shrink-0">
               <button
-                onClick={() => setPaused(p => !p)}
+                onClick={handlePauseToggle}
                 className="px-8 py-3 rounded-xl bg-white/80 text-slate-700 text-base font-medium hover:bg-white shadow-sm"
               >
                 {paused ? '继续' : '暂停一下'}

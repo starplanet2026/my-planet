@@ -95,7 +95,7 @@ export function DictationPlayPage() {
     <div className="h-[calc(100dvh-4rem-4rem-env(safe-area-inset-bottom))] -mt-6 -mb-24 -mx-4 sm:-mx-6 lg:-mx-8 px-2 sm:px-4 flex flex-col overflow-hidden">
       {/* 卡片自适应宽高，固定字号，自动换行，最大宽高限制 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="flex flex-wrap gap-2 justify-start">
+        <div className="grid h-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 auto-rows-fr gap-2">
           {words.map((w, i) => {
             const isCorrect = correct.has(w.id);
             const prompt = subject === 'english' ? (w.chinese_meaning ?? '-') : (w.pinyin ?? '-');
@@ -104,8 +104,7 @@ export function DictationPlayPage() {
                 key={w.id}
                 onClick={() => grading && toggleCorrect(w.id)}
                 className={cn(
-                  'p-2 flex flex-col justify-center items-center text-center transition-colors',
-                  'min-w-[5rem] max-w-[12rem] min-h-[3rem] max-h-[8rem]',
+                  'p-2 flex flex-col justify-center items-center text-center transition-colors w-full h-full min-h-0',
                   grading && 'cursor-pointer',
                   grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
                 )}

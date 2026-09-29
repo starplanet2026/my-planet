@@ -34,6 +34,16 @@ interface PetUiState {
   studyRemaining: number; // 秒
   studyStudying: boolean;
   studyPaused: boolean;
+  // 时间戳驱动：学习应结束的绝对时间（ms），跨页面/最小化期间倒计时继续
+  studyEndsAt: number | null;
+  // 已累计暂停时长（ms），用于结算实际学习分钟数
+  studyPausedAccumMs: number;
+  // 本次暂停开始时间戳（ms），null 表示未在暂停
+  studyPauseStartAt: number | null;
+  // 最小化标志：true 时仅渲染小浮窗，学习继续
+  studyMinimized: boolean;
+  // 本次学习已获得的星光值（跨页面恢复用）
+  studyTotalStarEarned: number;
 
   // 全局音效静音开关（跨页面共享）
   audioMuted: boolean;
@@ -45,7 +55,8 @@ interface PetUiState {
   clearGameState: () => void;
   setStudyState: (patch: Partial<Pick<PetUiState,
     'studyStep' | 'studyPetId' | 'studyMinutes' | 'studyTaskText' |
-    'studyTaskList' | 'studyRemaining' | 'studyStudying' | 'studyPaused'
+    'studyTaskList' | 'studyRemaining' | 'studyStudying' | 'studyPaused' |
+    'studyEndsAt' | 'studyPausedAccumMs' | 'studyPauseStartAt' | 'studyMinimized' | 'studyTotalStarEarned'
   >>) => void;
   clearStudyState: () => void;
   toggleAudioMute: () => void;
@@ -68,6 +79,11 @@ export const usePetUiStore = create<PetUiState>((set) => ({
   studyRemaining: 0,
   studyStudying: false,
   studyPaused: false,
+  studyEndsAt: null,
+  studyPausedAccumMs: 0,
+  studyPauseStartAt: null,
+  studyMinimized: false,
+  studyTotalStarEarned: 0,
 
   audioMuted: (() => {
     try {
@@ -94,6 +110,11 @@ export const usePetUiStore = create<PetUiState>((set) => ({
     studyRemaining: 0,
     studyStudying: false,
     studyPaused: false,
+    studyEndsAt: null,
+    studyPausedAccumMs: 0,
+    studyPauseStartAt: null,
+    studyMinimized: false,
+    studyTotalStarEarned: 0,
   }),
   toggleAudioMute: () => set((s) => {
     const next = !s.audioMuted;
