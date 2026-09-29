@@ -93,6 +93,8 @@ export function StudyCompanionModal({
   const setStudyState = usePetUiStore(s => s.setStudyState);
   const clearStudyState = usePetUiStore(s => s.clearStudyState);
   const restoredRef = useRef(false);
+  // 跳过首次渲染的 store 同步，避免初始空状态覆盖已持久化的学习进度
+  const skipSyncRef = useRef(true);
   // 防止同一任务快速重复点击触发多次发奖（同步锁）
   const rewardingRef = useRef<Set<string>>(new Set());
   // 时间戳驱动：学习应结束的绝对时间（ms），null 表示未在学习
@@ -141,8 +143,12 @@ export function StudyCompanionModal({
     }
   }, []);
 
-  // 同步状态到 store（切换 tab 后可恢复）
+  // 同步状态到 store（切换 tab 后可恢复）；跳过首次渲染避免覆盖已恢复的进度
   useEffect(() => {
+    if (skipSyncRef.current) {
+      skipSyncRef.current = false;
+      return;
+    }
     setStudyState({
       studyStep: step,
       studyPetId: selectedPet?.id ?? null,
@@ -207,8 +213,9 @@ export function StudyCompanionModal({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    // 最小化切换也纳入依赖，确保从最小化恢复时计时器一定重启
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studying, paused, endsAt]);
+  }, [studying, paused, endsAt, minimized]);
 
   // 自动生成任务：将输入框每行解析为任务条目，写入数据库（多端同步）
   const handleGenerateTasks = async () => {
