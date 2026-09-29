@@ -87,6 +87,10 @@ export const ROUTES = {
   PARENT_DICTATION: '/parent/dictation',
   // 背诵任务管理（一级板块，模板列表 + 学生提交查看）
   PARENT_RECITATION: '/parent/recitation',
+  // 陪伴学习任务管理（家长下发任务模板）
+  PARENT_STUDY_TASKS: '/parent/study-tasks',
+  // 陪伴学习审核（家长审核学生提交的学习记录）
+  PARENT_STUDY_REVIEW: '/parent/study-review',
   PET: '/pet',
 } as const;
 

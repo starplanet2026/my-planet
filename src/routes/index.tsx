@@ -19,6 +19,8 @@ import { WordChallengeManagePage } from '../pages/parent/WordChallengeManagePage
 import { QuestionReportManagePage } from '../pages/parent/QuestionReportManagePage';
 import { DictationManagePage } from '../pages/parent/DictationManagePage';
 import { RecitationManagePage } from '../pages/parent/RecitationManagePage';
+import { StudyTaskManagePage } from '../pages/parent/StudyTaskManagePage';
+import { StudyReviewPage } from '../pages/parent/StudyReviewPage';
 import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
 import { ROUTES } from '../lib/constants';
 
@@ -60,6 +62,8 @@ export function AppRoutes() {
           <Route path="question-reports" element={<QuestionReportManagePage />} />
           <Route path="dictation" element={<DictationManagePage />} />
           <Route path="recitation" element={<RecitationManagePage />} />
+          <Route path="study-tasks" element={<StudyTaskManagePage />} />
+          <Route path="study-review" element={<StudyReviewPage />} />
         </Route>
       </Route>
 

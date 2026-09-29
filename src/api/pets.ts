@@ -819,6 +819,53 @@ export async function deleteStudyTaskTemplate(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ====== 陪伴学习家长审核 ======
+
+// 家长审核通过：发放星光值 + 心情值
+export async function approveStudyRecord(recordId: string, reviewerId: string): Promise<{ success: boolean; message: string; star_granted: number; happiness_granted: number }> {
+  const { data, error } = await supabase.rpc('approve_study_record', {
+    p_record_id: recordId,
+    p_reviewer_id: reviewerId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as { success: boolean; message: string; star_granted: number; happiness_granted: number };
+}
+
+// 家长审核驳回
+export async function rejectStudyRecord(recordId: string, reviewerId: string, note?: string): Promise<{ success: boolean; message: string }> {
+  const { data, error } = await supabase.rpc('reject_study_record', {
+    p_record_id: recordId,
+    p_reviewer_id: reviewerId,
+    p_note: note ?? null,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as { success: boolean; message: string };
+}
+
+// 待审核学习记录列表（家长端）
+export interface PendingStudyReview {
+  id: string;
+  member_id: string;
+  member_name: string;
+  pet_name: string | null;
+  minutes: number;
+  happiness_gain: number;
+  star_earned: number;
+  tasks: { text: string; reward: number; done: boolean }[] | null;
+  created_at: string;
+  review_status: string;
+}
+
+export async function fetchPendingStudyReviews(familyId: string): Promise<PendingStudyReview[]> {
+  const { data, error } = await supabase.rpc('get_pending_study_reviews', {
+    p_family_id: familyId,
+  });
+  if (error) throw error;
+  return (data ?? []) as PendingStudyReview[];
+}
+
 // ====== 托管系统 ======
 
 export async function buyBoardingCard(memberId: string, itemId: string): Promise<BuyBoardingCardResult> {

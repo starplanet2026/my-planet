@@ -15,7 +15,7 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { ListTodo, ShoppingBag, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, Mic, KeyRound, Gamepad2, Flag } from 'lucide-react';
+import { ListTodo, ShoppingBag, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, Mic, KeyRound, Gamepad2, Flag, GraduationCap, ClipboardCheck } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -172,6 +172,8 @@ export function ParentDashboardPage() {
   const actions = [
     { label: '家默管理', icon: BookOpen, route: ROUTES.PARENT_DICTATION, color: 'blue' },
     { label: '背诵管理', icon: Mic, route: ROUTES.PARENT_RECITATION, color: 'emerald' },
+    { label: '陪伴学习', icon: GraduationCap, route: ROUTES.PARENT_STUDY_TASKS, color: 'green' },
+    { label: '学习审核', icon: ClipboardCheck, route: ROUTES.PARENT_STUDY_REVIEW, color: 'amber' },
     { label: '任务管理', icon: ListTodo, route: ROUTES.PARENT_TASKS, color: 'blue' },
     { label: '验证申请', icon: CheckCircle, route: ROUTES.PARENT_VERIFICATION, color: 'green' },
     { label: '特权管理', icon: ShoppingBag, route: ROUTES.PARENT_SHOP, color: 'purple' },

@@ -9,24 +9,14 @@ import { Minimize2 } from 'lucide-react';
 import type { Pet } from '../../../../api/types';
 import { supabase } from '../../../../api/client';
 import {
-  studyTaskReward, fetchStudyRecords,
-  fetchStudyTaskTemplates, addStudyTaskTemplates,
-  updateStudyTaskTemplate, deleteStudyTaskTemplate,
+  fetchStudyRecords,
+  fetchStudyTaskTemplates,
+  updateStudyTaskTemplate,
 } from '../../../../api/pets';
 import type { StudyRecord } from '../../../../api/pets';
 
 // 心情恢复 = 分钟数（1分钟=1心情值）
 const calcHappinessGain = (minutes: number) => minutes;
-
-// 从任务文本中解析星光值奖励（如"英语学习 2星光值"或"背单词 3星"）
-function parseReward(text: string): { label: string; reward: number } {
-  // 匹配 "X星光值" / "X星光" / "X星" / "Xstar"
-  const m = text.match(/\s*(\d+)\s*(?:星光值|星光|星|star)\s*$/i);
-  if (m) {
-    return { label: text.replace(/\s*\d+\s*(?:星光值|星光|星|star)\s*$/i, '').trim(), reward: parseInt(m[1], 10) };
-  }
-  return { label: text.trim(), reward: 0 };
-}
 
 // 陪伴学习鼓励语（每 10 分钟轮换）
 const STUDY_MESSAGES = [
@@ -63,7 +53,6 @@ export function StudyCompanionModal({
   const [step, setStep] = useState<'select' | 'timer' | 'done' | 'records'>('select');
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [minutes, setMinutes] = useState(15);
-  const [studyTask, setStudyTask] = useState('');
   const [taskList, setTaskList] = useState<StudyTask[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
@@ -71,10 +60,13 @@ export function StudyCompanionModal({
   const [studying, setStudying] = useState(false);
   const [paused, setPaused] = useState(false);
   const [happinessGain, setHappinessGain] = useState(0);
-  const [totalStarEarned, setTotalStarEarned] = useState(0);
+  // 待审核的星光值合计（已完成任务的奖励总和，家长审核通过后才发放）
+  const [pendingStar, setPendingStar] = useState(0);
   // 倒计时归零后停留在页面等待领取奖励；rewardClaimed 标记是否已领取
   const [studyEnded, setStudyEnded] = useState(false);
   const [rewardClaimed, setRewardClaimed] = useState(false);
+  // 是否已提交家长审核
+  const [submittedForReview, setSubmittedForReview] = useState(false);
   const [records, setRecords] = useState<StudyRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,7 +75,6 @@ export function StudyCompanionModal({
   const persistedStep = usePetUiStore(s => s.studyStep);
   const persistedPetId = usePetUiStore(s => s.studyPetId);
   const persistedMinutes = usePetUiStore(s => s.studyMinutes);
-  const persistedTaskText = usePetUiStore(s => s.studyTaskText);
   const persistedTaskList = usePetUiStore(s => s.studyTaskList);
   const persistedRemaining = usePetUiStore(s => s.studyRemaining);
   const persistedStudying = usePetUiStore(s => s.studyStudying);
@@ -92,7 +83,7 @@ export function StudyCompanionModal({
   const persistedPausedAccumMs = usePetUiStore(s => s.studyPausedAccumMs);
   const persistedPauseStartAt = usePetUiStore(s => s.studyPauseStartAt);
   const persistedMinimized = usePetUiStore(s => s.studyMinimized);
-  const persistedTotalStar = usePetUiStore(s => s.studyTotalStarEarned);
+  const persistedPendingStar = usePetUiStore(s => s.studyTotalStarEarned);
   const persistedStudyEnded = usePetUiStore(s => s.studyEnded);
   const persistedRewardClaimed = usePetUiStore(s => s.studyRewardClaimed);
   const setStudyState = usePetUiStore(s => s.setStudyState);
@@ -100,8 +91,6 @@ export function StudyCompanionModal({
   const restoredRef = useRef(false);
   // 跳过首次渲染的 store 同步，避免初始空状态覆盖已持久化的学习进度
   const skipSyncRef = useRef(true);
-  // 防止同一任务快速重复点击触发多次发奖（同步锁）
-  const rewardingRef = useRef<Set<string>>(new Set());
   // 时间戳驱动：学习应结束的绝对时间（ms），null 表示未在学习
   const [endsAt, setEndsAt] = useState<number | null>(null);
   // 累计已暂停时长（ms）
@@ -118,9 +107,8 @@ export function StudyCompanionModal({
     if (persistedStep !== 'select' || persistedPetId) {
       setStep(persistedStep);
       setMinutes(persistedMinutes);
-      setStudyTask(persistedTaskText);
       setTaskList(persistedTaskList as StudyTask[]);
-      setTotalStarEarned(persistedTotalStar);
+      setPendingStar(persistedPendingStar);
       setEndsAt(persistedEndsAt);
       setPausedAccumMs(persistedPausedAccumMs);
       setPauseStartAt(persistedPauseStartAt);
@@ -160,7 +148,7 @@ export function StudyCompanionModal({
       studyStep: step,
       studyPetId: selectedPet?.id ?? null,
       studyMinutes: minutes,
-      studyTaskText: studyTask,
+      studyTaskText: '',
       studyTaskList: taskList,
       studyRemaining: remaining,
       studyStudying: studying,
@@ -169,11 +157,11 @@ export function StudyCompanionModal({
       studyPausedAccumMs: pausedAccumMs,
       studyPauseStartAt: pauseStartAt,
       studyMinimized: minimized,
-      studyTotalStarEarned: totalStarEarned,
+      studyTotalStarEarned: pendingStar,
       studyEnded,
       studyRewardClaimed: rewardClaimed,
     });
-  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, totalStarEarned, studyEnded, rewardClaimed, setStudyState]);
+  }, [step, selectedPet, minutes, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, pendingStar, studyEnded, rewardClaimed, setStudyState]);
 
   // 从数据库加载任务模板（多端同步）
   useEffect(() => {
@@ -227,34 +215,7 @@ export function StudyCompanionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studying, paused, endsAt, minimized]);
 
-  // 自动生成任务：将输入框每行解析为任务条目，写入数据库（多端同步）
-  const handleGenerateTasks = async () => {
-    const lines = studyTask
-      .split(/\r?\n/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    if (lines.length === 0) {
-      toast.info('请在输入框中输入任务，每行一个');
-      return;
-    }
-    const items = lines.map(line => {
-      const { label, reward } = parseReward(line);
-      return { text: label, reward };
-    });
-    try {
-      const created = await addStudyTaskTemplates(childId, items);
-      setTaskTemplates(prev => [...prev, ...created.map(t => ({
-        id: t.id, text: t.text, reward: t.reward,
-        done: false, rewarded: false, selected: t.selected,
-      }))]);
-      setStudyTask('');
-      toast.success(`已生成 ${created.length} 个任务`);
-    } catch (e: any) {
-      toast.error(e?.message ?? '生成失败');
-    }
-  };
-
-  // 勾选/取消勾选任务模板
+  // 勾选/取消勾选任务模板（学生仅可选择家长下发的任务，不可新建/删除）
   const handleToggleSelect = async (taskId: string) => {
     const task = taskTemplates.find(t => t.id === taskId);
     if (!task) return;
@@ -273,25 +234,6 @@ export function StudyCompanionModal({
     }
   };
 
-  // 删除单个任务模板
-  const handleDeleteTask = async (taskId: string) => {
-    setTaskTemplates(prev => prev.filter(t => t.id !== taskId));
-    try {
-      await deleteStudyTaskTemplate(taskId);
-    } catch (e: any) {
-      toast.error(e?.message ?? '删除失败');
-      // 重新加载
-      if (childId) {
-        fetchStudyTaskTemplates(childId).then(list => {
-          setTaskTemplates(list.map(t => ({
-            id: t.id, text: t.text, reward: t.reward,
-            done: false, rewarded: false, selected: t.selected,
-          })));
-        });
-      }
-    }
-  };
-
   const handleStart = () => {
     if (!selectedPet) return;
     // 取已勾选的任务模板作为本次学习任务
@@ -305,7 +247,8 @@ export function StudyCompanionModal({
     }));
     const totalSec = minutes * 60;
     setTaskList(tasks);
-    setTotalStarEarned(0);
+    setPendingStar(0);
+    setSubmittedForReview(false);
     setRemaining(totalSec);
     setPausedAccumMs(0);
     setPauseStartAt(null);
@@ -318,58 +261,29 @@ export function StudyCompanionModal({
     setStep('timer');
   };
 
-  // 勾选/取消勾选任务（单任务只发一次星光值：首次完成发奖，后续恢复/再完成不重复发）
-  const handleToggleTask = async (taskId: string) => {
+  // 勾选/取消勾选任务：仅本地标记完成，不发放星光值（家长审核通过后才发放）
+  const handleToggleTask = (taskId: string) => {
     const task = taskList.find(t => t.id === taskId);
     if (!task) return;
     const willBeDone = !task.done;
-
-    // 首次完成 + 有奖励 + 未发过 + 未在发奖中：才触发发奖
-    const shouldReward = willBeDone && task.reward > 0 && !task.rewarded && !rewardingRef.current.has(taskId);
-    if (shouldReward) {
-      // 同步加锁，防止快速重复点击在 await 期间多次进入发奖分支
-      rewardingRef.current.add(taskId);
-    }
-
-    // 同步更新 done 与 rewarded（乐观标记 rewarded，避免重复发奖）
-    setTaskList(prev => prev.map(x => x.id === taskId ? {
-      ...x,
-      done: willBeDone,
-      rewarded: shouldReward ? true : x.rewarded,
-    } : x));
-
-    if (shouldReward) {
-      try {
-        const result = await studyTaskReward(childId, task.reward);
-        if (result.success) {
-          setTotalStarEarned(prev => prev + task.reward);
-          toast.success(`完成任务！获得 ${task.reward} 星光值`);
-          refreshMembers();
-          onCompleted();
-        } else {
-          // 后端未成功：回退勾选与 rewarded
-          setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: false, rewarded: false } : x));
-        }
-      } catch (e: any) {
-        toast.error(e?.message ?? '奖励领取失败');
-        // 失败则回退勾选状态与 rewarded
-        setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: false, rewarded: false } : x));
-      } finally {
-        rewardingRef.current.delete(taskId);
-      }
-    }
+    setTaskList(prev => prev.map(x => x.id === taskId ? { ...x, done: willBeDone } : x));
+    // 实时更新待审核星光值合计
+    setPendingStar(prev => {
+      const delta = willBeDone ? task.reward : -task.reward;
+      return Math.max(0, prev + delta);
+    });
   };
 
-  // 完成学习：按实际学习分钟数结算（学了多久就恢复多少心情值）
+  // 完成学习：提交家长审核（不直接发放奖励，审核通过后才发放心情+星光）
   const finishStudy = async (actualMinutes: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     setStudying(false);
     setMinimized(false);
     setEndsAt(null);
-    // 实际学习分钟数至少为 0（不足 1 分钟不记录不发奖）
+    // 实际学习分钟数至少为 0（不足 1 分钟不提交审核）
     const minutes2 = Math.max(0, Math.round(actualMinutes));
     if (minutes2 <= 0) {
-      // 不足 1 分钟，不记录、不发奖，直接关闭
+      // 不足 1 分钟，不记录，直接关闭
       handleClose();
       return;
     }
@@ -381,23 +295,24 @@ export function StudyCompanionModal({
         p_reward: 0,
         p_pet_id: selectedPet?.id ?? null,
         p_tasks: tasksForRecord,
-        p_star_earned: totalStarEarned,
+        p_star_earned: pendingStar,
       });
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
       const gain = (result as any)?.happiness_gain ?? minutes2;
       setHappinessGain(gain);
+      setSubmittedForReview(true);
       if (result?.success) {
         refreshMembers();
         onCompleted();
       }
     } catch (e: any) {
-      toast.error(e?.message ?? '领取奖励失败');
+      toast.error(e?.message ?? '提交审核失败');
     }
     setStep('done');
   };
 
-  // 倒计时归零后：点击小狗领取本次心情值奖励（记录一次学习，不关闭页面）
+  // 倒计时归零后：点击小狗提交家长审核（记录一次学习，不直接发放奖励）
   const handleClaimReward = async () => {
     if (rewardClaimed || !studyEnded) return;
     try {
@@ -408,18 +323,19 @@ export function StudyCompanionModal({
         p_reward: 0,
         p_pet_id: selectedPet?.id ?? null,
         p_tasks: tasksForRecord,
-        p_star_earned: totalStarEarned,
+        p_star_earned: pendingStar,
       });
       if (error) throw error;
       const result = Array.isArray(data) ? data[0] : data;
       const gain = (result as any)?.happiness_gain ?? minutes;
       setHappinessGain(gain);
       setRewardClaimed(true);
+      setSubmittedForReview(true);
       refreshMembers();
       onCompleted();
-      toast.success(`领取成功：心情 +${gain}，星光 +${totalStarEarned}`);
+      toast.success(`已提交家长审核，通过后将发放心情 +${gain}，星光 +${pendingStar}`);
     } catch (e: any) {
-      toast.error(e?.message ?? '领取奖励失败');
+      toast.error(e?.message ?? '提交审核失败');
     }
   };
 
@@ -500,7 +416,7 @@ export function StudyCompanionModal({
       >
         <span className="text-lg">{studyEnded ? '🎁' : '📚'}</span>
         <div className="flex flex-col items-start leading-tight">
-          <span className="text-[10px] text-slate-400">{studyEnded ? (rewardClaimed ? '奖励已领取' : '点击领取奖励') : '陪伴学习中'}</span>
+          <span className="text-[10px] text-slate-400">{studyEnded ? (rewardClaimed ? '已提交审核' : '点击提交审核') : '陪伴学习中'}</span>
           <span className="text-sm font-bold text-green-600 tabular-nums">{studyEnded ? '完成' : formatTime(remaining)}</span>
         </div>
       </button>
@@ -541,32 +457,14 @@ export function StudyCompanionModal({
             )}
           </div>
 
-          {/* 今日任务 */}
+          {/* 今日任务（家长下发，学生仅可勾选） */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">今日任务</label>
-            <textarea
-              value={studyTask}
-              onChange={e => setStudyTask(e.target.value)}
-              placeholder={'如：\n英语学习 2星光值\n背20个单词 3星光值\n阅读课文第3课 1星光值'}
-              maxLength={300}
-              rows={4}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:border-green-400 focus:outline-none resize-none"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">每行一个任务，可在任务名后加"X星光值"设置奖励；支持多次粘贴追加</p>
-            <button
-              type="button"
-              onClick={handleGenerateTasks}
-              disabled={!studyTask.trim()}
-              className="mt-2 w-full py-2 rounded-xl bg-green-50 text-green-600 text-sm font-medium hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              自动生成任务
-            </button>
-
-            {/* 已生成的任务模板列表 */}
-            {taskTemplates.length > 0 && (
-              <div className="mt-3 space-y-1.5">
+            <label className="block text-sm font-medium text-slate-700 mb-2">今日任务（由家长下发）</label>
+            {/* 已下发的任务模板列表 */}
+            {taskTemplates.length > 0 ? (
+              <div className="space-y-1.5">
                 <p className="text-[11px] text-slate-400">
-                  已生成 {taskTemplates.length} 个任务，已勾选 {taskTemplates.filter(t => t.selected).length} 个
+                  共 {taskTemplates.length} 个任务，已勾选 {taskTemplates.filter(t => t.selected).length} 个
                 </p>
                 <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                   {taskTemplates.map(t => (
@@ -593,19 +491,12 @@ export function StudyCompanionModal({
                           <span className="text-amber-500 text-xs ml-1">⭐{t.reward}</span>
                         )}
                       </span>
-                      {/* 删除按钮 */}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTask(t.id)}
-                        className="flex-shrink-0 w-6 h-6 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                        title="删除任务"
-                      >
-                        ✕
-                      </button>
                     </li>
                   ))}
                 </ul>
               </div>
+            ) : (
+              <p className="text-sm text-slate-400 text-center py-4">家长还没下发学习任务，请联系家长添加</p>
             )}
           </div>
 
@@ -752,8 +643,8 @@ export function StudyCompanionModal({
               </p>
               <div className="flex items-center justify-center gap-3 mt-2 text-xs text-slate-400">
                 <span>恢复心情 {calcHappinessGain(minutes)} 点</span>
-                {totalStarEarned > 0 && (
-                  <span className="text-amber-500 font-medium">已获 ⭐ {totalStarEarned}</span>
+                {pendingStar > 0 && (
+                  <span className="text-amber-500 font-medium">待审核 ⭐ {pendingStar}</span>
                 )}
               </div>
             </div>
@@ -767,21 +658,21 @@ export function StudyCompanionModal({
                 studyEnded && !rewardClaimed ? 'text-white font-bold' : 'text-slate-600'
               }`}>
                 {studyEnded
-                  ? (rewardClaimed ? '奖励已领取，下次再一起学习吧' : '学习完成啦，点我领取奖励吧！')
+                  ? (rewardClaimed ? '已提交家长审核，通过后发放奖励' : '学习完成啦，点我提交审核吧！')
                   : currentMessage}
               </p>
               <span className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 ${
                 studyEnded && !rewardClaimed ? 'bg-green-400' : 'bg-white/95'
               }`} />
             </div>
-            {/* 宠物（倒计时归零后可点击领取奖励） */}
+            {/* 宠物（倒计时归零后可点击提交审核） */}
             {selectedPet && (
               <button
                 type="button"
                 onClick={studyEnded && !rewardClaimed ? handleClaimReward : undefined}
                 disabled={!(studyEnded && !rewardClaimed)}
                 className={`flex flex-col items-center ${studyEnded && !rewardClaimed ? 'cursor-pointer animate-pulse' : 'cursor-default'}`}
-                title={studyEnded && !rewardClaimed ? '点击领取奖励' : ''}
+                title={studyEnded && !rewardClaimed ? '点击提交家长审核' : ''}
               >
                 {selectedPet.image_url ? (
                   <img src={selectedPet.image_url} alt="" className="w-56 h-64 object-contain" />
@@ -790,7 +681,7 @@ export function StudyCompanionModal({
                 )}
                 <span className="text-sm text-slate-500">
                   {studyEnded
-                    ? (rewardClaimed ? '奖励已领取' : '点击我领取奖励')
+                    ? (rewardClaimed ? '已提交审核' : '点击我提交审核')
                     : `${selectedPet.name} 陪伴你学习中`}
                 </span>
               </button>
@@ -868,15 +759,13 @@ export function StudyCompanionModal({
       <Modal open onClose={handleClose} title="学习完成" size="sm">
         <div className="text-center space-y-4 py-4">
           <div className="text-6xl">🎉</div>
-          <p className="text-lg font-bold text-slate-700">太棒了！</p>
+          <p className="text-lg font-bold text-slate-700">已提交家长审核</p>
           <div className="space-y-1 text-sm text-slate-500">
             <p>本次陪伴学习 {happinessGain} 分钟</p>
-            {selectedPet && happinessGain > 0 && (
-              <p>宠物心情恢复 <span className="text-green-600 font-bold">{happinessGain}</span> 点</p>
+            {pendingStar > 0 && (
+              <p>待审核星光值 <span className="text-amber-500 font-bold">⭐ {pendingStar}</span></p>
             )}
-            {totalStarEarned > 0 && (
-              <p>完成任务获得 <span className="text-amber-500 font-bold">⭐ {totalStarEarned}</span> 星光值</p>
-            )}
+            <p className="text-xs text-slate-400 mt-2">家长审核通过后，心情值与星光值将自动发放</p>
           </div>
           <Button onClick={handleClose} className="w-full">返回</Button>
         </div>
