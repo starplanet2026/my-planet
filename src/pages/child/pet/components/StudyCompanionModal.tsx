@@ -72,6 +72,9 @@ export function StudyCompanionModal({
   const [paused, setPaused] = useState(false);
   const [happinessGain, setHappinessGain] = useState(0);
   const [totalStarEarned, setTotalStarEarned] = useState(0);
+  // 倒计时归零后停留在页面等待领取奖励；rewardClaimed 标记是否已领取
+  const [studyEnded, setStudyEnded] = useState(false);
+  const [rewardClaimed, setRewardClaimed] = useState(false);
   const [records, setRecords] = useState<StudyRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,6 +93,8 @@ export function StudyCompanionModal({
   const persistedPauseStartAt = usePetUiStore(s => s.studyPauseStartAt);
   const persistedMinimized = usePetUiStore(s => s.studyMinimized);
   const persistedTotalStar = usePetUiStore(s => s.studyTotalStarEarned);
+  const persistedStudyEnded = usePetUiStore(s => s.studyEnded);
+  const persistedRewardClaimed = usePetUiStore(s => s.studyRewardClaimed);
   const setStudyState = usePetUiStore(s => s.setStudyState);
   const clearStudyState = usePetUiStore(s => s.clearStudyState);
   const restoredRef = useRef(false);
@@ -120,6 +125,8 @@ export function StudyCompanionModal({
       setPausedAccumMs(persistedPausedAccumMs);
       setPauseStartAt(persistedPauseStartAt);
       setMinimized(persistedMinimized);
+      setStudyEnded(persistedStudyEnded);
+      setRewardClaimed(persistedRewardClaimed);
       const pet = pets.find(p => p.id === persistedPetId);
       if (pet) setSelectedPet(pet);
       // 时间戳驱动恢复：若 endsAt 在未来，继续倒计时（不暂停）
@@ -163,8 +170,10 @@ export function StudyCompanionModal({
       studyPauseStartAt: pauseStartAt,
       studyMinimized: minimized,
       studyTotalStarEarned: totalStarEarned,
+      studyEnded,
+      studyRewardClaimed: rewardClaimed,
     });
-  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, totalStarEarned, setStudyState]);
+  }, [step, selectedPet, minutes, studyTask, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, totalStarEarned, studyEnded, rewardClaimed, setStudyState]);
 
   // 从数据库加载任务模板（多端同步）
   useEffect(() => {
@@ -203,9 +212,10 @@ export function StudyCompanionModal({
       const rem = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
       setRemaining(rem);
       if (rem <= 0) {
+        // 倒计时归零：停留在页面，不自动关闭，等待用户点击小狗领取奖励
         if (intervalRef.current) clearInterval(intervalRef.current);
         setStudying(false);
-        handleComplete();
+        setStudyEnded(true);
       }
     };
     tick();
@@ -300,6 +310,8 @@ export function StudyCompanionModal({
     setPausedAccumMs(0);
     setPauseStartAt(null);
     setMinimized(false);
+    setStudyEnded(false);
+    setRewardClaimed(false);
     setEndsAt(Date.now() + totalSec * 1000);
     setStudying(true);
     setPaused(false);
@@ -385,6 +397,32 @@ export function StudyCompanionModal({
     setStep('done');
   };
 
+  // 倒计时归零后：点击小狗领取本次心情值奖励（记录一次学习，不关闭页面）
+  const handleClaimReward = async () => {
+    if (rewardClaimed || !studyEnded) return;
+    try {
+      const tasksForRecord = taskList.map(t => ({ text: t.text, reward: t.reward, done: t.done }));
+      const { data, error } = await supabase.rpc('study_reward', {
+        p_member_id: childId,
+        p_minutes: minutes,
+        p_reward: 0,
+        p_pet_id: selectedPet?.id ?? null,
+        p_tasks: tasksForRecord,
+        p_star_earned: totalStarEarned,
+      });
+      if (error) throw error;
+      const result = Array.isArray(data) ? data[0] : data;
+      const gain = (result as any)?.happiness_gain ?? minutes;
+      setHappinessGain(gain);
+      setRewardClaimed(true);
+      refreshMembers();
+      onCompleted();
+      toast.success(`领取成功：心情 +${gain}，星光 +${totalStarEarned}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? '领取奖励失败');
+    }
+  };
+
   const handleComplete = async () => {
     // 倒计时归零，实际学习 = 设置的时长（不含暂停）
     await finishStudy(minutes);
@@ -460,10 +498,10 @@ export function StudyCompanionModal({
         title="点击恢复陪伴学习"
         className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full bg-white shadow-lg border border-green-200 hover:bg-green-50 transition-colors"
       >
-        <span className="text-lg">📚</span>
+        <span className="text-lg">{studyEnded ? '🎁' : '📚'}</span>
         <div className="flex flex-col items-start leading-tight">
-          <span className="text-[10px] text-slate-400">陪伴学习中</span>
-          <span className="text-sm font-bold text-green-600 tabular-nums">{formatTime(remaining)}</span>
+          <span className="text-[10px] text-slate-400">{studyEnded ? (rewardClaimed ? '奖励已领取' : '点击领取奖励') : '陪伴学习中'}</span>
+          <span className="text-sm font-bold text-green-600 tabular-nums">{studyEnded ? '完成' : formatTime(remaining)}</span>
         </div>
       </button>
     );
@@ -721,19 +759,33 @@ export function StudyCompanionModal({
             </div>
             {/* 对话框：小狗说的话 */}
             <div className="bg-white/95 rounded-2xl px-6 py-3 max-w-xs shadow-md relative">
-              <p className="text-base md:text-lg text-slate-600 text-center leading-relaxed">{currentMessage}</p>
+              <p className="text-base md:text-lg text-slate-600 text-center leading-relaxed">
+                {studyEnded
+                  ? (rewardClaimed ? '奖励已领取，下次再一起学习吧' : '学习结束啦，快来领取奖励吧')
+                  : currentMessage}
+              </p>
               <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white/95 rotate-45" />
             </div>
-            {/* 宠物 */}
+            {/* 宠物（倒计时归零后可点击领取奖励） */}
             {selectedPet && (
-              <>
+              <button
+                type="button"
+                onClick={studyEnded && !rewardClaimed ? handleClaimReward : undefined}
+                disabled={!(studyEnded && !rewardClaimed)}
+                className={`flex flex-col items-center ${studyEnded && !rewardClaimed ? 'cursor-pointer animate-pulse' : 'cursor-default'}`}
+                title={studyEnded && !rewardClaimed ? '点击领取奖励' : ''}
+              >
                 {selectedPet.image_url ? (
                   <img src={selectedPet.image_url} alt="" className="w-56 h-64 object-contain" />
                 ) : (
                   <span className="text-9xl">{selectedPet.emoji || '🐾'}</span>
                 )}
-                <span className="text-sm text-slate-500">{selectedPet.name} 陪伴你学习中</span>
-              </>
+                <span className="text-sm text-slate-500">
+                  {studyEnded
+                    ? (rewardClaimed ? '奖励已领取' : '点击我领取奖励')
+                    : `${selectedPet.name} 陪伴你学习中`}
+                </span>
+              </button>
             )}
           </div>
 
@@ -780,14 +832,17 @@ export function StudyCompanionModal({
             )}
             {/* 横向按钮（固定在底部，不被任务顶出画面） */}
             <div className="flex gap-4 mt-2 flex-shrink-0">
+              {/* 倒计时归零后隐藏暂停按钮 */}
+              {!studyEnded && (
+                <button
+                  onClick={handlePauseToggle}
+                  className="px-8 py-3 rounded-xl bg-white/80 text-slate-700 text-base font-medium hover:bg-white shadow-sm"
+                >
+                  {paused ? '继续' : '暂停一下'}
+                </button>
+              )}
               <button
-                onClick={handlePauseToggle}
-                className="px-8 py-3 rounded-xl bg-white/80 text-slate-700 text-base font-medium hover:bg-white shadow-sm"
-              >
-                {paused ? '继续' : '暂停一下'}
-              </button>
-              <button
-                onClick={handleQuit}
+                onClick={studyEnded ? handleClose : handleQuit}
                 className="px-8 py-3 rounded-xl bg-red-100/80 text-red-600 text-base font-medium hover:bg-red-100 shadow-sm"
               >
                 结束学习

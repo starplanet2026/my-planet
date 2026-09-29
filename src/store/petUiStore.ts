@@ -44,6 +44,9 @@ interface PetUiState {
   studyMinimized: boolean;
   // 本次学习已获得的星光值（跨页面恢复用）
   studyTotalStarEarned: number;
+  // 倒计时归零后是否已领取奖励（防止跨页面重复领取）
+  studyEnded: boolean;
+  studyRewardClaimed: boolean;
 
   // 全局音效静音开关（跨页面共享）
   audioMuted: boolean;
@@ -56,7 +59,7 @@ interface PetUiState {
   setStudyState: (patch: Partial<Pick<PetUiState,
     'studyStep' | 'studyPetId' | 'studyMinutes' | 'studyTaskText' |
     'studyTaskList' | 'studyRemaining' | 'studyStudying' | 'studyPaused' |
-    'studyEndsAt' | 'studyPausedAccumMs' | 'studyPauseStartAt' | 'studyMinimized' | 'studyTotalStarEarned'
+    'studyEndsAt' | 'studyPausedAccumMs' | 'studyPauseStartAt' | 'studyMinimized' | 'studyTotalStarEarned' | 'studyEnded' | 'studyRewardClaimed'
   >>) => void;
   clearStudyState: () => void;
   toggleAudioMute: () => void;
@@ -84,6 +87,8 @@ export const usePetUiStore = create<PetUiState>((set) => ({
   studyPauseStartAt: null,
   studyMinimized: false,
   studyTotalStarEarned: 0,
+  studyEnded: false,
+  studyRewardClaimed: false,
 
   audioMuted: (() => {
     try {
@@ -115,6 +120,8 @@ export const usePetUiStore = create<PetUiState>((set) => ({
     studyPauseStartAt: null,
     studyMinimized: false,
     studyTotalStarEarned: 0,
+    studyEnded: false,
+    studyRewardClaimed: false,
   }),
   toggleAudioMute: () => set((s) => {
     const next = !s.audioMuted;
