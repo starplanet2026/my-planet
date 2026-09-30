@@ -14,7 +14,7 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound } from 'lucide-react';
+import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -221,11 +221,9 @@ export function ParentDashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 px-2">
+      {/* 顶部：左上角「家长管理后台」与设置按钮对齐 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{family?.name ?? '我的家庭'}</h1>
-          <p className="text-sm text-slate-500 mt-1">家长管理后台</p>
-        </div>
+        <h1 className="text-2xl font-bold">家长管理后台</h1>
         <button
           onClick={() => setShowSettings(true)}
           className="flex items-center gap-1 px-3 py-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
@@ -238,7 +236,7 @@ export function ParentDashboardPage() {
       {/* 第1行：手动加减分 | 快速验证 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 手动加减分 */}
-        <Card className="p-4 space-y-3 border-star-200 bg-star-50/30">
+        <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Coins className="w-5 h-5 text-star-500" />
@@ -256,7 +254,7 @@ export function ParentDashboardPage() {
             <button
               onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'star' }))}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                'flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs font-medium transition-colors',
                 adjustForm.balanceType === 'star'
                   ? 'bg-gradient-to-r from-purple-400 to-purple-500 text-white shadow'
                   : 'bg-slate-100 text-slate-500'
@@ -268,7 +266,7 @@ export function ParentDashboardPage() {
             <button
               onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'coin' }))}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                'flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs font-medium transition-colors',
                 adjustForm.balanceType === 'coin'
                   ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow'
                   : 'bg-slate-100 text-slate-500'
@@ -278,29 +276,29 @@ export function ParentDashboardPage() {
               金币
             </button>
           </div>
-          {/* 加减按钮 + 数量 + 确认 + 留言原因，同一行 */}
-          <div className="flex gap-2 items-center flex-wrap">
+          {/* 加减按钮 + 数量 + 确认 + 留言原因，同一行，高度压缩 */}
+          <div className="flex gap-1.5 items-center">
             <button
               onClick={() => setAdjustForm(p => ({ ...p, direction: 'add' }))}
               className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-full font-bold transition-colors shrink-0',
+                'flex items-center justify-center w-7 h-7 rounded-full font-bold transition-colors shrink-0',
                 adjustForm.direction === 'add'
                   ? 'bg-emerald-400 text-white'
                   : 'bg-slate-100 text-slate-400'
               )}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setAdjustForm(p => ({ ...p, direction: 'sub' }))}
               className={cn(
-                'flex items-center justify-center w-8 h-8 rounded-full font-bold transition-colors shrink-0',
+                'flex items-center justify-center w-7 h-7 rounded-full font-bold transition-colors shrink-0',
                 adjustForm.direction === 'sub'
                   ? 'bg-red-400 text-white'
                   : 'bg-slate-100 text-slate-400'
               )}
             >
-              <Minus className="w-4 h-4" />
+              <Minus className="w-3.5 h-3.5" />
             </button>
             <Input
               type="number"
@@ -308,13 +306,13 @@ export function ParentDashboardPage() {
               value={adjustForm.amount}
               onChange={e => setAdjustForm(p => ({ ...p, amount: Number(e.target.value) }))}
               placeholder="数量"
-              className="w-16 shrink-0"
+              className="w-12 shrink-0 text-sm"
             />
             <Button
               loading={adjusting}
               onClick={handleManualAdjust}
               variant={adjustForm.direction === 'add' ? undefined : 'danger'}
-              className="shrink-0 text-sm"
+              className="shrink-0 text-xs px-2 py-1"
             >
               确认
             </Button>
@@ -322,20 +320,23 @@ export function ParentDashboardPage() {
               value={adjustForm.reason}
               onChange={e => setAdjustForm(p => ({ ...p, reason: e.target.value }))}
               placeholder="留言原因（选填）"
-              className="flex-1 min-w-[100px]"
+              className="flex-1 min-w-[80px] text-sm"
             />
           </div>
         </Card>
 
         {/* 快速验证 */}
-        <Card className="p-4 space-y-3 border-slate-200">
-          <h2 className="font-bold text-slate-700">快速验证</h2>
-          <div className="flex flex-wrap gap-2">
+        <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-star-500" />
+            <h2 className="font-bold text-star-700">快速验证</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             {quickVerifyButtons.map(b => (
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+                className="px-2 py-2.5 rounded-lg border-2 border-blue-400 bg-white hover:bg-blue-50 text-blue-600 text-sm font-medium transition-colors text-center"
               >
                 {b.label}
               </button>
@@ -346,28 +347,34 @@ export function ParentDashboardPage() {
 
       {/* 第2行：领取成就 | 特权兑换 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4 space-y-3 border-slate-200">
-          <h2 className="font-bold text-slate-700">领取成就</h2>
-          <div className="flex flex-wrap gap-2">
+        <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-star-500" />
+            <h2 className="font-bold text-star-700">领取成就</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             {achievementButtons.map(b => (
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+                className="px-2 py-2.5 rounded-lg border-2 border-blue-400 bg-white hover:bg-blue-50 text-blue-600 text-sm font-medium transition-colors text-center"
               >
                 {b.label}
               </button>
             ))}
           </div>
         </Card>
-        <Card className="p-4 space-y-3 border-slate-200">
-          <h2 className="font-bold text-slate-700">特权兑换</h2>
-          <div className="flex flex-wrap gap-2">
+        <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
+          <div className="flex items-center gap-2">
+            <Gift className="w-5 h-5 text-star-500" />
+            <h2 className="font-bold text-star-700">特权兑换</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             {privilegeButtons.map(b => (
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+                className="px-2 py-2.5 rounded-lg border-2 border-blue-400 bg-white hover:bg-blue-50 text-blue-600 text-sm font-medium transition-colors text-center"
               >
                 {b.label}
               </button>
@@ -377,14 +384,17 @@ export function ParentDashboardPage() {
       </div>
 
       {/* 第3行：智慧星战（通栏） */}
-      <Card className="p-4 space-y-3 border-slate-200">
-        <h2 className="font-bold text-slate-700">智慧星战</h2>
+      <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-star-500" />
+          <h2 className="font-bold text-star-700">智慧星战</h2>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
           {starBattleButtons.map(b => (
             <button
               key={b.label}
               onClick={b.onClick}
-              className="px-2 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              className="px-2 py-2.5 rounded-lg border-2 border-blue-400 bg-white hover:bg-blue-50 text-blue-600 text-sm font-medium transition-colors text-center"
             >
               {b.label}
             </button>
@@ -393,14 +403,17 @@ export function ParentDashboardPage() {
       </Card>
 
       {/* 第4行：萌宠星球（通栏） */}
-      <Card className="p-4 space-y-3 border-slate-200">
-        <h2 className="font-bold text-slate-700">萌宠星球</h2>
+      <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
+        <div className="flex items-center gap-2">
+          <PawPrint className="w-5 h-5 text-star-500" />
+          <h2 className="font-bold text-star-700">萌宠星球</h2>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
           {petPlanetButtons.map(b => (
             <button
               key={b.label}
               onClick={b.onClick}
-              className="px-2 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              className="px-2 py-2.5 rounded-lg border-2 border-blue-400 bg-white hover:bg-blue-50 text-blue-600 text-sm font-medium transition-colors text-center"
             >
               {b.label}
             </button>
