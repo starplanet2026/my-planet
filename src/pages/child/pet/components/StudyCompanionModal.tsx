@@ -56,6 +56,8 @@ export function StudyCompanionModal({
   const [taskList, setTaskList] = useState<StudyTask[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  // 学生本次勾选的任务 ID 集合（仅本地，不回传后端；后台 selected 仅作上线开关）
+  const [studentPicks, setStudentPicks] = useState<Set<string>>(new Set());
   const [remaining, setRemaining] = useState(0);
   const [studying, setStudying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -167,10 +169,13 @@ export function StudyCompanionModal({
   useEffect(() => {
     if (!childId || templatesLoaded) return;
     fetchStudyTaskTemplates(childId).then(list => {
-      setTaskTemplates(list.map(t => ({
+      const mapped = list.map(t => ({
         id: t.id, text: t.text, reward: t.reward,
         done: false, rewarded: false, selected: t.selected,
-      })));
+      }));
+      setTaskTemplates(mapped);
+      // 默认全选已上线任务（后台 selected=true 视为上线，学生默认勾选）
+      setStudentPicks(new Set(mapped.filter(t => t.selected).map(t => t.id)));
       setTemplatesLoaded(true);
     }).catch(() => setTemplatesLoaded(true));
   }, [childId, templatesLoaded]);
@@ -215,29 +220,20 @@ export function StudyCompanionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studying, paused, endsAt, minimized]);
 
-  // 勾选/取消勾选任务模板（学生仅可选择家长下发的任务，不可新建/删除）
-  const handleToggleSelect = async (taskId: string) => {
-    const task = taskTemplates.find(t => t.id === taskId);
-    if (!task) return;
-    const newSelected = !task.selected;
-    setTaskTemplates(prev => prev.map(t =>
-      t.id === taskId ? { ...t, selected: newSelected } : t
-    ));
-    try {
-      await updateStudyTaskTemplate(taskId, { selected: newSelected });
-    } catch (e: any) {
-      // 失败回退
-      setTaskTemplates(prev => prev.map(t =>
-        t.id === taskId ? { ...t, selected: !newSelected } : t
-      ));
-      toast.error(e?.message ?? '更新失败');
-    }
+  // 学生勾选/取消勾选：仅本地状态，不回传后端（后台 selected 仅作上线开关）
+  const handleToggleSelect = (taskId: string) => {
+    setStudentPicks(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
   };
 
   const handleStart = () => {
     if (!selectedPet) return;
-    // 取已勾选的任务模板作为本次学习任务
-    const selectedTasks = taskTemplates.filter(t => t.selected);
+    // 取【已上线且学生勾选】的任务作为本次学习任务
+    const selectedTasks = taskTemplates.filter(t => t.selected && studentPicks.has(t.id));
     if (selectedTasks.length === 0) {
       toast.info('请至少勾选一个任务');
       return;
@@ -434,7 +430,7 @@ export function StudyCompanionModal({
             {pets.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">还没有领养宠物，先去领养一只吧</p>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {pets.map(pet => (
                   <button
                     key={pet.id}
@@ -460,18 +456,20 @@ export function StudyCompanionModal({
           {/* 今日任务（家长下发，学生仅可勾选） */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">今日任务（由家长下发）</label>
-            {/* 已下发的任务模板列表 */}
-            {taskTemplates.length > 0 ? (
+            {/* 仅展示后台已上线（selected=true）的任务；学生勾选仅本地，不回传后端 */}
+            {taskTemplates.some(t => t.selected) ? (
               <div className="space-y-1.5">
                 <p className="text-[11px] text-slate-400">
-                  共 {taskTemplates.length} 个任务，已勾选 {taskTemplates.filter(t => t.selected).length} 个
+                  共 {taskTemplates.filter(t => t.selected).length} 个任务，已勾选 {taskTemplates.filter(t => t.selected && studentPicks.has(t.id)).length} 个
                 </p>
                 <ul className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {taskTemplates.map(t => (
+                  {taskTemplates.filter(t => t.selected).map(t => {
+                    const picked = studentPicks.has(t.id);
+                    return (
                     <li
                       key={t.id}
                       className={`flex items-center gap-1.5 p-2 rounded-lg border transition-colors ${
-                        t.selected ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
+                        picked ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
                       }`}
                     >
                       {/* 勾选框 */}
@@ -479,10 +477,10 @@ export function StudyCompanionModal({
                         type="button"
                         onClick={() => handleToggleSelect(t.id)}
                         className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs transition-colors ${
-                          t.selected ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
+                          picked ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
                         }`}
                       >
-                        {t.selected ? '✓' : ''}
+                        {picked ? '✓' : ''}
                       </button>
                       {/* 任务名称 + 奖励 */}
                       <span className="flex-1 min-w-0 text-xs text-slate-700 truncate">
@@ -492,7 +490,8 @@ export function StudyCompanionModal({
                         )}
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             ) : (
