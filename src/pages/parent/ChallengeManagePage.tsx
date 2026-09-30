@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -50,10 +50,14 @@ const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
 
 export function ChallengeManagePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const family = useFamilyStore(s => s.family);
   const toast = useToastStore();
 
-  const [tab, setTab] = useState<'sets' | 'levels' | 'wrong_battle'>('sets');
+  // 支持 ?tab=sets|levels|wrong_battle 深链接，从首页按钮直达对应内层
+  const initialTab: 'sets' | 'levels' | 'wrong_battle' =
+    (searchParams.get('tab') as 'sets' | 'levels' | 'wrong_battle') || 'sets';
+  const [tab, setTab] = useState<'sets' | 'levels' | 'wrong_battle'>(initialTab);
   const [sets, setSets] = useState<ChallengeSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);

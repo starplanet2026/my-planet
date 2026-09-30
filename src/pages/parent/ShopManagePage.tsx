@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToastStore } from '../../store/toastStore';
 import { formatCoins, formatDate, isExpired } from '../../lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ROUTES } from '../../lib/constants';
 import { Plus, Edit2, Trash2, Coins, ArrowLeft, Upload, X, Dices, Users, Gift } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -60,6 +60,7 @@ async function compressImageToBlob(file: File): Promise<Blob> {
 
 export function ShopManagePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
   const parentMember = members.find(m => m.role === 'parent');
@@ -73,8 +74,10 @@ export function ShopManagePage() {
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [wheelConfigOpen, setWheelConfigOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'items' | 'users'>('items');
+  const [wheelConfigOpen, setWheelConfigOpen] = useState(searchParams.get('open') === 'wheel');
+  const [activeTab, setActiveTab] = useState<'items' | 'users'>(
+    searchParams.get('tab') === 'users' ? 'users' : 'items'
+  );
 
   // 用户特权卡管理
   const children = members.filter(m => m.role === 'child');

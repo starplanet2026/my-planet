@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
-import { useTasks } from '../../hooks/useTasks';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -15,7 +14,7 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
-import { ListTodo, ShoppingBag, CheckCircle, Coins, Settings, Lock, Trash2, Plus, Minus, BookOpen, PawPrint, Mic, KeyRound, Gamepad2, Flag, GraduationCap, ClipboardCheck } from 'lucide-react';
+import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound } from 'lucide-react';
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -28,13 +27,11 @@ export function ParentDashboardPage() {
   const multiChildMode = useModeStore(s => s.multiChildMode);
   const setMultiChildMode = useModeStore(s => s.setMultiChildMode);
   const { manualAdjustCoins, refresh: refreshRecords } = useCoinRecords();
-  const { tasks } = useTasks();
   const toast = useToastStore();
 
   const childMembers = members.filter(m => m.role === 'child');
   const parentMember = members.find(m => m.role === 'parent');
   const currentChild = childMembers.find(m => m.id === currentChildId) ?? childMembers[0];
-  const pendingCount = tasks.filter(t => t.status === 'pending_approval').length;
 
   const [adjusting, setAdjusting] = useState(false);
   const [adjustForm, setAdjustForm] = useState({
@@ -64,7 +61,6 @@ export function ParentDashboardPage() {
 
   const handleManualAdjust = async () => {
     if (!family || !parentMember || !currentChild) return;
-    if (!adjustForm.reason.trim()) { toast.error('请填写原因'); return; }
 
     setAdjusting(true);
     try {
@@ -169,22 +165,62 @@ export function ParentDashboardPage() {
     }
   };
 
-  const actions = [
-    { label: '家默管理', icon: BookOpen, route: ROUTES.PARENT_DICTATION, color: 'blue' },
-    { label: '背诵管理', icon: Mic, route: ROUTES.PARENT_RECITATION, color: 'emerald' },
-    { label: '陪伴学习', icon: GraduationCap, route: ROUTES.PARENT_STUDY_TASKS, color: 'green' },
-    { label: '学习审核', icon: ClipboardCheck, route: ROUTES.PARENT_STUDY_REVIEW, color: 'amber' },
-    { label: '任务管理', icon: ListTodo, route: ROUTES.PARENT_TASKS, color: 'blue' },
-    { label: '验证申请', icon: CheckCircle, route: ROUTES.PARENT_VERIFICATION, color: 'green' },
-    { label: '特权管理', icon: ShoppingBag, route: ROUTES.PARENT_SHOP, color: 'purple' },
-    { label: '智慧星战', icon: BookOpen, route: ROUTES.PARENT_CHALLENGES, color: 'star' },
-    { label: '萌宠星球', icon: PawPrint, route: ROUTES.PARENT_PETS, color: 'amber' },
-    { label: '萌宠闯关', icon: Gamepad2, route: ROUTES.PARENT_WORD_CHALLENGE, color: 'emerald' },
-    { label: '题目报错', icon: Flag, route: ROUTES.PARENT_QUESTION_REPORTS, color: 'red' },
+  // 占位按钮：点击提示"功能待开发"
+  const handlePlaceholder = (label: string) => toast.info(`${label}功能待开发`);
+
+  // 跳转（带可选 query）
+  const go = (route: string, query?: string) =>
+    navigate(query ? `${route}?${query}` : route);
+
+  // 快速验证按钮
+  const quickVerifyButtons = [
+    { label: '成就达成', onClick: () => go(ROUTES.PARENT_VERIFICATION) },
+    { label: '陪伴任务', onClick: () => go(ROUTES.PARENT_STUDY_TASKS) },
+    { label: '学习完成', onClick: () => go(ROUTES.PARENT_STUDY_REVIEW) },
+  ];
+
+  // 领取成就按钮
+  const achievementButtons = [
+    { label: '成就库', onClick: () => go(ROUTES.PARENT_TASKS) },
+    { label: '勋章库', onClick: () => handlePlaceholder('勋章库') },
+    { label: '成功日记', onClick: () => handlePlaceholder('成功日记') },
+  ];
+
+  // 特权兑换按钮
+  const privilegeButtons = [
+    { label: '特权库', onClick: () => go(ROUTES.PARENT_SHOP) },
+    { label: '用户特权卡', onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users') },
+    { label: '转盘权重', onClick: () => go(ROUTES.PARENT_SHOP, 'open=wheel') },
+  ];
+
+  // 智慧星战按钮（两行）
+  const starBattleButtons = [
+    { label: '家默', onClick: () => go(ROUTES.PARENT_DICTATION) },
+    { label: '背诵', onClick: () => go(ROUTES.PARENT_RECITATION) },
+    { label: '关卡库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=levels') },
+    { label: '题集库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=sets') },
+    { label: '错题库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=wrong_battle') },
+    { label: '题目报错', onClick: () => go(ROUTES.PARENT_QUESTION_REPORTS) },
+    { label: '病句库', onClick: () => handlePlaceholder('病句库') },
+    { label: '连词成句库', onClick: () => handlePlaceholder('连词成句库') },
+    { label: '翻译库', onClick: () => handlePlaceholder('翻译库') },
+    { label: '通用语法', onClick: () => handlePlaceholder('通用语法') },
+  ];
+
+  // 萌宠星球按钮（两行）
+  const petPlanetButtons = [
+    { label: '萌宠闯关', onClick: () => go(ROUTES.PARENT_WORD_CHALLENGE) },
+    { label: '萌宠商店', onClick: () => go(ROUTES.PARENT_PETS, 'tab=shop') },
+    { label: '用户管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=user') },
+    { label: '背景管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg') },
+    { label: '新宠抽卡', onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha') },
+    { label: '新宠测试', onClick: () => handlePlaceholder('新宠测试') },
+    { label: '新宠奇遇', onClick: () => handlePlaceholder('新宠奇遇') },
+    { label: '宠物店', onClick: () => handlePlaceholder('宠物店') },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 px-2">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{family?.name ?? '我的家庭'}</h1>
@@ -199,116 +235,178 @@ export function ParentDashboardPage() {
         </button>
       </div>
 
-      {/* 手动加减分板块 */}
-      <Card className="p-4 space-y-3 border-star-200 bg-star-50/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Coins className="w-5 h-5 text-star-500" />
-            <h2 className="font-bold text-star-700">手动加减分</h2>
-          </div>
-          {currentChild && (
-            <span className="text-sm text-slate-500 flex items-center gap-1">
-              <Avatar emoji={currentChild.avatar_emoji} size="sm" />
-              {currentChild.name}
-            </span>
-          )}
-        </div>
-        {/* 货币类型切换 */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'star' }))}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition-colors',
-              adjustForm.balanceType === 'star'
-                ? 'bg-gradient-to-r from-purple-400 to-purple-500 text-white shadow'
-                : 'bg-slate-100 text-slate-500'
-            )}
-          >
-            <img src={STAR_ICON_SM} alt="星光值" className="w-4 h-4" />
-            星光值
-          </button>
-          <button
-            onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'coin' }))}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition-colors',
-              adjustForm.balanceType === 'coin'
-                ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow'
-                : 'bg-slate-100 text-slate-500'
-            )}
-          >
-            <img src={COIN_ICON_SM} alt="金币" className="w-4 h-4" />
-            金币
-          </button>
-        </div>
-        {/* 数字 + 加减分 一排 */}
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => setAdjustForm(p => ({ ...p, direction: 'add' }))}
-            className={cn(
-              'flex items-center justify-center w-10 h-10 rounded-full font-bold transition-colors shrink-0',
-              adjustForm.direction === 'add'
-                ? 'bg-emerald-400 text-white'
-                : 'bg-slate-100 text-slate-400'
-            )}
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setAdjustForm(p => ({ ...p, direction: 'sub' }))}
-            className={cn(
-              'flex items-center justify-center w-10 h-10 rounded-full font-bold transition-colors shrink-0',
-              adjustForm.direction === 'sub'
-                ? 'bg-red-400 text-white'
-                : 'bg-slate-100 text-slate-400'
-            )}
-          >
-            <Minus className="w-5 h-5" />
-          </button>
-          <Input
-            type="number"
-            min={1}
-            value={adjustForm.amount}
-            onChange={e => setAdjustForm(p => ({ ...p, amount: Number(e.target.value) }))}
-            placeholder="数量"
-            className="flex-1"
-          />
-          <Button
-            loading={adjusting}
-            onClick={handleManualAdjust}
-            variant={adjustForm.direction === 'add' ? undefined : 'danger'}
-            className="shrink-0"
-          >
-            确认
-          </Button>
-        </div>
-        {/* 留言原因单行 */}
-        <Input
-          value={adjustForm.reason}
-          onChange={e => setAdjustForm(p => ({ ...p, reason: e.target.value }))}
-          placeholder="留言原因（必填）"
-        />
-      </Card>
-
-      {/* 快捷操作 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {actions.map(a => (
-          <Card
-            key={a.label}
-            className="p-4 cursor-pointer hover:shadow-md transition-shadow relative"
-            onClick={() => navigate(a.route)}
-          >
-            <div className={`w-10 h-10 rounded-xl bg-${a.color}-50 flex items-center justify-center mb-2`}>
-              <a.icon className={`w-5 h-5 text-${a.color}-500`} />
+      {/* 第1行：手动加减分 | 快速验证 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 手动加减分 */}
+        <Card className="p-4 space-y-3 border-star-200 bg-star-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Coins className="w-5 h-5 text-star-500" />
+              <h2 className="font-bold text-star-700">手动加减分</h2>
             </div>
-            <span className="text-sm font-medium">{a.label}</span>
-            {a.label === '验证申请' && pendingCount > 0 && (
-              <span className="absolute top-2 right-2 min-w-5 h-5 px-1 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full">
-                {pendingCount}
+            {currentChild && (
+              <span className="text-sm text-slate-500 flex items-center gap-1">
+                <Avatar emoji={currentChild.avatar_emoji} size="sm" />
+                {currentChild.name}
               </span>
             )}
-          </Card>
-        ))}
+          </div>
+          {/* 货币类型切换 */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'star' }))}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                adjustForm.balanceType === 'star'
+                  ? 'bg-gradient-to-r from-purple-400 to-purple-500 text-white shadow'
+                  : 'bg-slate-100 text-slate-500'
+              )}
+            >
+              <img src={STAR_ICON_SM} alt="星光值" className="w-3.5 h-3.5" />
+              星光值
+            </button>
+            <button
+              onClick={() => setAdjustForm(p => ({ ...p, balanceType: 'coin' }))}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                adjustForm.balanceType === 'coin'
+                  ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow'
+                  : 'bg-slate-100 text-slate-500'
+              )}
+            >
+              <img src={COIN_ICON_SM} alt="金币" className="w-3.5 h-3.5" />
+              金币
+            </button>
+          </div>
+          {/* 加减按钮 + 数量 + 确认 + 留言原因，同一行 */}
+          <div className="flex gap-2 items-center flex-wrap">
+            <button
+              onClick={() => setAdjustForm(p => ({ ...p, direction: 'add' }))}
+              className={cn(
+                'flex items-center justify-center w-8 h-8 rounded-full font-bold transition-colors shrink-0',
+                adjustForm.direction === 'add'
+                  ? 'bg-emerald-400 text-white'
+                  : 'bg-slate-100 text-slate-400'
+              )}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setAdjustForm(p => ({ ...p, direction: 'sub' }))}
+              className={cn(
+                'flex items-center justify-center w-8 h-8 rounded-full font-bold transition-colors shrink-0',
+                adjustForm.direction === 'sub'
+                  ? 'bg-red-400 text-white'
+                  : 'bg-slate-100 text-slate-400'
+              )}
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <Input
+              type="number"
+              min={1}
+              value={adjustForm.amount}
+              onChange={e => setAdjustForm(p => ({ ...p, amount: Number(e.target.value) }))}
+              placeholder="数量"
+              className="w-16 shrink-0"
+            />
+            <Button
+              loading={adjusting}
+              onClick={handleManualAdjust}
+              variant={adjustForm.direction === 'add' ? undefined : 'danger'}
+              className="shrink-0 text-sm"
+            >
+              确认
+            </Button>
+            <Input
+              value={adjustForm.reason}
+              onChange={e => setAdjustForm(p => ({ ...p, reason: e.target.value }))}
+              placeholder="留言原因（选填）"
+              className="flex-1 min-w-[100px]"
+            />
+          </div>
+        </Card>
+
+        {/* 快速验证 */}
+        <Card className="p-4 space-y-3 border-slate-200">
+          <h2 className="font-bold text-slate-700">快速验证</h2>
+          <div className="flex flex-wrap gap-2">
+            {quickVerifyButtons.map(b => (
+              <button
+                key={b.label}
+                onClick={b.onClick}
+                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </Card>
       </div>
+
+      {/* 第2行：领取成就 | 特权兑换 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 space-y-3 border-slate-200">
+          <h2 className="font-bold text-slate-700">领取成就</h2>
+          <div className="flex flex-wrap gap-2">
+            {achievementButtons.map(b => (
+              <button
+                key={b.label}
+                onClick={b.onClick}
+                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-4 space-y-3 border-slate-200">
+          <h2 className="font-bold text-slate-700">特权兑换</h2>
+          <div className="flex flex-wrap gap-2">
+            {privilegeButtons.map(b => (
+              <button
+                key={b.label}
+                onClick={b.onClick}
+                className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* 第3行：智慧星战（通栏） */}
+      <Card className="p-4 space-y-3 border-slate-200">
+        <h2 className="font-bold text-slate-700">智慧星战</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          {starBattleButtons.map(b => (
+            <button
+              key={b.label}
+              onClick={b.onClick}
+              className="px-2 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {/* 第4行：萌宠星球（通栏） */}
+      <Card className="p-4 space-y-3 border-slate-200">
+        <h2 className="font-bold text-slate-700">萌宠星球</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+          {petPlanetButtons.map(b => (
+            <button
+              key={b.label}
+              onClick={b.onClick}
+              className="px-2 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* 设置弹窗 */}
       <Modal open={showSettings} onClose={() => setShowSettings(false)} title="设置" size="sm">

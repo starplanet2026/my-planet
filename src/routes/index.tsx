@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { RequireParentMode } from '../auth/RequireParentMode';
@@ -13,8 +14,6 @@ import { ParentDashboardPage } from '../pages/parent/ParentDashboardPage';
 import { TaskManagePage } from '../pages/parent/TaskManagePage';
 import { VerificationPage } from '../pages/parent/VerificationPage';
 import { ShopManagePage } from '../pages/parent/ShopManagePage';
-import { ChallengeManagePage } from '../pages/parent/ChallengeManagePage';
-import { PetManagePage } from '../pages/parent/PetManagePage';
 import { WordChallengeManagePage } from '../pages/parent/WordChallengeManagePage';
 import { QuestionReportManagePage } from '../pages/parent/QuestionReportManagePage';
 import { DictationManagePage } from '../pages/parent/DictationManagePage';
@@ -22,7 +21,20 @@ import { RecitationManagePage } from '../pages/parent/RecitationManagePage';
 import { StudyTaskManagePage } from '../pages/parent/StudyTaskManagePage';
 import { StudyReviewPage } from '../pages/parent/StudyReviewPage';
 import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
+import { Loading } from '../components/common/Loading';
 import { ROUTES } from '../lib/constants';
+
+// 按需加载：智慧星战、萌宠星球两大管理页面分包，首页不加载其代码
+const ChallengeManagePage = lazy(() => import('../pages/parent/ChallengeManagePage').then(m => ({ default: m.ChallengeManagePage })));
+const PetManagePage = lazy(() => import('../pages/parent/PetManagePage').then(m => ({ default: m.PetManagePage })));
+
+function PageFallback() {
+  return (
+    <div className="py-16 flex justify-center">
+      <Loading text="加载中..." />
+    </div>
+  );
+}
 
 function ParentLayout() {
   return (
@@ -56,8 +68,8 @@ export function AppRoutes() {
           <Route path="tasks" element={<TaskManagePage />} />
           <Route path="verification" element={<VerificationPage />} />
           <Route path="shop" element={<ShopManagePage />} />
-          <Route path="challenges" element={<ChallengeManagePage />} />
-          <Route path="pets" element={<PetManagePage />} />
+          <Route path="challenges" element={<Suspense fallback={<PageFallback />}><ChallengeManagePage /></Suspense>} />
+          <Route path="pets" element={<Suspense fallback={<PageFallback />}><PetManagePage /></Suspense>} />
           <Route path="word-challenge" element={<WordChallengeManagePage />} />
           <Route path="question-reports" element={<QuestionReportManagePage />} />
           <Route path="dictation" element={<DictationManagePage />} />

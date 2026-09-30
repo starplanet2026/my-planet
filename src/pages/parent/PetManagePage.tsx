@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -200,10 +200,13 @@ function SevereIllnessCostConfig({ familyId }: { familyId: string }) {
 
 export function PetManagePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const family = useFamilyStore(s => s.family);
   const toast = useToastStore();
 
-  const [activeTab, setActiveTab] = useState<PageTab>('shop');
+  // 支持 ?tab=shop|user|bg|gacha 深链接，从首页按钮直达对应内层
+  const initialTab: PageTab = (searchParams.get('tab') as PageTab) || 'shop';
+  const [activeTab, setActiveTab] = useState<PageTab>(initialTab);
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [userPets, setUserPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
