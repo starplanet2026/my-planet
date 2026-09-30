@@ -140,6 +140,7 @@ export function PetManagePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<PetShopItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ petId: string; petName: string; memberName: string } | null>(null);
 
   const loadItems = async () => {
     if (!family) return;
@@ -165,13 +166,22 @@ export function PetManagePage() {
     }
   };
 
-  const handleDeletePet = async (petId: string, petName: string) => {
+  const handleDeletePet = (petId: string, petName: string, memberName: string) => {
+    setDeleteConfirm({ petId, petName, memberName });
+  };
+
+  const confirmDeletePet = async () => {
+    if (!deleteConfirm) return;
+    const { petId, petName } = deleteConfirm;
     try {
       await deletePet(petId);
       toast.success(`已删除宠物「${petName}」`);
+      // 仅刷新当前用户宠物列表，保留当前选中的孩子
       loadUserData();
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -457,6 +467,19 @@ export function PetManagePage() {
       {editingItem && (
         <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onUpdated={loadItems} />
       )}
+      {deleteConfirm && (
+        <Modal open onClose={() => setDeleteConfirm(null)} title="确认删除" size="sm">
+          <p className="text-sm text-slate-600 leading-relaxed">
+            {deleteConfirm.petName
+              ? `确认删除【${deleteConfirm.memberName}】的宠物【${deleteConfirm.petName}】吗？`
+              : `确认删除${deleteConfirm.memberName}的宠物吗？`}
+          </p>
+          <div className="flex gap-2 mt-5">
+            <Button variant="ghost" onClick={() => setDeleteConfirm(null)} className="flex-1">取消</Button>
+            <Button danger onClick={confirmDeletePet} className="flex-1">确认删除</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -649,7 +672,7 @@ function UserDataTab({
 }: {
   pets: Pet[];
   loading: boolean;
-  onDeletePet: (id: string, name: string) => void;
+  onDeletePet: (id: string, name: string, memberName: string) => void;
 }) {
   const members = useFamilyStore(s => s.members);
   const children = members.filter(m => m.role === 'child');
@@ -658,6 +681,8 @@ function UserDataTab({
   useEffect(() => {
     if (!selectedChildId && children.length > 0) setSelectedChildId(children[0].id);
   }, [selectedChildId, children.length]);
+
+  const selectedChild = children.find(c => c.id === selectedChildId);
 
   // 问题14: 按选中的孩子过滤宠物列表，区分不同孩子的宠物
   const filteredPets = selectedChildId
@@ -728,7 +753,7 @@ function UserDataTab({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.name)}>
+                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.name, selectedChild?.name ?? '')}>
                     <Trash2 className="w-4 h-4" /> 删除
                   </Button>
                 </div>
