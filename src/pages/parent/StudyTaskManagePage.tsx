@@ -7,6 +7,7 @@ import { Input } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { Loading } from '../../components/common/Loading';
 import { EmptyState } from '../../components/common/EmptyState';
+import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
@@ -120,16 +121,16 @@ export function StudyTaskManagePage() {
         <span className="text-sm text-slate-500">选择孩子：</span>
         {children.map(c => (
           <button
-            key={c.id}
-            onClick={() => setSelectedChildId(c.id)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              selectedChildId === c.id
-                ? 'bg-green-500 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {c.avatar_emoji} {c.name}
-          </button>
+              key={c.id}
+              onClick={() => setSelectedChildId(c.id)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                selectedChildId === c.id
+                  ? 'bg-green-500 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Avatar emoji={c.avatar_emoji} size="sm" /> {c.name}
+            </button>
         ))}
       </div>
 

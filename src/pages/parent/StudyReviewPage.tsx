@@ -7,6 +7,7 @@ import { Textarea } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { Loading } from '../../components/common/Loading';
 import { EmptyState } from '../../components/common/EmptyState';
+import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { ArrowLeft, Check, X } from 'lucide-react';
@@ -121,8 +122,9 @@ export function StudyReviewPage() {
                   <div className="flex-1 min-w-0">
                     {/* 头部：孩子 + 时间 */}
                     <div className="flex items-center gap-2 mb-2">
+                      <Avatar emoji={child?.avatar_emoji ?? ''} size="sm" />
                       <span className="text-base font-bold text-slate-700">
-                        {child?.avatar_emoji} {r.member_name}
+                        {r.member_name}
                       </span>
                       <span className="text-xs text-slate-400">{formatDate(r.created_at)}</span>
                     </div>
