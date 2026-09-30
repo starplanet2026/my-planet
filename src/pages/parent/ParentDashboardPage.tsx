@@ -336,7 +336,7 @@ export function ParentDashboardPage() {
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
               >
                 {b.label}
               </button>
@@ -357,7 +357,7 @@ export function ParentDashboardPage() {
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
               >
                 {b.label}
               </button>
@@ -374,7 +374,7 @@ export function ParentDashboardPage() {
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
               >
                 {b.label}
               </button>
@@ -394,7 +394,7 @@ export function ParentDashboardPage() {
             <button
               key={b.label}
               onClick={b.onClick}
-              className="px-2 py-2.5 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+              className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
             >
               {b.label}
             </button>
@@ -413,7 +413,7 @@ export function ParentDashboardPage() {
             <button
               key={b.label}
               onClick={b.onClick}
-              className="px-2 py-2.5 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+              className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
             >
               {b.label}
             </button>
