@@ -818,6 +818,14 @@ export async function deleteStudyTaskTemplate(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 批量重排任务顺序（按数组顺序重新分配 display_order = 1,2,3...）
+export async function reorderStudyTaskTemplates(orderedIds: string[]): Promise<void> {
+  const { error } = await supabase
+    .from('study_task_templates')
+    .upsert(orderedIds.map((id, i) => ({ id, display_order: i + 1 })), { onConflict: 'id' });
+  if (error) throw error;
+}
+
 // ====== 陪伴学习家长审核 ======
 
 // 家长审核通过：发放星光值 + 心情值

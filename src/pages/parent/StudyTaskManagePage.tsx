@@ -10,10 +10,10 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import {
   fetchStudyTaskTemplates, addStudyTaskTemplates,
-  updateStudyTaskTemplate, deleteStudyTaskTemplate,
+  updateStudyTaskTemplate, deleteStudyTaskTemplate, reorderStudyTaskTemplates,
 } from '../../api/pets';
 import type { StudyTaskTemplate } from '../../api/pets';
 
@@ -104,6 +104,24 @@ export function StudyTaskManagePage() {
     }
   };
 
+  // 上移/下移：乐观更新本地顺序，再调 RPC 持久化
+  const handleMove = async (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === templates.length - 1) return;
+    const swapIdx = direction === 'up' ? index - 1 : index + 1;
+    const next = [...templates];
+    [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
+    setTemplates(next);  // 乐观更新
+    try {
+      await reorderStudyTaskTemplates(next.map(t => t.id));
+    } catch (e: any) {
+      toast.error(e?.message ?? '排序失败');
+      // 失败回退
+      const list = await fetchStudyTaskTemplates(selectedChildId);
+      setTemplates(list);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
@@ -156,7 +174,7 @@ export function StudyTaskManagePage() {
         />
       ) : (
         <div className="space-y-2">
-          {templates.map(t => (
+          {templates.map((t, idx) => (
             <Card key={t.id} className="p-4">
               <div className="flex items-center gap-3">
                 {/* 启用/停用 */}
@@ -182,6 +200,25 @@ export function StudyTaskManagePage() {
                       {t.selected ? '已启用' : '已停用'}
                     </span>
                   </div>
+                </div>
+                {/* 排序按钮 */}
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => handleMove(idx, 'up')}
+                    disabled={idx === 0}
+                    className="p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-500 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="上移"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleMove(idx, 'down')}
+                    disabled={idx === templates.length - 1}
+                    className="p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-500 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="下移"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 {/* 操作 */}
                 <div className="flex items-center gap-1 flex-shrink-0">
