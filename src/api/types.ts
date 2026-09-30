@@ -324,11 +324,11 @@ export interface WrongBattlePoolItem {
   pool_id: string;
   question_id: string;
   source_challenge_set_id: string | null;
-  source_level_id: string | null;
   added_at: string;
   question_text: string;
   options: string[] | null;
   correct_answer: string;
+  answer2: string | null;
   explanation: string | null;
   type: string;
   difficulty: string;
@@ -349,6 +349,7 @@ export interface WrongBattleOfflineItem {
   question_text: string;
   options: string[] | null;
   correct_answer: string;
+  answer2: string | null;
   explanation: string | null;
   type: string;
   difficulty: string;

@@ -11,13 +11,48 @@ import type { Pet } from '../../../../api/types';
 // 通过分数线
 const PASS_THRESHOLD = 0.8;
 
+// 标准化答案：去首尾空格、全角转半角（与 FillBlankQuestion 一致）
+function normalizeAnswer(s: string): string {
+  let result = '';
+  for (const ch of s) {
+    const code = ch.charCodeAt(0);
+    if (code === 12288) {
+      result += ' ';
+    } else if (code >= 65281 && code <= 65374) {
+      result += String.fromCharCode(code - 65248);
+    } else {
+      result += ch;
+    }
+  }
+  return result.trim();
+}
+
+// 检查单空答案是否匹配（支持 / 分隔的等价答案）
+function checkAnswer(userAnswer: string, correctAnswer: string): boolean {
+  const ua = normalizeAnswer(userAnswer);
+  if (!ua) return false;
+  const equivs = correctAnswer.split('/').map(s => normalizeAnswer(s));
+  return equivs.includes(ua);
+}
+
 interface QuizItem {
   id: string;
   type: string;
   question_text: string;
   options: string[] | null;
   correct_answer: string;
+  answer2: string | null;
   explanation: string | null;
+}
+
+// 判断是否为双空填空题（answer2 非空即为双空题）
+function isDoubleBlank(q: QuizItem): boolean {
+  return q.type === 'fill_blank' && !!(q.answer2 && q.answer2.trim());
+}
+
+// 从答案字符串拆出各空答案（与后端 answer_question RPC 一致：用 || 分隔）
+function splitBlanks(answer: string): string[] {
+  return answer.split('||');
 }
 
 export function PetLevelUpQuiz({
@@ -69,6 +104,7 @@ export function PetLevelUpQuiz({
           question_text: r.question_text,
           options: r.options,
           correct_answer: r.correct_answer,
+          answer2: r.answer2 ?? null,
           explanation: r.explanation,
         }));
 
@@ -113,12 +149,26 @@ export function PetLevelUpQuiz({
     });
   };
 
+  // 填空题判题：单空用 checkAnswer，双空需两空全对
+  const checkFillBlank = (q: QuizItem, userAnswer: string): boolean => {
+    if (isDoubleBlank(q)) {
+      const parts = splitBlanks(userAnswer);
+      const ok1 = checkAnswer(parts[0] ?? '', q.correct_answer ?? '');
+      const ok2 = checkAnswer(parts[1] ?? '', q.answer2 ?? '');
+      return ok1 && ok2;
+    }
+    return checkAnswer(userAnswer, q.correct_answer ?? '');
+  };
+
   const computeCorrect = (q: QuizItem): boolean => {
     const userAns = (answers[q.id] ?? '').trim();
     if (!userAns) return false;
     if (q.type === 'choice' || q.type === 'multi_choice') {
       const sortStr = (s: string) => s.split('').sort().join('');
       return sortStr(userAns) === sortStr(q.correct_answer);
+    }
+    if (q.type === 'fill_blank') {
+      return checkFillBlank(q, userAns);
     }
     return userAns === q.correct_answer;
   };
@@ -143,7 +193,11 @@ export function PetLevelUpQuiz({
           const sortStr = (s: string) => s.split('').sort().join('');
           return acc + (sortStr(userAns) === sortStr(q.correct_answer) ? 1 : 0);
         }
-        // 填空题：直接比较文本
+        // 填空题：单空/双空均走 checkFillBlank
+        if (q.type === 'fill_blank') {
+          return acc + (checkFillBlank(q, userAns) ? 1 : 0);
+        }
+        // 其他题型：直接比较文本
         return acc + (userAns === q.correct_answer ? 1 : 0);
       }, 0);
       const passed = correctCount / questions.length >= PASS_THRESHOLD;
@@ -178,7 +232,31 @@ export function PetLevelUpQuiz({
       const sortStr = (s: string) => s.split('').sort().join('');
       return sortStr(userAns) === sortStr(q.correct_answer);
     }
+    if (q.type === 'fill_blank') {
+      return checkFillBlank(q, userAns);
+    }
     return userAns === q.correct_answer;
+  };
+
+  // 双空题：各空是否答对（用于揭示时显示对错）
+  const blankResults = (q: QuizItem): boolean[] => {
+    const parts = splitBlanks(answers[q.id] ?? '');
+    return [
+      checkAnswer(parts[0] ?? '', q.correct_answer ?? ''),
+      checkAnswer(parts[1] ?? '', q.answer2 ?? ''),
+    ];
+  };
+
+  // 设置某空的答案（双空题用）
+  const setBlankAnswer = (qid: string, idx: number, val: string) => {
+    if (revealed[qid]) return;
+    setAnswers(prev => {
+      const cur = prev[qid] ?? '';
+      const parts = splitBlanks(cur);
+      while (parts.length < idx + 1) parts.push('');
+      parts[idx] = val;
+      return { ...prev, [qid]: parts.join('||') };
+    });
   };
 
   return (
@@ -291,7 +369,53 @@ export function PetLevelUpQuiz({
                 );
               })}
             </div>
+          ) : isDoubleBlank(current) ? (
+            // 双空填空题：渲染两个独立输入框（列式 + 最终答案）
+            <div className="space-y-2">
+              {[
+                { label: '列式', answer: current.correct_answer, idx: 0 },
+                { label: '最终答案', answer: current.answer2 ?? '', idx: 1 },
+              ].map(blank => {
+                const parts = splitBlanks(answers[current.id] ?? '');
+                const val = parts[blank.idx] ?? '';
+                const results = blankResults(current);
+                const ok = results[blank.idx];
+                return (
+                  <div key={blank.idx} className="space-y-1">
+                    <label className="text-xs font-medium text-slate-500">
+                      {blank.label}
+                    </label>
+                    <input
+                      type="text"
+                      value={val}
+                      onChange={e => setBlankAnswer(current.id, blank.idx, e.target.value)}
+                      disabled={revealed[current.id]}
+                      placeholder={`请输入${blank.label}`}
+                      className={cn(
+                        'w-full px-3 py-2.5 rounded-xl border-2 text-sm outline-none transition-colors',
+                        revealed[current.id]
+                          ? (ok
+                              ? 'border-emerald-400 bg-emerald-50'
+                              : 'border-red-400 bg-red-50')
+                          : 'border-slate-200 focus:border-blue-400'
+                      )}
+                    />
+                    {revealed[current.id] && !ok && (
+                      <p className="text-xs text-red-600">
+                        ✗ 正确答案：{blank.answer}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+              {revealed[current.id] && (
+                <p className={cn('text-xs', isCorrect(current) ? 'text-emerald-600' : 'text-red-600')}>
+                  {isCorrect(current) ? '✓ 回答正确' : '✗ 两空均需答对'}
+                </p>
+              )}
+            </div>
           ) : (
+            // 单空填空题：原有逻辑，仅 1 个输入框
             <div className="space-y-2">
               <input
                 type="text"
