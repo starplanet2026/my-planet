@@ -10,7 +10,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import {
   fetchStudyTaskTemplates, addStudyTaskTemplates,
   updateStudyTaskTemplate, deleteStudyTaskTemplate, reorderStudyTaskTemplates,
@@ -27,6 +27,7 @@ export function StudyTaskManagePage() {
   const [selectedChildId, setSelectedChildId] = useState<string>('');
 
   const [templates, setTemplates] = useState<StudyTaskTemplate[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // 新建/编辑弹窗
@@ -105,18 +106,25 @@ export function StudyTaskManagePage() {
   };
 
   // 上移/下移：乐观更新本地顺序，再调 RPC 持久化
-  const handleMove = async (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === templates.length - 1) return;
-    const swapIdx = direction === 'up' ? index - 1 : index + 1;
+  // 拖拽排序：dragStart 记录源、dragOver 实时重排、dragEnd 持久化
+  const handleDragStart = (id: string) => setDragId(id);
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id === dragId) return;
+    const fromIdx = templates.findIndex(t => t.id === dragId);
+    const toIdx = templates.findIndex(t => t.id === id);
+    if (fromIdx < 0 || toIdx < 0) return;
     const next = [...templates];
-    [next[index], next[swapIdx]] = [next[swapIdx], next[index]];
-    setTemplates(next);  // 乐观更新
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setTemplates(next);
+  };
+  const handleDragEnd = async () => {
+    setDragId(null);
     try {
-      await reorderStudyTaskTemplates(next.map(t => t.id));
+      await reorderStudyTaskTemplates(templates.map(t => t.id));
     } catch (e: any) {
       toast.error(e?.message ?? '排序失败');
-      // 失败回退
       const list = await fetchStudyTaskTemplates(selectedChildId);
       setTemplates(list);
     }
@@ -173,14 +181,23 @@ export function StudyTaskManagePage() {
           description="点击右上角新建任务，下发给孩子"
         />
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2">
           {templates.map((t, idx) => (
-            <Card key={t.id} className="p-4">
-              <div className="flex items-center gap-3">
+            <Card
+              key={t.id}
+              draggable
+              onDragStart={() => handleDragStart(t.id)}
+              onDragOver={(e) => handleDragOver(e, t.id)}
+              onDragEnd={handleDragEnd}
+              className={`p-3 cursor-move transition-opacity ${dragId === t.id ? 'opacity-40' : ''}`}
+            >
+              <div className="flex items-center gap-2">
+                {/* 拖拽手柄 */}
+                <span className="flex-shrink-0 text-slate-300 cursor-move select-none" title="拖动调整顺序">⋮⋮</span>
                 {/* 启用/停用 */}
                 <button
                   onClick={() => toggleSelected(t)}
-                  className={`flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center text-xs transition-colors ${
+                  className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center text-[10px] transition-colors ${
                     t.selected ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300'
                   }`}
                   title={t.selected ? '已启用' : '已停用'}
@@ -189,52 +206,33 @@ export function StudyTaskManagePage() {
                 </button>
                 {/* 内容 */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium ${t.selected ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
+                  <p className={`text-xs font-medium truncate ${t.selected ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
                     {t.text}
                   </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-amber-500">⭐ {t.reward} 星光值</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-amber-500">⭐{t.reward}</span>
+                    <span className={`text-[9px] px-1 py-0.5 rounded-full ${
                       t.selected ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'
                     }`}>
-                      {t.selected ? '已启用' : '已停用'}
+                      {t.selected ? '启用' : '停用'}
                     </span>
                   </div>
                 </div>
-                {/* 排序按钮 */}
-                <div className="flex flex-col gap-0.5 flex-shrink-0">
-                  <button
-                    onClick={() => handleMove(idx, 'up')}
-                    disabled={idx === 0}
-                    className="p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-500 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="上移"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleMove(idx, 'down')}
-                    disabled={idx === templates.length - 1}
-                    className="p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-500 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="下移"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
                 {/* 操作 */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-0.5 flex-shrink-0">
                   <button
                     onClick={() => openEdit(t)}
-                    className="p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-500 rounded-lg transition-colors"
+                    className="p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-500 rounded-lg transition-colors"
                     title="编辑"
                   >
-                    <CheckCircle className="w-4 h-4" />
+                    <CheckCircle className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleDelete(t.id)}
-                    className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
+                    className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
                     title="删除"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
