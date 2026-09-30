@@ -145,9 +145,10 @@ export interface PetMessage {
   family_id: string;
   member_id: string;
   pet_id: string | null;
-  event_type: 'level_up' | 'coin_harvest' | 'sick' | 'new_pet';
+  event_type: 'level_up' | 'coin_harvest' | 'sick' | 'new_pet' | 'level_reward' | 'study_approved' | 'study_rejected';
   pet_name: string | null;
   message: string;
+  read: boolean;
   created_at: string;
 }
 

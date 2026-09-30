@@ -966,6 +966,12 @@ export async function clearPetMessages(memberId: string): Promise<void> {
   if (error) throw error;
 }
 
+// 标记所有宠物消息为已读
+export async function markPetMessagesRead(memberId: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_pet_messages_read', { p_member_id: memberId });
+  if (error) throw error;
+}
+
 // ====== 抽卡配置 ======
 
 // 读取抽卡配置（全局单行）

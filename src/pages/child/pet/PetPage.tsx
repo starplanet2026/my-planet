@@ -7,7 +7,7 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages } from '../../../api/pets';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
 import { expNeeded, TRAIT_DESC } from '../../../api/types';
 import { PetGrassland } from './components/PetGrassland';
@@ -65,6 +65,7 @@ export function PetPage() {
   const [showPetMessages, setShowPetMessages] = useState(false);
   const [petMessages, setPetMessages] = useState<PetMessage[]>([]);
   const [petMessagesLoading, setPetMessagesLoading] = useState(false);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [evolvingPetId, setEvolvingPetId] = useState<string | null>(null);
   const [renamingPetId, setRenamingPetId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -182,13 +183,14 @@ export function PetPage() {
     }
   };
 
-  // 加载宠物消息
+  // 加载宠物消息（同时统计未读数）
   const loadPetMessages = useCallback(async () => {
     if (!child) return;
     setPetMessagesLoading(true);
     try {
       const data = await fetchPetMessages(child.id, 50, 0);
       setPetMessages(data);
+      setUnreadMsgCount(data.filter(m => !m.read).length);
     } catch {
       setPetMessages([]);
     } finally {
@@ -201,16 +203,30 @@ export function PetPage() {
     try {
       await clearPetMessages(child.id);
       setPetMessages([]);
+      setUnreadMsgCount(0);
       toast.success('消息已清空');
     } catch (e: any) {
       toast.error(e?.message ?? '清空失败');
     }
   };
 
-  // 打开消息面板时加载
+  // 打开消息面板时加载并标记已读
   useEffect(() => {
-    if (showPetMessages) loadPetMessages();
-  }, [showPetMessages, loadPetMessages]);
+    if (showPetMessages) {
+      loadPetMessages();
+      if (child) {
+        markPetMessagesRead(child.id).then(() => setUnreadMsgCount(0)).catch(() => {});
+      }
+    }
+  }, [showPetMessages, loadPetMessages, child?.id]);
+
+  // 页面挂载时拉取未读数（用于消息按钮红点提醒）
+  useEffect(() => {
+    if (!child) return;
+    fetchPetMessages(child.id, 50, 0)
+      .then(data => setUnreadMsgCount(data.filter(m => !m.read).length))
+      .catch(() => {});
+  }, [child?.id]);
 
   // 懒加载背景列表：仅在打开切换弹窗时加载，避免大 base64 阻塞首屏
   const loadBackgrounds = useCallback(async () => {
@@ -380,10 +396,15 @@ export function PetPage() {
           </button>
           <button
             onClick={() => setShowPetMessages(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
           >
             <MessageCircle className="w-4 h-4" />
             <span className="text-xs font-medium">消息</span>
+            {unreadMsgCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold shadow">
+                {unreadMsgCount > 99 ? '99+' : unreadMsgCount}
+              </span>
+            )}
           </button>
           <AudioToggleButton />
         </div>
@@ -575,15 +596,22 @@ export function PetPage() {
                       : msg.event_type === 'level_reward' ? '🎁'
                       : msg.event_type === 'coin_harvest' ? '💰'
                       : msg.event_type === 'sick' ? '🤒'
+                      : msg.event_type === 'study_approved' ? '✅'
+                      : msg.event_type === 'study_rejected' ? '❌'
                       : '🐾';
                     return (
-                      <div key={msg.id} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50">
+                      <div key={msg.id} className={`flex items-start gap-2 p-2 rounded-lg ${msg.read ? 'bg-slate-50' : 'bg-amber-50 border border-amber-200'}`}>
                         <span className="text-lg flex-shrink-0">{icon}</span>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm text-slate-700">{msg.message}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            {new Date(msg.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] text-slate-400">
+                              {new Date(msg.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {!msg.read && (
+                              <span className="text-[10px] text-amber-600 font-medium">未读</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
