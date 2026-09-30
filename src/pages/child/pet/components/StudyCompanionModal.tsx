@@ -426,7 +426,7 @@ export function StudyCompanionModal({
   // 选择宠物+时长
   if (step === 'select') {
     return (
-      <Modal open onClose={handleClose} title="陪伴学习" size="md">
+      <Modal open onClose={handleClose} title="陪伴学习" size="xl">
         <div className="space-y-4">
           {/* 选择宠物 */}
           <div>
@@ -466,11 +466,11 @@ export function StudyCompanionModal({
                 <p className="text-[11px] text-slate-400">
                   共 {taskTemplates.length} 个任务，已勾选 {taskTemplates.filter(t => t.selected).length} 个
                 </p>
-                <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                <ul className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
                   {taskTemplates.map(t => (
                     <li
                       key={t.id}
-                      className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border transition-colors ${
                         t.selected ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
                       }`}
                     >
@@ -485,10 +485,10 @@ export function StudyCompanionModal({
                         {t.selected ? '✓' : ''}
                       </button>
                       {/* 任务名称 + 奖励 */}
-                      <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">
+                      <span className="flex-1 min-w-0 text-xs text-slate-700 truncate">
                         {t.text}
                         {t.reward > 0 && (
-                          <span className="text-amber-500 text-xs ml-1">⭐{t.reward}</span>
+                          <span className="text-amber-500 text-[10px] ml-1">⭐{t.reward}</span>
                         )}
                       </span>
                     </li>
