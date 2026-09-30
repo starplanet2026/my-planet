@@ -269,7 +269,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
 
         {/* 心情提示 */}
         <p className="text-[10px] text-slate-400 text-center">
-          和小狗玩耍填满心情条（上限300），满额+10经验。托管可一次性补满心情至300，+30经验。
+          体力/清洁/心情各满100即可领取当日金币。心情达100/200/300各+10经验（共30），托管可一次性补满至300。
         </p>
 
         {/* 领取金币 */}

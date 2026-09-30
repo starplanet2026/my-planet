@@ -367,13 +367,13 @@ begin
       end if;
     end if;
 
-    -- 四项满 → 每日金币
+    -- 四项满 → 每日金币（体力/清洁/心情各满100即可，无需心情满300）
     if coalesce(v_pet.hunger, 0) >= v_stat_max
        and coalesce(v_pet.clean, 0) >= v_stat_max
-       and coalesce(v_pet.happiness, 0) >= v_happiness_max
+       and coalesce(v_pet.happiness, 0) >= v_stat_max
        and coalesce(v_pet.health, 0) >= v_stat_max
        and not (v_old_hunger >= v_stat_max and v_old_clean >= v_stat_max
-                and v_old_happiness >= v_happiness_max and v_old_health >= v_stat_max)
+                and v_old_happiness >= v_stat_max and v_old_health >= v_stat_max)
        and coalesce(v_log.daily_coin_claimed, false) = false
     then
       v_daily_coin := coalesce(v_pet.base_coin_per_day, 1) * (1 + (coalesce(v_pet.level, 1) - 1) * 0.1);
