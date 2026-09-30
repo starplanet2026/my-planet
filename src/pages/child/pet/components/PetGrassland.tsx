@@ -115,6 +115,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     try { return new Set(JSON.parse(localStorage.getItem('pet-collapsed-chats') || '[]')); } catch { return new Set(); }
   });
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  // positionsRef：实时镜像最新坐标，避免 onPointerUp 读到闭包旧值导致保存旧坐标
+  const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
   // 宠物图层顺序：数组末尾 = 最上层。双击宠物将其置顶。
   // 按用户独立存储，切换用户不互相覆盖
@@ -174,15 +176,18 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
               next[p.id] = { ...DEFAULT_PET_POSITION };
             }
           });
+          positionsRef.current = next;
           return next;
         });
-      }).catch(() => {
+      }).catch((e) => {
         // 数据库读取失败时用默认位置
+        console.error('[fetchPetPositions] 失败:', e);
         setPositions(prev => {
           const next = { ...prev };
           pets.forEach(p => {
             if (!next[p.id]) next[p.id] = { ...DEFAULT_PET_POSITION };
           });
+          positionsRef.current = next;
           return next;
         });
       });
@@ -377,23 +382,30 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     const newX = ((e.clientX - rect.left) / rect.width) * 100;
     const newY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    setPositions(prev => ({
-      ...prev,
-      [petId]: {
-        x: Math.max(5, Math.min(95, newX)),
-        y: Math.max(10, Math.min(70, newY)),
-      },
-    }));
+    setPositions(prev => {
+      const next = {
+        ...prev,
+        [petId]: {
+          x: Math.max(5, Math.min(95, newX)),
+          y: Math.max(10, Math.min(70, newY)),
+        },
+      };
+      positionsRef.current = next;
+      return next;
+    });
   };
 
   const onPointerUp = () => {
     if (!dragRef.current) return;
     const { petId, moved } = dragRef.current;
     if (moved) {
-      // 拖拽结束：保存最新坐标到数据库
-      const pos = positions[petId];
+      // 拖拽结束：从 ref 读最新坐标并保存到数据库
+      const pos = positionsRef.current[petId];
       if (pos && childId) {
-        savePetPosition(childId, petId, pos.x, pos.y).catch(() => {});
+        savePetPosition(childId, petId, pos.x, pos.y).catch((e) => {
+          console.error('[savePetPosition] 保存失败:', e);
+          toast.error(`宠物位置保存失败：${e?.message || '未知错误'}`);
+        });
       }
     } else {
       // 点击：切换互动面板 + 互动音效

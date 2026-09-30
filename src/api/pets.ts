@@ -629,12 +629,10 @@ export interface PetPosition {
 
 export async function fetchPetPositions(memberId: string): Promise<Record<string, { x: number; y: number }>> {
   const { data, error } = await supabase
-    .from('pet_positions')
-    .select('pet_id, pos_x, pos_y')
-    .eq('member_id', memberId);
+    .rpc('get_pet_positions', { p_member_id: memberId });
   if (error) throw error;
   const map: Record<string, { x: number; y: number }> = {};
-  for (const r of data ?? []) {
+  for (const r of (data ?? []) as Array<{ pet_id: string; pos_x: number; pos_y: number }>) {
     map[r.pet_id] = { x: Number(r.pos_x), y: Number(r.pos_y) };
   }
   return map;
@@ -642,11 +640,12 @@ export async function fetchPetPositions(memberId: string): Promise<Record<string
 
 export async function savePetPosition(memberId: string, petId: string, x: number, y: number): Promise<void> {
   const { error } = await supabase
-    .from('pet_positions')
-    .upsert(
-      { member_id: memberId, pet_id: petId, pos_x: x, pos_y: y, updated_at: new Date().toISOString() },
-      { onConflict: 'member_id,pet_id' }
-    );
+    .rpc('save_pet_position', {
+      p_member_id: memberId,
+      p_pet_id: petId,
+      p_x: x,
+      p_y: y,
+    });
   if (error) throw error;
 }
 
