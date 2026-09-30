@@ -14,11 +14,13 @@ const SUB_LABEL: Record<string, string> = {
   food: '食品',
   clean: '清洁',
   toy: '玩具',
+  stomach_medicine: '肠胃药',
+  deworming_medicine: '驱虫药',
   medicine: '药品',
 };
 
 // 分组顺序
-const SUB_ORDER: PetSubcategory[] = ['doghouse', 'food', 'clean', 'toy', 'medicine'];
+const SUB_ORDER: PetSubcategory[] = ['doghouse', 'food', 'clean', 'toy', 'stomach_medicine', 'deworming_medicine', 'medicine'];
 
 // 单个物品卡片：图标 + 名字 + 数量
 function InventoryItemCard({ item }: { item: PetInventory }) {

@@ -925,6 +925,26 @@ export async function healSevereIllness(memberId: string, petId: string): Promis
   return row as HealSevereResult;
 }
 
+// ====== 重病就医消耗配置 ======
+
+export async function getSevereIllnessCost(familyId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('families')
+    .select('severe_illness_cost')
+    .eq('id', familyId)
+    .single();
+  if (error) throw error;
+  return (data as { severe_illness_cost?: number })?.severe_illness_cost ?? 20;
+}
+
+export async function updateSevereIllnessCost(familyId: string, cost: number): Promise<void> {
+  const { error } = await supabase
+    .from('families')
+    .update({ severe_illness_cost: cost, updated_at: new Date().toISOString() })
+    .eq('id', familyId);
+  if (error) throw error;
+}
+
 // ====== 进修系统 ======
 
 export async function sendPetToStudy(memberId: string, petId: string): Promise<SendStudyResult> {

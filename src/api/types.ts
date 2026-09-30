@@ -25,6 +25,7 @@ export interface Family {
   name: string;
   owner_user_id: string | null;
   parent_pin_hash: string | null;
+  severe_illness_cost?: number;
   created_at: string;
   updated_at: string;
 }
@@ -467,7 +468,7 @@ export interface ReviewWrongResult {
 // ====== 萌宠星球模块 ======
 
 export type PetShopItemType = 'pet' | 'supply';
-export type PetSubcategory = 'dog' | 'cat' | 'food' | 'clean' | 'toy' | 'medicine' | 'foster' | 'doghouse';
+export type PetSubcategory = 'dog' | 'cat' | 'food' | 'clean' | 'toy' | 'medicine' | 'foster' | 'doghouse' | 'stomach_medicine' | 'deworming_medicine';
 export type PetRarity = 'common' | 'rare' | 'epic';
 
 export interface PetShopItem {
@@ -621,6 +622,7 @@ export interface Pet {
   has_stomach_issue: boolean;
   has_skin_issue: boolean;
   has_severe_illness: boolean;
+  days_zero_stats?: number;
   happiness_rounds: number;
   last_hunger_fill_at: string | null;
   hunger_decay_count: number;

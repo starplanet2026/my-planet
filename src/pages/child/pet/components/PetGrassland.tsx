@@ -35,6 +35,15 @@ const GENDER_STYLE: Record<string, string> = {
 // 心情状态：统一 emoji 和文案的对应关系
 // 与 moodEmoji / petMessage 共用同一套阈值，确保表情和会话内容一致
 function moodState(pet: Pet): { emoji: string; text: string } {
+  if (pet.has_severe_illness) {
+    return { emoji: '🤢', text: '主人，我生重病了，快带我去医院吧' };
+  }
+  if (pet.has_stomach_issue) {
+    return { emoji: '😖', text: '主人，我肠胃不适了，快来帮我买肠胃药' };
+  }
+  if (pet.has_skin_issue) {
+    return { emoji: '😣', text: '主人，我身上有虫了，快来帮我买驱虫药' };
+  }
   if (pet.is_sick) {
     return { emoji: '😢', text: '我不舒服...快带我去看医生！' };
   }
@@ -71,8 +80,15 @@ const ACTIONS = [
 ] as const;
 
 const ACTION_SUBCAT: Record<string, PetSubcategory> = {
-  feed: 'food', clean: 'clean', play: 'toy', heal: 'medicine',
+  feed: 'food', clean: 'clean', play: 'toy',
 };
+
+// 根据宠物病症动态返回 heal 所需药品子分类
+function getHealSubcategory(pet: Pet): PetSubcategory | null {
+  if (pet.has_stomach_issue) return 'stomach_medicine';
+  if (pet.has_skin_issue) return 'deworming_medicine';
+  return null;
+}
 
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
@@ -200,8 +216,12 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     });
   };
 
-  const getItem = (action: string): PetInventory | undefined => {
-    const sub = ACTION_SUBCAT[action];
+  const getItem = (action: string, pet?: Pet): PetInventory | undefined => {
+    let sub: PetSubcategory | undefined = ACTION_SUBCAT[action];
+    if (action === 'heal' && pet) {
+      sub = getHealSubcategory(pet) ?? undefined;
+    }
+    if (!sub) return undefined;
     return inventory.find(i => i.subcategory === sub && i.quantity > 0);
   };
 
@@ -210,6 +230,16 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     if (!pet) return;
     if (action === 'heal' && !pet.is_sick) {
       toast.info('宠物没有生病');
+      return;
+    }
+    // Bug1 修复：生病时禁止非 heal 互动
+    if (pet.is_sick && action !== 'heal') {
+      toast.info('宠物生病了，请先治愈');
+      return;
+    }
+    // 重病时 heal 按钮提示需就医
+    if (action === 'heal' && pet.has_severe_illness) {
+      toast.info('宠物生重病了，吃药没用，请使用就医功能送医院');
       return;
     }
     // 问题6: 属性满值时拦截，提示友好文案
@@ -228,9 +258,13 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
         return;
       }
     }
-    const item = getItem(action);
+    const item = getItem(action, pet);
     if (!item) {
-      toast.error('背包无此物品，去商店购买');
+      if (action === 'heal') {
+        toast.error('背包无对应药品，去商店购买');
+      } else {
+        toast.error('背包无此物品，去商店购买');
+      }
       return;
     }
     setActing(action);
@@ -413,8 +447,12 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
             {isInteracting && (
               <div className="mb-2 flex items-start gap-2">
                 {ACTIONS.map(action => {
-                  const item = getItem(action.key);
-                  const disabled = !!acting || (action.key === 'heal' && !pet.is_sick);
+                  const item = getItem(action.key, pet);
+                  // Bug1 修复：生病时禁用非 heal 按钮；重病时 heal 也禁用（需就医）
+                  const disabled = !!acting
+                    || (pet.is_sick && action.key !== 'heal')
+                    || (action.key === 'heal' && !pet.is_sick)
+                    || (action.key === 'heal' && pet.has_severe_illness);
                   const statVal = pet[action.stat];
                   const pct = Math.max(0, Math.min(100, (statVal / action.max) * 100));
                   const barColor = pct > 60 ? action.barColor : pct > 30 ? 'bg-yellow-400' : 'bg-red-400';

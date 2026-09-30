@@ -43,7 +43,8 @@ const SUPPLY_SUBS: { id: string; label: string }[] = [
   { id: 'food', label: '食品' },
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
-  { id: 'medicine', label: '药品' },
+  { id: 'stomach_medicine', label: '肠胃药' },
+  { id: 'deworming_medicine', label: '驱虫药' },
   { id: 'doghouse', label: '住所' },
 ];
 
@@ -52,6 +53,8 @@ const SUPPLY_EFFECT: Record<string, { icon: string; label: string; color: string
   food: { icon: '🍖', label: '食品', color: 'text-orange-600', badgeCls: 'bg-orange-100 text-orange-600' },
   clean: { icon: '🧴', label: '清洁', color: 'text-blue-600', badgeCls: 'bg-blue-100 text-blue-600' },
   toy: { icon: '🎾', label: '玩具', color: 'text-green-600', badgeCls: 'bg-green-100 text-green-600' },
+  stomach_medicine: { icon: '💊', label: '肠胃药', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
+  deworming_medicine: { icon: '💉', label: '驱虫药', color: 'text-purple-600', badgeCls: 'bg-purple-100 text-purple-600' },
   medicine: { icon: '💊', label: '药品', color: 'text-red-600', badgeCls: 'bg-red-100 text-red-600' },
   doghouse: { icon: '🏠', label: '住所', color: 'text-amber-600', badgeCls: 'bg-amber-100 text-amber-600' },
 };

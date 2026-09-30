@@ -23,6 +23,7 @@ import {
   fetchBackgrounds, createBackground, deleteBackground,
   migrateBase64ToStorage,
   fetchGachaConfig, updateGachaConfig,
+  getSevereIllnessCost, updateSevereIllnessCost,
 } from '../../api/pets';
 import type {
   PetShopItem, PetShopItemType, PetSubcategory, PetRarity, Pet,
@@ -42,19 +43,22 @@ const PET_SUBS = [
   { id: 'cat' as const, label: '猫', emoji: '🐱' },
 ];
 
-// 用品子分类（食品 / 清洁 / 玩具 / 药品 / 寄养 / 住所）
+// 用品子分类（食品 / 清洁 / 玩具 / 肠胃药 / 驱虫药 / 寄养 / 住所）
 const SUPPLY_SUBS = [
   { id: 'food' as const, label: '食品', emojis: ['🍖', '🥩', '🍗', '🐟', '🥛', '🍪', '🥫'] },
   { id: 'clean' as const, label: '清洁', emojis: ['🧼', '🚿', '🛁', '🧴'] },
   { id: 'toy' as const, label: '玩具', emojis: ['🎾', '🧸', '🎈', '🎮', '🪀', '🎁', '🎯'] },
-  { id: 'medicine' as const, label: '药品', emojis: ['💊', '💉', '🧪', '🩺'] },
+  { id: 'stomach_medicine' as const, label: '肠胃药', emojis: ['💊', '🧪', '🩺'] },
+  { id: 'deworming_medicine' as const, label: '驱虫药', emojis: ['💉', '🧴', '🪲'] },
   { id: 'foster' as const, label: '寄养', emojis: ['🏠', '🏨', '🛏️'] },
   { id: 'doghouse' as const, label: '住所', emojis: ['🏡', '🏠', '🛖'] },
 ];
 
 // 子分类标签文案
 const SUB_LABEL: Record<string, string> = {
-  dog: '狗', cat: '猫', food: '食品', clean: '清洁', toy: '玩具', medicine: '药品', foster: '寄养', doghouse: '住所',
+  dog: '狗', cat: '猫', food: '食品', clean: '清洁', toy: '玩具',
+  stomach_medicine: '肠胃药', deworming_medicine: '驱虫药', medicine: '药品',
+  foster: '寄养', doghouse: '住所',
 };
 
 // 稀有度配置
@@ -89,15 +93,16 @@ const PET_EMOJIS: Record<'dog' | 'cat', string[]> = {
   cat: ['🐱', '🐈', '😺', '😻', '🐾'],
 };
 
-// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 药品 / 寄养 / 住所
-type CategoryFilter = 'all' | 'pet' | 'food' | 'clean' | 'toy' | 'medicine' | 'foster' | 'doghouse';
+// 商品分类筛选：全部 / 宠物 / 食物 / 清洁 / 玩具 / 肠胃药 / 驱虫药 / 寄养 / 住所
+type CategoryFilter = 'all' | 'pet' | 'food' | 'clean' | 'toy' | 'stomach_medicine' | 'deworming_medicine' | 'foster' | 'doghouse';
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: 'pet', label: '宠物' },
   { id: 'food', label: '食物' },
   { id: 'clean', label: '清洁' },
   { id: 'toy', label: '玩具' },
-  { id: 'medicine', label: '药品' },
+  { id: 'stomach_medicine', label: '肠胃药' },
+  { id: 'deworming_medicine', label: '驱虫药' },
   { id: 'foster', label: '寄养' },
   { id: 'doghouse', label: '住所' },
 ];
@@ -126,6 +131,71 @@ function getEmojiOptions(type: PetShopItemType, subcategory: PetSubcategory | nu
 // 根据类型获取默认子分类
 function defaultSubcategory(type: PetShopItemType): PetSubcategory {
   return type === 'pet' ? 'dog' : 'food';
+}
+
+// 重病就医消耗星光值配置组件
+function SevereIllnessCostConfig({ familyId }: { familyId: string }) {
+  const toast = useToastStore();
+  const [cost, setCost] = useState(20);
+  const [editing, setEditing] = useState(false);
+  const [inputValue, setInputValue] = useState('20');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!familyId) return;
+    getSevereIllnessCost(familyId)
+      .then(v => { setCost(v); setInputValue(String(v)); })
+      .catch(() => {});
+  }, [familyId]);
+
+  const handleSave = async () => {
+    const v = parseInt(inputValue, 10);
+    if (isNaN(v) || v < 1) {
+      toast.error('请输入有效数字（≥1）');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateSevereIllnessCost(familyId, v);
+      setCost(v);
+      setEditing(false);
+      toast.success('重病就医消耗已更新');
+    } catch (e: any) {
+      toast.error(e?.message ?? '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl border border-red-200 mb-4">
+      <span className="text-sm font-medium text-red-700">🏥 重病就医消耗</span>
+      {editing ? (
+        <>
+          <Input
+            type="number"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className="w-24"
+            disabled={saving}
+          />
+          <span className="text-xs text-slate-500">星光值</span>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? '保存中...' : '保存'}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setInputValue(String(cost)); }} disabled={saving}>
+            取消
+          </Button>
+        </>
+      ) : (
+        <>
+          <span className="text-sm font-bold text-red-600">{cost}</span>
+          <span className="text-xs text-slate-500">星光值/次</span>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>修改</Button>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function PetManagePage() {
@@ -319,6 +389,9 @@ export function PetManagePage() {
       {/* 商品管理 tab */}
       {activeTab === 'shop' && (
         <>
+          {/* 重病就医消耗配置 */}
+          <SevereIllnessCostConfig familyId={family?.id ?? ''} />
+
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <p className="text-sm text-slate-500">上架宠物和用品，孩子用星光值购买</p>
