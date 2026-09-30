@@ -240,8 +240,11 @@ export function StudyCompanionModal({
 
   const handleStart = () => {
     if (!selectedPet) return;
-    // 取【已上线且学生勾选】的任务作为本次学习任务
-    const selectedTasks = taskTemplates.filter(t => t.selected && studentPicks.has(t.id));
+    // 取【已上线且学生勾选】的任务作为本次学习任务，按语文→数学→英语排序
+    const subjectOrder = { chinese: 0, math: 1, english: 2 };
+    const selectedTasks = taskTemplates
+      .filter(t => t.selected && studentPicks.has(t.id))
+      .sort((a, b) => (subjectOrder[a.subject ?? 'chinese'] ?? 0) - (subjectOrder[b.subject ?? 'chinese'] ?? 0));
     if (selectedTasks.length === 0) {
       toast.info('请至少勾选一个任务');
       return;
