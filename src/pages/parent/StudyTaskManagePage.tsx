@@ -183,13 +183,13 @@ export function StudyTaskManagePage() {
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {templates.map((t, idx) => (
-            <Card
+            <div
               key={t.id}
               draggable
               onDragStart={() => handleDragStart(t.id)}
               onDragOver={(e) => handleDragOver(e, t.id)}
               onDragEnd={handleDragEnd}
-              className={`p-3 cursor-move transition-opacity ${dragId === t.id ? 'opacity-40' : ''}`}
+              className={`bg-white rounded-cute shadow-sm border border-star-100 p-3 cursor-move transition-opacity ${dragId === t.id ? 'opacity-40' : ''}`}
             >
               <div className="flex items-center gap-2">
                 {/* 拖拽手柄 */}
@@ -236,7 +236,7 @@ export function StudyTaskManagePage() {
                   </button>
                 </div>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
