@@ -247,7 +247,7 @@ export function StudyCompanionModal({
       return;
     }
     const tasks: StudyTask[] = selectedTasks.map((t, i) => ({
-      id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false,
+      id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false, subject: t.subject,
     }));
     const totalSec = minutes * 60;
     setTaskList(tasks);
