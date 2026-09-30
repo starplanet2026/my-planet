@@ -37,10 +37,10 @@ interface StudyTask {
   subject?: 'chinese' | 'math' | 'english'; // 学科归属
 }
 
-const SUBJECT_META: { id: 'chinese' | 'math' | 'english'; label: string; color: string }[] = [
-  { id: 'chinese', label: '语文', color: 'text-red-600' },
-  { id: 'math', label: '数学', color: 'text-blue-600' },
-  { id: 'english', label: '英语', color: 'text-green-600' },
+const SUBJECT_META: { id: 'chinese' | 'math' | 'english'; label: string; color: string; cls: string }[] = [
+  { id: 'chinese', label: '语文', color: 'text-red-600', cls: 'bg-red-100 text-red-600' },
+  { id: 'math', label: '数学', color: 'text-blue-600', cls: 'bg-blue-100 text-blue-600' },
+  { id: 'english', label: '英语', color: 'text-green-600', cls: 'bg-green-100 text-green-600' },
 ];
 
 export function StudyCompanionModal({
@@ -496,10 +496,15 @@ export function StudyCompanionModal({
                                 >
                                   {picked ? '✓' : ''}
                                 </button>
-                                <span className="flex-1 min-w-0 text-[10px] text-slate-700 truncate">
-                                  {t.text}
+                                <span className="flex-1 min-w-0 text-[10px] text-slate-700 truncate flex items-center gap-1">
+                                  {t.subject && (
+                                    <span className={`flex-shrink-0 text-[8px] px-1 py-0.5 rounded ${SUBJECT_META.find(s => s.id === t.subject)?.cls || 'bg-slate-100 text-slate-500'}`}>
+                                      {SUBJECT_META.find(s => s.id === t.subject)?.label || ''}
+                                    </span>
+                                  )}
+                                  <span className="truncate">{t.text}</span>
                                   {t.reward > 0 && (
-                                    <span className="text-amber-500 text-[9px] ml-0.5">⭐{t.reward}</span>
+                                    <span className="text-amber-500 text-[9px] ml-0.5 flex-shrink-0">⭐{t.reward}</span>
                                   )}
                                 </span>
                               </li>
