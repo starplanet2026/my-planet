@@ -5,6 +5,8 @@ import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { supabase } from '../../api/client';
 import { Modal } from '../common/Modal';
+import { AssetDetailModal } from '../common/AssetDetailModal';
+import type { BalanceType } from '../../api/coins';
 import { ROUTES, TASK_CATEGORIES, getTaskIconUrl, COIN_ICON_SM, STAR_ICON_SM } from '../../lib/constants';
 import { formatCoins } from '../../lib/utils';
 import { cn } from '../../lib/utils';
@@ -35,6 +37,11 @@ export function TopBar() {
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showTodayCompleted, setShowTodayCompleted] = useState(false);
   const [showTodayAnswerRecords, setShowTodayAnswerRecords] = useState(false);
+  // 资产明细弹窗
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [assetShowStar, setAssetShowStar] = useState(true);
+  const [assetShowCoin, setAssetShowCoin] = useState(true);
+  const [assetDefaultTab, setAssetDefaultTab] = useState<BalanceType>('coin');
   // 面板时间范围：今日 / 近30天
   const [completedRange, setCompletedRange] = useState<'today' | '30days'>('today');
   const [answerRange, setAnswerRange] = useState<'today' | '30days'>('today');
@@ -274,17 +281,42 @@ export function TopBar() {
     navigate(ROUTES.PARENT_DASHBOARD);
   };
 
+  // 打开资产明细弹窗：根据点击的货币类型决定展示哪些明细
+  const openAssetModal = (clicked: BalanceType) => {
+    if (isPetPage) {
+      // 萌宠星球：星光/金币任意点击 → 同时展示两套明细
+      setAssetShowStar(true);
+      setAssetShowCoin(true);
+      setAssetDefaultTab(clicked);
+    } else if (isShopPage) {
+      // 特权兑换：仅金币
+      setAssetShowStar(false);
+      setAssetShowCoin(true);
+      setAssetDefaultTab('coin');
+    } else {
+      // 领取成就 / 智慧星战：仅星光值
+      setAssetShowStar(true);
+      setAssetShowCoin(false);
+      setAssetDefaultTab('star');
+    }
+    setShowAssetModal(true);
+  };
+
   // 渲染左侧货币区域
   const renderCurrencyBar = () => {
     if (isTasksPage && currentChild) {
       return (
         <div className="flex items-center gap-4">
-          {/* 星光值 */}
+          {/* 星光值：点击数字弹出星光值明细 */}
           <div className="flex items-center gap-1.5">
             <img src={STAR_ICON_SM} alt="星光值" className="w-7 h-7 object-contain" />
-            <span className="text-lg font-bold text-amber-600 tabular-nums">
+            <button
+              onClick={() => openAssetModal('star')}
+              className="text-lg font-bold text-amber-600 tabular-nums hover:text-amber-700 active:scale-95 transition-all"
+              title="点击查看星光值明细"
+            >
               {currentChild.star_value ?? 0}
-            </span>
+            </button>
           </div>
           <div className="w-px h-6 bg-slate-200" />
           {/* 今日达成（可点击） */}
@@ -304,12 +336,16 @@ export function TopBar() {
     if (isShopPage && currentChild) {
       return (
         <div className="flex items-center gap-4">
-          {/* 金币 */}
+          {/* 金币：点击数字弹出金币明细 */}
           <div className="flex items-center gap-1.5">
             <img src={COIN_ICON_SM} alt="金币" className="w-7 h-7 object-contain" />
-            <span className="text-lg font-bold text-amber-600 tabular-nums">
+            <button
+              onClick={() => openAssetModal('coin')}
+              className="text-lg font-bold text-amber-600 tabular-nums hover:text-amber-700 active:scale-95 transition-all"
+              title="点击查看金币明细"
+            >
               {formatCoins(currentChild.coin_balance)}
-            </span>
+            </button>
           </div>
           <div className="w-px h-6 bg-slate-200" />
           {/* 背包 */}
@@ -329,18 +365,28 @@ export function TopBar() {
     if (isPetPage && currentChild) {
       return (
         <div className="flex items-center gap-4">
+          {/* 星光值：点击弹出星光+金币明细 */}
           <div className="flex items-center gap-1.5">
             <img src={STAR_ICON_SM} alt="星光值" className="w-7 h-7 object-contain" />
-            <span className="text-lg font-bold text-amber-600 tabular-nums">
+            <button
+              onClick={() => openAssetModal('star')}
+              className="text-lg font-bold text-amber-600 tabular-nums hover:text-amber-700 active:scale-95 transition-all"
+              title="点击查看资产明细"
+            >
               {currentChild.star_value ?? 0}
-            </span>
+            </button>
           </div>
           <div className="w-px h-6 bg-slate-200" />
+          {/* 金币：点击弹出星光+金币明细 */}
           <div className="flex items-center gap-1.5">
             <img src={COIN_ICON_SM} alt="金币" className="w-7 h-7 object-contain" />
-            <span className="text-lg font-bold text-amber-600 tabular-nums">
+            <button
+              onClick={() => openAssetModal('coin')}
+              className="text-lg font-bold text-amber-600 tabular-nums hover:text-amber-700 active:scale-95 transition-all"
+              title="点击查看资产明细"
+            >
               {formatCoins(currentChild.coin_balance)}
-            </span>
+            </button>
           </div>
         </div>
       );
@@ -349,11 +395,16 @@ export function TopBar() {
     if (isChallengePage && currentChild) {
       return (
         <div className="flex items-center gap-4">
+          {/* 星光值：点击数字弹出星光值明细 */}
           <div className="flex items-center gap-1.5">
             <img src={STAR_ICON_SM} alt="星光值" className="w-7 h-7 object-contain" />
-            <span className="text-lg font-bold text-amber-600 tabular-nums">
+            <button
+              onClick={() => openAssetModal('star')}
+              className="text-lg font-bold text-amber-600 tabular-nums hover:text-amber-700 active:scale-95 transition-all"
+              title="点击查看星光值明细"
+            >
               {currentChild.star_value ?? 0}
-            </span>
+            </button>
           </div>
           <div className="w-px h-6 bg-slate-200" />
           {/* 今日答题：点击弹出按题集分组的答题记录 */}
@@ -556,6 +607,18 @@ export function TopBar() {
           </div>
         )}
       </Modal>
+
+      {/* 资产明细弹窗：顶部星光值/金币数字点击唤起 */}
+      {currentChild && (
+        <AssetDetailModal
+          open={showAssetModal}
+          onClose={() => setShowAssetModal(false)}
+          memberId={currentChild.id}
+          showStar={assetShowStar}
+          showCoin={assetShowCoin}
+          defaultTab={assetDefaultTab}
+        />
+      )}
     </>
   );
 }
