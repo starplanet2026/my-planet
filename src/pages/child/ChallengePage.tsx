@@ -1074,6 +1074,7 @@ function WrongBattlePlayer({ childId, onBack }: {
   const [results, setResults] = useState<boolean[]>([]);
   const [totalReward, setTotalReward] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
+  const [resultQuestion, setResultQuestion] = useState<WrongBattlePoolItem | null>(null);
   const toast = useToastStore();
   const patchMember = useFamilyStore(s => s.patchMember);
   useChallengeSession(childId, undefined, undefined, '错题大混战');
@@ -1092,13 +1093,15 @@ function WrongBattlePlayer({ childId, onBack }: {
     })();
   }, [childId]);
 
-  const q = pool[idx];
+  // 答题中：showResult 时用 resultQuestion（锁定的题目），避免消题后 q 漏出下一题答案
+  const q = showResult && resultQuestion ? resultQuestion : pool[idx];
 
   const handleSubmit = async () => {
     if (!answer.trim() || !q) return;
     setSubmitting(true);
     try {
       const result = await answerQuestion(childId, q.question_id, answer, '错题混战');
+      setResultQuestion(q);  // 锁定当前题目，避免消题后显示下一题答案
       setIsCorrect(result.is_correct);
       setShowResult(true);
       setResults(prev => [...prev, result.is_correct]);
@@ -1110,7 +1113,7 @@ function WrongBattlePlayer({ childId, onBack }: {
       } else {
         toast.error('答错了，继续加油');
       }
-      // 若该题已达标自动下线，从本地混战池中移除
+      // 若该题已达标自动下线，从本地混战池中移除（resultQuestion 仍锁定，显示当前题答案）
       if (result.is_mastered) {
         setPool(prev => {
           const next = prev.filter((_, i) => i !== idx);
@@ -1126,19 +1129,20 @@ function WrongBattlePlayer({ childId, onBack }: {
   };
 
   const handleNext = () => {
+    // 清除锁定，避免下一题渲染时残留
+    setResultQuestion(null);
+    setShowResult(false);
     // 若当前题已被下线（pool 长度变化），直接进入下一题或结算
     if (idx >= pool.length) {
       if (pool.length === 0) {
         setShowFinal(true);
       } else {
         setAnswer('');
-        setShowResult(false);
       }
       return;
     }
     if (idx < pool.length - 1) {
       setAnswer('');
-      setShowResult(false);
       setIdx(i => i + 1);
     } else {
       setShowFinal(true);
