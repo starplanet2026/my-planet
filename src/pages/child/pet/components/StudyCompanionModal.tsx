@@ -497,11 +497,6 @@ export function StudyCompanionModal({
                                   {picked ? '✓' : ''}
                                 </button>
                                 <span className="flex-1 min-w-0 text-[10px] text-slate-700 truncate flex items-center gap-1">
-                                  {t.subject && (
-                                    <span className={`flex-shrink-0 text-[8px] px-1 py-0.5 rounded ${SUBJECT_META.find(s => s.id === t.subject)?.cls || 'bg-slate-100 text-slate-500'}`}>
-                                      {SUBJECT_META.find(s => s.id === t.subject)?.label || ''}
-                                    </span>
-                                  )}
                                   <span className="truncate">{t.text}</span>
                                   {t.reward > 0 && (
                                     <span className="text-amber-500 text-[9px] ml-0.5 flex-shrink-0">⭐{t.reward}</span>
@@ -735,9 +730,16 @@ export function StudyCompanionModal({
                           {t.done ? '✓' : ''}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <span className={`text-base leading-snug block ${t.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                            {t.text}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {t.subject && (
+                              <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded ${SUBJECT_META.find(s => s.id === t.subject)?.cls || 'bg-slate-100 text-slate-500'}`}>
+                                {SUBJECT_META.find(s => s.id === t.subject)?.label || ''}
+                              </span>
+                            )}
+                            <span className={`text-base leading-snug block ${t.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                              {t.text}
+                            </span>
+                          </div>
                           {t.reward > 0 && (
                             <span className={`text-xs inline-flex items-center gap-0.5 mt-1 ${t.done ? 'text-amber-300' : 'text-amber-500'}`}>
                               ⭐ {t.reward} 星光值
