@@ -821,11 +821,9 @@ export async function deleteStudyTaskTemplate(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// 批量重排任务顺序（按数组顺序重新分配 display_order = 1,2,3...）
+// 批量重排任务顺序（通过 RPC 绕过 RLS，仅更新 display_order）
 export async function reorderStudyTaskTemplates(orderedIds: string[]): Promise<void> {
-  const { error } = await supabase
-    .from('study_task_templates')
-    .upsert(orderedIds.map((id, i) => ({ id, display_order: i + 1 })), { onConflict: 'id' });
+  const { error } = await supabase.rpc('reorder_study_task_templates', { p_ids: orderedIds });
   if (error) throw error;
 }
 
