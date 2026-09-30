@@ -15,7 +15,13 @@ import {
   fetchStudyTaskTemplates, addStudyTaskTemplates,
   updateStudyTaskTemplate, deleteStudyTaskTemplate, reorderStudyTaskTemplates,
 } from '../../api/pets';
-import type { StudyTaskTemplate } from '../../api/pets';
+import type { StudyTaskTemplate, StudySubject } from '../../api/pets';
+
+const SUBJECTS: { id: StudySubject; label: string; color: string }[] = [
+  { id: 'chinese', label: '语文', color: 'text-red-600' },
+  { id: 'math', label: '数学', color: 'text-blue-600' },
+  { id: 'english', label: '英语', color: 'text-green-600' },
+];
 
 export function StudyTaskManagePage() {
   const navigate = useNavigate();
@@ -35,6 +41,7 @@ export function StudyTaskManagePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formText, setFormText] = useState('');
   const [formReward, setFormReward] = useState(1);
+  const [formSubject, setFormSubject] = useState<StudySubject>('chinese');
 
   useEffect(() => {
     if (children.length > 0 && !selectedChildId) {
@@ -51,10 +58,11 @@ export function StudyTaskManagePage() {
       .finally(() => setLoading(false));
   }, [selectedChildId, toast]);
 
-  const openCreate = () => {
+  const openCreate = (subject: StudySubject) => {
     setEditingId(null);
     setFormText('');
     setFormReward(1);
+    setFormSubject(subject);
     setShowEdit(true);
   };
 
@@ -62,6 +70,7 @@ export function StudyTaskManagePage() {
     setEditingId(t.id);
     setFormText(t.text);
     setFormReward(t.reward);
+    setFormSubject(t.subject);
     setShowEdit(true);
   };
 
@@ -70,14 +79,13 @@ export function StudyTaskManagePage() {
     if (!selectedChildId) return;
     try {
       if (editingId) {
-        await updateStudyTaskTemplate(editingId, { text: formText.trim(), reward: formReward });
+        await updateStudyTaskTemplate(editingId, { text: formText.trim(), reward: formReward, subject: formSubject });
         toast.success('已更新');
       } else {
-        await addStudyTaskTemplates(selectedChildId, [{ text: formText.trim(), reward: formReward }]);
+        await addStudyTaskTemplates(selectedChildId, [{ text: formText.trim(), reward: formReward, subject: formSubject }]);
         toast.success('已添加');
       }
       setShowEdit(false);
-      // 刷新
       const list = await fetchStudyTaskTemplates(selectedChildId);
       setTemplates(list);
     } catch (e: any) {
@@ -105,12 +113,19 @@ export function StudyTaskManagePage() {
     }
   };
 
-  // 上移/下移：乐观更新本地顺序，再调 RPC 持久化
-  // 拖拽排序：dragStart 记录源、dragOver 实时重排、dragEnd 持久化
-  const handleDragStart = (id: string) => setDragId(id);
+  // 拖拽排序：dragStart 记录源 + 设置 dataTransfer（修复 Bug1）、dragOver 实时重排（仅同学科）、dragEnd 持久化
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     if (id === dragId) return;
+    const dragItem = templates.find(t => t.id === dragId);
+    const targetItem = templates.find(t => t.id === id);
+    if (!dragItem || !targetItem) return;
+    if (dragItem.subject !== targetItem.subject) return; // 跨学科不允许拖拽
     const fromIdx = templates.findIndex(t => t.id === dragId);
     const toIdx = templates.findIndex(t => t.id === id);
     if (fromIdx < 0 || toIdx < 0) return;
@@ -120,9 +135,15 @@ export function StudyTaskManagePage() {
     setTemplates(next);
   };
   const handleDragEnd = async () => {
+    const dragItemId = dragId;
     setDragId(null);
+    if (!dragItemId) return;
+    const dragItem = templates.find(t => t.id === dragItemId);
+    if (!dragItem) return;
+    // 只持久化同学科内的顺序（其他学科 display_order 不受影响）
+    const sameSubjectIds = templates.filter(t => t.subject === dragItem.subject).map(t => t.id);
     try {
-      await reorderStudyTaskTemplates(templates.map(t => t.id));
+      await reorderStudyTaskTemplates(sameSubjectIds);
     } catch (e: any) {
       toast.error(e?.message ?? '排序失败');
       const list = await fetchStudyTaskTemplates(selectedChildId);
@@ -160,84 +181,90 @@ export function StudyTaskManagePage() {
         ))}
       </div>
 
-      {/* 新建按钮 */}
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-slate-400">
-          共 {templates.length} 个任务，已启用 {templates.filter(t => t.selected).length} 个
-        </p>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="w-4 h-4" />
-          新建任务
-        </Button>
-      </div>
-
-      {/* 任务列表 */}
+      {/* 任务列表：按学科三列分区 */}
       {loading ? (
         <Loading />
       ) : templates.length === 0 ? (
         <EmptyState
           icon="📚"
           title="还没有学习任务"
-          description="点击右上角新建任务，下发给孩子"
+          description="点击列内新建任务，下发给孩子"
         />
       ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {templates.map((t, idx) => (
-            <div
-              key={t.id}
-              draggable
-              onDragStart={() => handleDragStart(t.id)}
-              onDragOver={(e) => handleDragOver(e, t.id)}
-              onDragEnd={handleDragEnd}
-              className={`bg-white rounded-cute shadow-sm border border-star-100 p-3 cursor-move transition-opacity ${dragId === t.id ? 'opacity-40' : ''}`}
-            >
-              <div className="flex items-center gap-2">
-                {/* 拖拽手柄 */}
-                <span className="flex-shrink-0 text-slate-300 cursor-move select-none" title="拖动调整顺序">⋮⋮</span>
-                {/* 启用/停用 */}
-                <button
-                  onClick={() => toggleSelected(t)}
-                  className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center text-[10px] transition-colors ${
-                    t.selected ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300'
-                  }`}
-                  title={t.selected ? '已启用' : '已停用'}
-                >
-                  {t.selected ? '✓' : ''}
-                </button>
-                {/* 内容 */}
-                <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium truncate ${t.selected ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
-                    {t.text}
-                  </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-amber-500">⭐{t.reward}</span>
-                    <span className={`text-[9px] px-1 py-0.5 rounded-full ${
-                      t.selected ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      {t.selected ? '启用' : '停用'}
-                    </span>
-                  </div>
+        <div className="grid grid-cols-3 gap-3">
+          {SUBJECTS.map(sub => {
+            const subjectTasks = templates.filter(t => t.subject === sub.id);
+            return (
+              <div key={sub.id} className="space-y-2">
+                {/* 学科标题 + 新建 */}
+                <div className="flex items-center justify-between sticky top-0 bg-white py-1 z-10">
+                  <h3 className={`text-sm font-bold ${sub.color}`}>{sub.label}</h3>
+                  <button
+                    onClick={() => openCreate(sub.id)}
+                    className="p-1 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
+                    title={`新建${sub.label}任务`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-                {/* 操作 */}
-                <div className="flex items-center gap-0.5 flex-shrink-0">
-                  <button
-                    onClick={() => openEdit(t)}
-                    className="p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-500 rounded-lg transition-colors"
-                    title="编辑"
-                  >
-                    <CheckCircle className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(t.id)}
-                    className="p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                {/* 学科任务列表 */}
+                <div className="space-y-1.5 min-h-[60px]">
+                  {subjectTasks.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 text-center py-3">暂无{sub.label}任务</p>
+                  ) : subjectTasks.map(t => (
+                    <div
+                      key={t.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, t.id)}
+                      onDragOver={(e) => handleDragOver(e, t.id)}
+                      onDragEnd={handleDragEnd}
+                      className={`bg-white rounded-cute shadow-sm border border-star-100 p-2 cursor-move transition-opacity ${dragId === t.id ? 'opacity-40' : ''}`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {/* 拖拽手柄 */}
+                        <span className="flex-shrink-0 text-slate-300 cursor-move select-none text-xs">⋮⋮</span>
+                        {/* 启用/停用 */}
+                        <button
+                          onClick={() => toggleSelected(t)}
+                          className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[8px] transition-colors ${
+                            t.selected ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300'
+                          }`}
+                        >
+                          {t.selected ? '✓' : ''}
+                        </button>
+                        {/* 内容 */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-[11px] font-medium truncate ${t.selected ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
+                            {t.text}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-[9px] text-amber-500">⭐{t.reward}</span>
+                          </div>
+                        </div>
+                        {/* 操作 */}
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          <button
+                            onClick={() => openEdit(t)}
+                            className="p-0.5 text-slate-400 hover:bg-blue-50 hover:text-blue-500 rounded transition-colors"
+                            title="编辑"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(t.id)}
+                            className="p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded transition-colors"
+                            title="删除"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

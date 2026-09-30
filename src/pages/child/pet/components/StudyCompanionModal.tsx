@@ -34,7 +34,14 @@ interface StudyTask {
   done: boolean;
   rewarded: boolean; // 是否已发放奖励（防止重复）
   selected?: boolean; // 任务模板是否被勾选（选择页使用）
+  subject?: 'chinese' | 'math' | 'english'; // 学科归属
 }
+
+const SUBJECT_META: { id: 'chinese' | 'math' | 'english'; label: string; color: string }[] = [
+  { id: 'chinese', label: '语文', color: 'text-red-600' },
+  { id: 'math', label: '数学', color: 'text-blue-600' },
+  { id: 'english', label: '英语', color: 'text-green-600' },
+];
 
 export function StudyCompanionModal({
   pets,
@@ -172,6 +179,7 @@ export function StudyCompanionModal({
       const mapped = list.map(t => ({
         id: t.id, text: t.text, reward: t.reward,
         done: false, rewarded: false, selected: t.selected,
+        subject: t.subject,
       }));
       setTaskTemplates(mapped);
       // 默认全选已上线任务（后台 selected=true 视为上线，学生默认勾选）
@@ -453,7 +461,7 @@ export function StudyCompanionModal({
             )}
           </div>
 
-          {/* 今日任务（家长下发，学生仅可勾选） */}
+          {/* 今日任务（家长下发，学生仅可勾选） - 按学科三列分区 */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">今日任务（由家长下发）</label>
             {/* 仅展示后台已上线（selected=true）的任务；学生勾选仅本地，不回传后端 */}
@@ -462,37 +470,46 @@ export function StudyCompanionModal({
                 <p className="text-[11px] text-slate-400">
                   共 {taskTemplates.filter(t => t.selected).length} 个任务，已勾选 {taskTemplates.filter(t => t.selected && studentPicks.has(t.id)).length} 个
                 </p>
-                <ul className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {taskTemplates.filter(t => t.selected).map(t => {
-                    const picked = studentPicks.has(t.id);
+                <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {SUBJECT_META.map(sub => {
+                    const subTasks = taskTemplates.filter(t => t.selected && t.subject === sub.id);
+                    if (subTasks.length === 0) return null;
                     return (
-                    <li
-                      key={t.id}
-                      className={`flex items-center gap-1.5 p-2 rounded-lg border transition-colors ${
-                        picked ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
-                      }`}
-                    >
-                      {/* 勾选框 */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleSelect(t.id)}
-                        className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center text-xs transition-colors ${
-                          picked ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
-                        }`}
-                      >
-                        {picked ? '✓' : ''}
-                      </button>
-                      {/* 任务名称 + 奖励 */}
-                      <span className="flex-1 min-w-0 text-xs text-slate-700 truncate">
-                        {t.text}
-                        {t.reward > 0 && (
-                          <span className="text-amber-500 text-[10px] ml-1">⭐{t.reward}</span>
-                        )}
-                      </span>
-                    </li>
+                      <div key={sub.id} className="space-y-1">
+                        <h4 className={`text-[11px] font-bold ${sub.color} text-center`}>{sub.label}</h4>
+                        <ul className="space-y-1">
+                          {subTasks.map(t => {
+                            const picked = studentPicks.has(t.id);
+                            return (
+                              <li
+                                key={t.id}
+                                className={`flex items-center gap-1 p-1.5 rounded-lg border transition-colors ${
+                                  picked ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSelect(t.id)}
+                                  className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[8px] transition-colors ${
+                                    picked ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
+                                  }`}
+                                >
+                                  {picked ? '✓' : ''}
+                                </button>
+                                <span className="flex-1 min-w-0 text-[10px] text-slate-700 truncate">
+                                  {t.text}
+                                  {t.reward > 0 && (
+                                    <span className="text-amber-500 text-[9px] ml-0.5">⭐{t.reward}</span>
+                                  )}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-slate-400 text-center py-4">家长还没下发学习任务，请联系家长添加</p>

@@ -755,6 +755,7 @@ export async function fetchStudyRecords(memberId: string, limit = 50): Promise<S
 }
 
 // 陪伴学习任务模板（多端同步）
+export type StudySubject = 'chinese' | 'math' | 'english';
 export interface StudyTaskTemplate {
   id: string;
   member_id: string;
@@ -762,6 +763,7 @@ export interface StudyTaskTemplate {
   reward: number;
   selected: boolean;
   display_order: number;
+  subject: StudySubject;
   created_at: string;
 }
 
@@ -778,10 +780,10 @@ export async function fetchStudyTaskTemplates(memberId: string): Promise<StudyTa
 
 export async function addStudyTaskTemplates(
   memberId: string,
-  items: { text: string; reward: number }[],
+  items: { text: string; reward: number; subject: StudySubject }[],
 ): Promise<StudyTaskTemplate[]> {
   if (items.length === 0) return [];
-  // 获取当前最大 display_order
+  // 获取当前最大 display_order（同学科内排序）
   const { data: existing } = await supabase
     .from('study_task_templates')
     .select('display_order')
@@ -794,6 +796,7 @@ export async function addStudyTaskTemplates(
     member_id: memberId,
     text: it.text,
     reward: it.reward,
+    subject: it.subject,
     selected: true,
     display_order: maxOrder + 1 + i,
   }));
@@ -807,7 +810,7 @@ export async function addStudyTaskTemplates(
 
 export async function updateStudyTaskTemplate(
   id: string,
-  patch: Partial<Pick<StudyTaskTemplate, 'selected' | 'text' | 'reward'>>,
+  patch: Partial<Pick<StudyTaskTemplate, 'selected' | 'text' | 'reward' | 'subject'>>,
 ): Promise<void> {
   const { error } = await supabase.from('study_task_templates').update(patch).eq('id', id);
   if (error) throw error;
