@@ -752,9 +752,10 @@ export async function fetchWrongQuestionStats(
     memberName = m?.name ?? null;
   }
 
-  // 只返回 wrong_count > correct_count 的错题（做对次数超过错误次数后自动下线）
+  // 下线条件：答对次数 = 错误次数 + 1（即 correct_count >= wrong_count + 1）
+  // 显示条件：correct_count <= wrong_count（答对次数 <= 错误次数时保留）
   return ((wrongRecords ?? []) as any[])
-    .filter(w => (w.wrong_count as number) > (w.correct_count as number))
+    .filter(w => (w.wrong_count as number) >= (w.correct_count as number))
     .map(w => {
       const q = qMap.get(w.question_id);
       const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
@@ -818,9 +819,10 @@ export async function fetchLevelWrongQuestionStats(
     attemptMap.set(r.question_id, cur);
   }
 
-  // 只返回 wrong_count > correct_count 的错题（做对次数超过错误次数后自动下线）
+  // 下线条件：答对次数 = 错误次数 + 1（即 correct_count >= wrong_count + 1）
+  // 显示条件：correct_count <= wrong_count（答对次数 <= 错误次数时保留）
   return ((wrongRecords ?? []) as any[])
-    .filter(w => (w.wrong_count as number) > (w.correct_count as number))
+    .filter(w => (w.wrong_count as number) >= (w.correct_count as number))
     .map(w => {
       const q = qMap.get(w.question_id);
       const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
