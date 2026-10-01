@@ -44,8 +44,8 @@ with rec as (
     count(*) filter (where not r.is_correct) as wrong_count,
     count(*) filter (where r.is_correct) as correct_count,
     max(r.answered_at) filter (where not r.is_correct) as last_wrong_at,
-    max(q.challenge_set_id) as challenge_set_id,
-    max(q.level_id) as level_id
+    min(q.challenge_set_id) as challenge_set_id,
+    min(q.level_id) as level_id
   from public.question_records r
   join public.questions q on q.id = r.question_id
   where r.question_id is not null
