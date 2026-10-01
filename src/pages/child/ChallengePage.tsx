@@ -53,6 +53,21 @@ const SUBJECT_COLORS: Record<string, string> = {
 const DEFAULT_SUBJECT_COLOR = 'bg-indigo-50 text-indigo-500';
 const subjectColor = (s: string) => SUBJECT_COLORS[s] ?? DEFAULT_SUBJECT_COLOR;
 
+// 难度标签文案 & 徽章样式
+const DIFFICULTY_LABEL: Record<string, string> = { easy: '简单', medium: '中级', hard: '困难' };
+const DIFFICULTY_BADGE: Record<string, string> = {
+  easy: 'bg-emerald-50 text-emerald-600',
+  medium: 'bg-amber-50 text-amber-600',
+  hard: 'bg-red-50 text-red-600',
+};
+
+// 按学科取难度星光值（独立关卡无题集奖励配置时使用）
+function getSubjectRewards(subject?: string | null) {
+  const s = (subject || '');
+  if (s.includes('英语') || s.toLowerCase().includes('english')) return { easy: 1, medium: 2, hard: 3 };
+  return { easy: 2, medium: 4, hard: 6 };
+}
+
 // 单词发音
 function speakWord(word: string) {
   if ('speechSynthesis' in window) {
@@ -568,7 +583,6 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
           const mastered = set.levels.reduce((s, l) => s + l.mastered, 0);
           const allCleared = set.levels.length > 0 && set.levels.every(l => l.is_cleared);
           const remaining = Math.max(0, total - mastered);
-          const accuracy = total > 0 ? Math.round((mastered / total) * 100) : 0;
           // 状态判断: 3=全新未做(mastered===0), 2=全消除(allCleared), 1=进行中
           const state: 1 | 2 | 3 = allCleared ? 2 : (mastered > 0 ? 1 : 3);
           const leftLabel = state === 2 ? '查看题集' : (state === 1 ? '继续挑战' : '开始挑战');
@@ -615,11 +629,11 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                 {set.description && (
                   <p className="text-[10px] text-slate-400 text-center line-clamp-2 mb-1 px-1">{set.description}</p>
                 )}
-                {/* ③ 难度分布 */}
+                {/* ③ 难度星光值 */}
                 <div className="flex items-center justify-center gap-1.5 text-[9px]">
-                  <span className="text-emerald-500">简 {set.easy_count}</span>
-                  <span className="text-amber-500">中 {set.medium_count}</span>
-                  <span className="text-red-400">难 {set.hard_count}</span>
+                  <span className="text-emerald-500">简单 {set.reward_easy}星</span>
+                  <span className="text-amber-500">中级 {set.reward_medium}星</span>
+                  <span className="text-red-400">困难 {set.reward_hard}星</span>
                 </div>
                 {/* ④ 进度信息 */}
                 {total > 0 && (
@@ -627,7 +641,6 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                     <span className={cn('text-[11px] font-bold', allCleared ? 'text-emerald-600' : 'text-slate-700')}>
                       已做 {mastered}/{total}
                     </span>
-                    {mastered > 0 && <span className="text-[9px] text-emerald-500">正确率 {accuracy}%</span>}
                     {!allCleared && <span className="text-[9px] text-slate-400">剩 {remaining} 题</span>}
                   </div>
                 )}
@@ -657,7 +670,6 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
           const mastered = lv.mastered;
           const allCleared = lv.is_cleared;
           const remaining = Math.max(0, total - mastered);
-          const accuracy = total > 0 ? Math.round((mastered / total) * 100) : 0;
           const state: 1 | 2 | 3 = allCleared ? 2 : (mastered > 0 ? 1 : 3);
           const leftLabel = state === 2 ? '查看题集' : (state === 1 ? '继续挑战' : '开始挑战');
           return (
@@ -689,21 +701,23 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                 {lv.description && (
                   <p className="text-[10px] text-slate-400 text-center line-clamp-2 mb-1 px-1">{lv.description}</p>
                 )}
-                {/* ③ 难度分布 */}
-                {(lv.easy_count !== undefined || lv.medium_count !== undefined || lv.hard_count !== undefined) && (
-                  <div className="flex items-center justify-center gap-1.5 text-[9px]">
-                    <span className="text-emerald-500">简 {lv.easy_count ?? 0}</span>
-                    <span className="text-amber-500">中 {lv.medium_count ?? 0}</span>
-                    <span className="text-red-400">难 {lv.hard_count ?? 0}</span>
-                  </div>
-                )}
+                {/* ③ 难度星光值 */}
+                {(() => {
+                  const r = getSubjectRewards(lv.subject);
+                  return (
+                    <div className="flex items-center justify-center gap-1.5 text-[9px]">
+                      <span className="text-emerald-500">简单 {r.easy}星</span>
+                      <span className="text-amber-500">中级 {r.medium}星</span>
+                      <span className="text-red-400">困难 {r.hard}星</span>
+                    </div>
+                  );
+                })()}
                 {/* ④ 进度信息 */}
                 {total > 0 && (
                   <div className="mt-1 flex flex-col items-center gap-0.5">
                     <span className={cn('text-[11px] font-bold', allCleared ? 'text-emerald-600' : 'text-slate-700')}>
                       已做 {mastered}/{total}
                     </span>
-                    {mastered > 0 && <span className="text-[9px] text-emerald-500">正确率 {accuracy}%</span>}
                     {!allCleared && <span className="text-[9px] text-slate-400">剩 {remaining} 题</span>}
                   </div>
                 )}
@@ -799,6 +813,11 @@ function WrongQuestionsModal({ childId, setId, setTitle, levelId, onClose, onRet
                 </span>
                 <p className="text-sm text-slate-800 pr-6 break-words">{s.question_text || '（无题干）'}</p>
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  {s.difficulty && (
+                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded', DIFFICULTY_BADGE[s.difficulty] ?? 'bg-slate-100 text-slate-600')}>
+                      {DIFFICULTY_LABEL[s.difficulty] ?? s.difficulty}
+                    </span>
+                  )}
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600">错 {s.wrong_count} 次</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">
                     错误率 {Math.round(s.error_rate)}%
@@ -994,6 +1013,11 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.difficulty && (
+              <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
+                {DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty}
+              </span>
+            )}
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
@@ -1232,6 +1256,11 @@ function WrongBattlePlayer({ childId, onBack }: {
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.difficulty && (
+              <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
+                {DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty}
+              </span>
+            )}
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
@@ -1783,6 +1812,11 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.difficulty && (
+              <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
+                {DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty}
+              </span>
+            )}
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
@@ -2180,6 +2214,11 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
         <div className="flex items-center justify-between mb-6">
           <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {q.difficulty && (
+              <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
+                {DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty}
+              </span>
+            )}
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
