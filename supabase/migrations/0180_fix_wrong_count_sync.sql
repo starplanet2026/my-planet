@@ -9,14 +9,17 @@
 --      保证后续新增答题记录计数不再丢失。
 
 -- ========== 1. 重算 question_progress（以 question_records 为真值） ==========
+-- 过滤：question_id 非空、且题目在 questions 表中存在（防止脏数据违反非空/FK 约束）
 with rec as (
   select
-    member_id,
-    question_id,
+    r.member_id,
+    r.question_id,
     count(*) as attempt_count,
-    count(*) filter (where is_correct) as correct_count
-  from public.question_records
-  group by member_id, question_id
+    count(*) filter (where r.is_correct) as correct_count
+  from public.question_records r
+  where r.question_id is not null
+    and exists (select 1 from public.questions q where q.id = r.question_id)
+  group by r.member_id, r.question_id
 )
 insert into public.question_progress (member_id, question_id, attempt_count, correct_count, is_mastered, last_attempt_at)
 select
@@ -45,6 +48,7 @@ with rec as (
     max(q.level_id) as level_id
   from public.question_records r
   join public.questions q on q.id = r.question_id
+  where r.question_id is not null
   group by r.member_id, r.question_id
   having count(*) filter (where not r.is_correct) > 0
 ),
