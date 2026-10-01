@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
+import { useTasks } from '../../hooks/useTasks';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -14,6 +15,8 @@ import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/cons
 import { cn } from '../../lib/utils';
 import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
+import { fetchPendingStudyReviews } from '../../api/pets';
+import { fetchQuestionReports } from '../../api/challenges';
 import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint } from 'lucide-react';
 
 export function ParentDashboardPage() {
@@ -27,7 +30,32 @@ export function ParentDashboardPage() {
   const multiChildMode = useModeStore(s => s.multiChildMode);
   const setMultiChildMode = useModeStore(s => s.setMultiChildMode);
   const { manualAdjustCoins, refresh: refreshRecords } = useCoinRecords();
+  const { tasks } = useTasks();
   const toast = useToastStore();
+
+  // 三个入口角标计数
+  const [pendingTaskCount, setPendingTaskCount] = useState(0);
+  const [pendingStudyCount, setPendingStudyCount] = useState(0);
+  const [pendingReportCount, setPendingReportCount] = useState(0);
+
+  const loadBadgeCounts = () => {
+    // 任务达成：待审核任务数
+    setPendingTaskCount(tasks.filter(t => t.status === 'pending_approval').length);
+    // 学习完成：待审核学习记录
+    if (family?.id) {
+      fetchPendingStudyReviews(family.id).then(r => setPendingStudyCount(r.length)).catch(() => {});
+    }
+    // 题目报错：待处理报错
+    fetchQuestionReports().then(r => setPendingReportCount(r.filter(x => x.status === 'pending').length)).catch(() => {});
+  };
+
+  useEffect(() => { loadBadgeCounts(); }, [family?.id, tasks]);
+  // 从子页面返回时刷新计数
+  useEffect(() => {
+    const onFocus = () => loadBadgeCounts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [family?.id, tasks]);
 
   const childMembers = members.filter(m => m.role === 'child');
   const parentMember = members.find(m => m.role === 'parent');
@@ -174,49 +202,49 @@ export function ParentDashboardPage() {
 
   // 快速验证按钮
   const quickVerifyButtons = [
-    { label: '成就达成', onClick: () => go(ROUTES.PARENT_VERIFICATION) },
-    { label: '陪伴任务', onClick: () => go(ROUTES.PARENT_STUDY_TASKS) },
-    { label: '学习完成', onClick: () => go(ROUTES.PARENT_STUDY_REVIEW) },
+    { label: '成就达成', onClick: () => go(ROUTES.PARENT_VERIFICATION), badge: pendingTaskCount },
+    { label: '陪伴任务', onClick: () => go(ROUTES.PARENT_STUDY_TASKS), badge: 0 },
+    { label: '学习完成', onClick: () => go(ROUTES.PARENT_STUDY_REVIEW), badge: pendingStudyCount },
   ];
 
   // 领取成就按钮
   const achievementButtons = [
-    { label: '成就库', onClick: () => go(ROUTES.PARENT_TASKS) },
-    { label: '勋章库', onClick: () => handlePlaceholder('勋章库') },
-    { label: '成功日记', onClick: () => handlePlaceholder('成功日记') },
+    { label: '成就库', onClick: () => go(ROUTES.PARENT_TASKS), badge: 0 },
+    { label: '勋章库', onClick: () => handlePlaceholder('勋章库'), badge: 0 },
+    { label: '成功日记', onClick: () => handlePlaceholder('成功日记'), badge: 0 },
   ];
 
   // 特权兑换按钮
   const privilegeButtons = [
-    { label: '特权库', onClick: () => go(ROUTES.PARENT_SHOP) },
-    { label: '用户特权卡', onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users') },
-    { label: '转盘权重', onClick: () => go(ROUTES.PARENT_SHOP, 'open=wheel') },
+    { label: '特权库', onClick: () => go(ROUTES.PARENT_SHOP), badge: 0 },
+    { label: '用户特权卡', onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users'), badge: 0 },
+    { label: '转盘权重', onClick: () => go(ROUTES.PARENT_SHOP, 'open=wheel'), badge: 0 },
   ];
 
   // 智慧星战按钮（两行）
   const starBattleButtons = [
-    { label: '家默', onClick: () => go(ROUTES.PARENT_DICTATION) },
-    { label: '背诵', onClick: () => go(ROUTES.PARENT_RECITATION) },
-    { label: '关卡库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=levels') },
-    { label: '题集库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=sets') },
-    { label: '错题库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=wrong_battle') },
-    { label: '题目报错', onClick: () => go(ROUTES.PARENT_QUESTION_REPORTS) },
-    { label: '病句库', onClick: () => handlePlaceholder('病句库') },
-    { label: '连词成句库', onClick: () => handlePlaceholder('连词成句库') },
-    { label: '翻译库', onClick: () => handlePlaceholder('翻译库') },
-    { label: '通用语法', onClick: () => handlePlaceholder('通用语法') },
+    { label: '家默', onClick: () => go(ROUTES.PARENT_DICTATION), badge: 0 },
+    { label: '背诵', onClick: () => go(ROUTES.PARENT_RECITATION), badge: 0 },
+    { label: '关卡库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=levels'), badge: 0 },
+    { label: '题集库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=sets'), badge: 0 },
+    { label: '错题库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=wrong_battle'), badge: 0 },
+    { label: '题目报错', onClick: () => go(ROUTES.PARENT_QUESTION_REPORTS), badge: pendingReportCount },
+    { label: '病句库', onClick: () => handlePlaceholder('病句库'), badge: 0 },
+    { label: '连词成句库', onClick: () => handlePlaceholder('连词成句库'), badge: 0 },
+    { label: '翻译库', onClick: () => handlePlaceholder('翻译库'), badge: 0 },
+    { label: '通用语法', onClick: () => handlePlaceholder('通用语法'), badge: 0 },
   ];
 
   // 萌宠星球按钮（两行）
   const petPlanetButtons = [
-    { label: '萌宠闯关', onClick: () => go(ROUTES.PARENT_WORD_CHALLENGE) },
-    { label: '萌宠商店', onClick: () => go(ROUTES.PARENT_PETS, 'tab=shop') },
-    { label: '用户管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=user') },
-    { label: '背景管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg') },
-    { label: '新宠抽卡', onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha') },
-    { label: '新宠测试', onClick: () => handlePlaceholder('新宠测试') },
-    { label: '新宠奇遇', onClick: () => handlePlaceholder('新宠奇遇') },
-    { label: '宠物店', onClick: () => handlePlaceholder('宠物店') },
+    { label: '萌宠闯关', onClick: () => go(ROUTES.PARENT_WORD_CHALLENGE), badge: 0 },
+    { label: '萌宠商店', onClick: () => go(ROUTES.PARENT_PETS, 'tab=shop'), badge: 0 },
+    { label: '用户管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=user'), badge: 0 },
+    { label: '背景管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg'), badge: 0 },
+    { label: '新宠抽卡', onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha'), badge: 0 },
+    { label: '新宠测试', onClick: () => handlePlaceholder('新宠测试'), badge: 0 },
+    { label: '新宠奇遇', onClick: () => handlePlaceholder('新宠奇遇'), badge: 0 },
+    { label: '宠物店', onClick: () => handlePlaceholder('宠物店'), badge: 0 },
   ];
 
   return (
@@ -336,9 +364,14 @@ export function ParentDashboardPage() {
               <button
                 key={b.label}
                 onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+                className="relative px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
               >
                 {b.label}
+                {b.badge ? (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+                    {b.badge > 99 ? '99+' : b.badge}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -394,9 +427,14 @@ export function ParentDashboardPage() {
             <button
               key={b.label}
               onClick={b.onClick}
-              className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
+              className="relative px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
             >
               {b.label}
+              {b.badge ? (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+                  {b.badge > 99 ? '99+' : b.badge}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
