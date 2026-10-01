@@ -2361,27 +2361,19 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   const members = useFamilyStore(s => s.members);
   const toast = useToastStore();
 
-  // 子模式：list（错题筛选）| pool（上线中错题池）| offline（已下线错题池）
-  const [subView, setSubView] = useState<'list' | 'pool' | 'offline'>('list');
-
-  // 筛选条件
+  // 全局筛选条件（同时作用于上线中错题池、已下线错题池）
   const [memberId, setMemberId] = useState<string>('');
   const [setId, setSetId] = useState<string>('');
   const [levelId, setLevelId] = useState<string>('');
-  const [minWrongCount, setMinWrongCount] = useState<number>(1);
+  const [minWrongCount, setMinWrongCount] = useState<number>(0);
   const [minErrorRate, setMinErrorRate] = useState<number>(0);
-  const [sortBy, setSortBy] = useState<'error_rate' | 'wrong_count'>('wrong_count');
 
-  const [stats, setStats] = useState<WrongQuestionStat[]>([]);
-  const [selectedQids, setSelectedQids] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
   // 当前题集下的关卡列表（关卡筛选用）
   const [setLevels, setSetLevels] = useState<ChallengeLevel[]>([]);
 
   // 池子数据（上线中）
   const [pool, setPool] = useState<WrongBattlePoolItem[]>([]);
   const [poolLoading, setPoolLoading] = useState(false);
-  const [poolMemberId, setPoolMemberId] = useState<string>('');
   const [selectedPoolIds, setSelectedPoolIds] = useState<Set<string>>(new Set());
 
   // 已下线池子数据
@@ -2397,36 +2389,6 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   const [poolActionLoading, setPoolActionLoading] = useState(false);
 
   const childMembers = members.filter(m => m.role === 'child');
-
-  // 加载错题统计
-  const loadStats = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchWrongQuestionStats(
-        memberId || undefined,
-        setId || undefined,
-        levelId || undefined,
-      );
-      // 客户端二次筛选 + 排序（错误次数为0的题不进入混战管理）
-      const filtered = data
-        .filter(s => s.wrong_count > 0)
-        .filter(s => s.wrong_count >= minWrongCount)
-        .filter(s => {
-          if (minErrorRate <= 0) return true;
-          return s.error_rate >= minErrorRate;
-        })
-        .sort((a, b) => {
-          if (sortBy === 'error_rate') return b.error_rate - a.error_rate;
-          return b.wrong_count - a.wrong_count;
-        });
-      setStats(filtered);
-      setSelectedQids(new Set());
-    } catch (e: any) {
-      toast.error(e?.message ?? '加载错题统计失败');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // 加载错题混战池（上线中）
   const loadPool = async (mid: string) => {
@@ -2458,15 +2420,16 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     }
   };
 
+  // 孩子变化时同时加载两个池子
   useEffect(() => {
-    if (subView === 'pool' && poolMemberId) loadPool(poolMemberId);
-    if (subView === 'offline' && poolMemberId) loadOfflinePool(poolMemberId);
-  }, [subView, poolMemberId]);
-
-  // 自动加载错题统计（首次进入 + 孩子或题集/关卡变化时）
-  useEffect(() => {
-    if (subView === 'list') loadStats();
-  }, [subView, memberId, setId, levelId]);
+    if (memberId) {
+      loadPool(memberId);
+      loadOfflinePool(memberId);
+    } else {
+      setPool([]);
+      setOfflinePool([]);
+    }
+  }, [memberId]);
 
   // 题集变化时加载其下关卡（关卡筛选用）
   useEffect(() => {
@@ -2478,13 +2441,26 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   // 默认选中第一个孩子
   useEffect(() => {
     if (!memberId && childMembers.length > 0) setMemberId(childMembers[0].id);
-    if (!poolMemberId && childMembers.length > 0) setPoolMemberId(childMembers[0].id);
   }, [childMembers.length]);
 
   // 加载全局关卡列表，供移动/复制选择目标
   useEffect(() => {
     fetchGlobalLevels().then(setAllLevels).catch(() => {/* ignore */});
   }, []);
+
+  // 客户端筛选：按题集/关卡/错误次数/错误率过滤两个池子
+  const filteredPool = pool.filter(p =>
+    (!setId || p.source_challenge_set_id === setId) &&
+    (!levelId || p.source_level_id === levelId) &&
+    (p.wrong_count ?? 0) >= minWrongCount &&
+    (p.error_rate ?? 0) >= minErrorRate
+  );
+  const filteredOfflinePool = offlinePool.filter(p =>
+    (!setId || p.source_challenge_set_id === setId) &&
+    (!levelId || p.source_level_id === levelId) &&
+    (p.wrong_count ?? 0) >= minWrongCount &&
+    (p.error_rate ?? 0) >= minErrorRate
+  );
 
   // 错题池：移动选中题目到普通关卡（从池中移除 + 改 level_id）
   const handlePoolMoveToLevel = async () => {
@@ -2501,7 +2477,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
       toast.success(`已移动 ${qids.length} 题到关卡"${allLevels.find(l => l.id === poolTargetLevelId)?.title ?? '?'}"`);
       setShowPoolMoveModal(false);
       setPoolTargetLevelId('');
-      if (poolMemberId) loadPool(poolMemberId);
+      if (memberId) loadPool(memberId);
     } catch (e: any) { toast.error(e?.message ?? '移动失败'); }
     finally { setPoolActionLoading(false); }
   };
@@ -2519,33 +2495,6 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
       setPoolTargetLevelId('');
     } catch (e: any) { toast.error(e?.message ?? '复制失败'); }
     finally { setPoolActionLoading(false); }
-  };
-
-  const toggleSelectQid = (qid: string) => {
-    setSelectedQids(prev => {
-      const next = new Set(prev);
-      if (next.has(qid)) next.delete(qid); else next.add(qid);
-      return next;
-    });
-  };
-  const toggleSelectAllQids = () => {
-    if (selectedQids.size === stats.length) setSelectedQids(new Set());
-    else setSelectedQids(new Set(stats.map(s => s.question_id)));
-  };
-
-  // 批量加入错题混战池
-  const handleBatchAddToPool = async () => {
-    if (!memberId) { toast.error('请选择孩子'); return; }
-    if (selectedQids.size === 0) { toast.error('请勾选要导入的题目'); return; }
-    try {
-      const n = await addWrongToBattlePool(memberId, [...selectedQids]);
-      toast.success(`已将 ${n} 题加入错题混战池`);
-      setSelectedQids(new Set());
-      // 如果当前正在查看该用户的池子，刷新
-      if (subView === 'pool' && poolMemberId === memberId) loadPool(poolMemberId);
-    } catch (e: any) {
-      toast.error(e?.message ?? '加入错题混战池失败');
-    }
   };
 
   // 池子勾选
@@ -2566,7 +2515,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     try {
       await removeWrongFromBattlePool([pid]);
       toast.success('已下线');
-      if (poolMemberId) loadPool(poolMemberId);
+      if (memberId) loadPool(memberId);
     } catch (e: any) {
       toast.error(e?.message ?? '下线失败');
     }
@@ -2578,7 +2527,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     try {
       const n = await offlineWrongBattleQuestions([...selectedPoolIds]);
       toast.success(`已下线 ${n} 题`);
-      if (poolMemberId) loadPool(poolMemberId);
+      if (memberId) loadPool(memberId);
     } catch (e: any) {
       toast.error(e?.message ?? '下线失败');
     }
@@ -2590,7 +2539,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     try {
       const n = await deleteWrongBattleQuestions([...selectedPoolIds]);
       toast.success(`已删除 ${n} 题`);
-      if (poolMemberId) loadPool(poolMemberId);
+      if (memberId) loadPool(memberId);
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
     }
@@ -2615,7 +2564,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     try {
       const n = await reonlineWrongBattleQuestions([...selectedOfflineIds]);
       toast.success(`已重新上线 ${n} 题`);
-      if (poolMemberId) loadOfflinePool(poolMemberId);
+      if (memberId) loadOfflinePool(memberId);
     } catch (e: any) {
       toast.error(e?.message ?? '重新上线失败');
     }
@@ -2627,7 +2576,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     try {
       const n = await deleteWrongBattleQuestions([...selectedOfflineIds]);
       toast.success(`已永久删除 ${n} 题`);
-      if (poolMemberId) loadOfflinePool(poolMemberId);
+      if (memberId) loadOfflinePool(memberId);
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
     }
@@ -2635,330 +2584,211 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
 
   return (
     <div className="space-y-4">
-      {/* 子视图切换 */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setSubView('list')}
-          className={cn('px-3 py-1.5 rounded-lg text-sm',
-            subView === 'list' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500')}
-        >
-          <Filter className="w-4 h-4 inline-block mr-1" /> 错题筛选
-        </button>
-        <button
-          onClick={() => setSubView('pool')}
-          className={cn('px-3 py-1.5 rounded-lg text-sm',
-            subView === 'pool' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500')}
-        >
-          <Swords className="w-4 h-4 inline-block mr-1" /> 上线中错题池
-        </button>
-        <button
-          onClick={() => setSubView('offline')}
-          className={cn('px-3 py-1.5 rounded-lg text-sm',
-            subView === 'offline' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500')}
-        >
-          <Layers className="w-4 h-4 inline-block mr-1" /> 已下线错题池
-        </button>
-      </div>
+      {/* 全局筛选栏（同时作用于上线中/已下线错题池） */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-star-500" />
+          <span className="text-sm font-medium text-slate-700">全局筛选</span>
+          <span className="text-xs text-slate-400">（筛选条件同时作用于上线中、已下线错题池）</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">孩子</label>
+            <Select value={memberId} onChange={e => setMemberId(e.target.value)}>
+              <option value="">全部孩子</option>
+              {childMembers.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">题集</label>
+            <Select value={setId} onChange={e => setSetId(e.target.value)}>
+              <option value="">全部题集</option>
+              {sets.map(s => (
+                <option key={s.id} value={s.id}>{s.title}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">关卡</label>
+            <Select value={levelId} onChange={e => setLevelId(e.target.value)} disabled={!setId}>
+              <option value="">{setId ? '全部关卡' : '请先选题集'}</option>
+              {setLevels.map(l => (
+                <option key={l.id} value={l.id}>{l.title || `关卡 ${l.level_no}`}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">最低错误次数</label>
+            <Input type="number" min={0} value={minWrongCount} onChange={e => setMinWrongCount(Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">最低错误率（%）</label>
+            <Input type="number" min={0} max={100} value={minErrorRate} onChange={e => setMinErrorRate(Number(e.target.value))} />
+          </div>
+        </div>
+      </Card>
 
-      {subView === 'list' ? (
-        <>
-          {/* 筛选条件 */}
-          <Card className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">孩子</label>
-                <Select value={memberId} onChange={e => setMemberId(e.target.value)}>
-                  <option value="">全部孩子</option>
-                  {childMembers.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">题集</label>
-                <Select value={setId} onChange={e => setSetId(e.target.value)}>
-                  <option value="">全部题集</option>
-                  {sets.map(s => (
-                    <option key={s.id} value={s.id}>{s.title}</option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">关卡</label>
-                <Select value={levelId} onChange={e => setLevelId(e.target.value)} disabled={!setId}>
-                  <option value="">{setId ? '全部关卡' : '请先选题集'}</option>
-                  {setLevels.map(l => (
-                    <option key={l.id} value={l.id}>{l.title || `关卡 ${l.level_no}`}</option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">最低错误次数</label>
-                <Input type="number" min={0} value={minWrongCount} onChange={e => setMinWrongCount(Number(e.target.value))} />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">最低错误率（%）</label>
-                <Input type="number" min={0} max={100} value={minErrorRate} onChange={e => setMinErrorRate(Number(e.target.value))} />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">排序</label>
-                <Select value={sortBy} onChange={e => setSortBy(e.target.value as 'error_rate' | 'wrong_count')}>
-                  <option value="wrong_count">按错误次数降序</option>
-                  <option value="error_rate">按错误率降序</option>
-                </Select>
-              </div>
-              <Button onClick={loadStats} loading={loading} className="self-end">
-                <Filter className="w-4 h-4" /> 筛选
-              </Button>
-            </div>
-          </Card>
+      {/* 上线中错题池 */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Swords className="w-4 h-4 text-purple-500" />
+          <h3 className="text-sm font-semibold text-slate-700">上线中错题池</h3>
+          {memberId && (
+            <span className="text-xs text-slate-400">（筛选后 {filteredPool.length} 题）</span>
+          )}
+        </div>
 
-          {/* 筛选结果 */}
-          {stats.length > 0 && (
+        {!memberId ? (
+          <EmptyState icon="🎯" title="请选择孩子" description="选择孩子后查看其上线中错题池" />
+        ) : poolLoading ? (
+          <Loading />
+        ) : filteredPool.length === 0 ? (
+          <EmptyState icon="🎉" title="上线中错题池为空" description="无符合筛选条件的上线中错题" />
+        ) : (
+          <>
             <div className="flex items-center justify-between">
-              <button onClick={toggleSelectAllQids} className="text-sm text-slate-600 hover:text-star-600 flex items-center gap-1">
-                {selectedQids.size === stats.length
+              <button onClick={toggleSelectAllPoolIds} className="text-sm text-slate-600 hover:text-star-600 flex items-center gap-1">
+                {selectedPoolIds.size === filteredPool.length
                   ? <CheckSquare className="w-4 h-4 text-star-500" />
                   : <Square className="w-4 h-4" />}
-                {selectedQids.size === stats.length ? '取消全选' : '全选'}（共 {stats.length} 题）
+                {selectedPoolIds.size === filteredPool.length ? '取消全选' : '全选'}
               </button>
-              {selectedQids.size > 0 && (
-                <Button size="sm" onClick={handleBatchAddToPool}>
-                  <Swords className="w-4 h-4" /> 加入错题混战池（{selectedQids.size}）
-                </Button>
+              {selectedPoolIds.size > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" onClick={handleBatchOffline}>
+                    <Layers className="w-4 h-4" /> 手动下线（{selectedPoolIds.size}）
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setPoolTargetLevelId(''); setShowPoolMoveModal(true); }} title="移动到普通关卡">
+                    <ArrowRight className="w-4 h-4" /> 移至关卡（{selectedPoolIds.size}）
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setPoolTargetLevelId(''); setShowPoolCopyModal(true); }} title="复制到普通关卡">
+                    <Copy className="w-4 h-4" /> 复制到关卡（{selectedPoolIds.size}）
+                  </Button>
+                  <Button size="sm" danger onClick={handleBatchDeleteActive}>
+                    <Trash2 className="w-4 h-4" /> 永久删除（{selectedPoolIds.size}）
+                  </Button>
+                </div>
               )}
             </div>
-          )}
-
-          {loading ? (
-            <Loading />
-          ) : stats.length === 0 ? (
-            <EmptyState icon="🎯" title="暂无符合条件的错题" description="调整筛选条件后重试" />
-          ) : (
             <div className="space-y-2">
-              {stats.map(s => {
-                const isSelected = selectedQids.has(s.question_id);
-                const setCfg = sets.find(x => x.id === s.challenge_set_id);
+              {filteredPool.map(p => {
+                const isSelected = selectedPoolIds.has(p.pool_id);
                 return (
-                  <Card key={s.question_id} className={cn('p-3 transition-colors', isSelected && 'border-star-300 bg-star-50')}>
+                  <Card key={p.pool_id} className={cn('p-3 transition-colors', isSelected && 'border-star-300 bg-star-50')}>
                     <div className="flex items-start gap-3">
-                      <button onClick={() => toggleSelectQid(s.question_id)} className="mt-1 flex-shrink-0">
+                      <button onClick={() => toggleSelectPoolId(p.pool_id)} className="mt-1 flex-shrink-0">
                         {isSelected
                           ? <CheckSquare className="w-5 h-5 text-star-500" />
                           : <Square className="w-5 h-5 text-slate-300" />}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 break-words">{s.question_text || '（无题干）'}</p>
+                        <p className="text-sm text-slate-800 break-words">{p.question_text || '（无题干）'}</p>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          {setCfg && <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{setCfg.title}</span>}
-                          {setCfg && (
-                            <span className={cn('text-xs px-1.5 py-0.5 rounded',
-                              setCfg.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
-                              {setCfg.status === 'active' ? '已发布' : '未发布'}
-                            </span>
-                          )}
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[s.type as QuestionType] ?? s.type}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[p.type as QuestionType] ?? p.type}</span>
                           <span className={cn('text-xs px-1.5 py-0.5 rounded',
-                            s.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
-                            s.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
-                            {s.difficulty === 'easy' ? '简单' : s.difficulty === 'hard' ? '困难' : '中等'}
+                            p.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
+                            p.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
+                            {p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}
                           </span>
-                          {s.member_name && <span className="text-xs text-slate-400">{s.member_name}</span>}
+                          <span className="text-xs text-slate-400">加入时间：{new Date(p.added_at).toLocaleString()}</span>
                         </div>
+                        {p.explanation && <p className="text-xs text-slate-400 mt-1">{p.explanation}</p>}
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <div className="text-xs text-red-500">错 {s.wrong_count} 次</div>
-                        <div className="text-xs text-amber-600">错误率 {Math.round(s.error_rate)}%</div>
-                        <div className="text-xs text-slate-400">共答 {s.attempt_count} 次</div>
+                        <div className="text-xs text-red-500">错 {p.wrong_count ?? 0} 次</div>
+                        <div className="text-xs text-amber-600">错误率 {Math.round(p.error_rate ?? 0)}%</div>
+                        <div className="text-xs text-slate-400">共答 {p.attempt_count ?? 0} 次</div>
+                      </div>
+                      <button onClick={() => handleRemoveOne(p.pool_id)} className="text-amber-500 hover:text-amber-600 flex-shrink-0 ml-2" title="下线该题">
+                        <Layers className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 已下线错题池 */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-slate-400" />
+          <h3 className="text-sm font-semibold text-slate-700">已下线错题池</h3>
+          {memberId && (
+            <span className="text-xs text-slate-400">（筛选后 {filteredOfflinePool.length} 题）</span>
+          )}
+        </div>
+
+        {!memberId ? (
+          <EmptyState icon="📦" title="请选择孩子" description="选择孩子后查看其已下线错题池" />
+        ) : offlineLoading ? (
+          <Loading />
+        ) : filteredOfflinePool.length === 0 ? (
+          <EmptyState icon="📭" title="已下线错题池为空" description="无符合筛选条件的已下线错题" />
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <button onClick={toggleSelectAllOfflineIds} className="text-sm text-slate-600 hover:text-star-600 flex items-center gap-1">
+                {selectedOfflineIds.size === filteredOfflinePool.length
+                  ? <CheckSquare className="w-4 h-4 text-star-500" />
+                  : <Square className="w-4 h-4" />}
+                {selectedOfflineIds.size === filteredOfflinePool.length ? '取消全选' : '全选'}
+              </button>
+              {selectedOfflineIds.size > 0 && (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleBatchReonline}>
+                    <Swords className="w-4 h-4" /> 重新上线（{selectedOfflineIds.size}）
+                  </Button>
+                  <Button size="sm" danger onClick={handleBatchDeleteOffline}>
+                    <Trash2 className="w-4 h-4" /> 永久删除（{selectedOfflineIds.size}）
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              {filteredOfflinePool.map(p => {
+                const isSelected = selectedOfflineIds.has(p.pool_id);
+                return (
+                  <Card key={p.pool_id} className={cn('p-3 transition-colors opacity-75', isSelected && 'border-star-300 bg-star-50 opacity-100')}>
+                    <div className="flex items-start gap-3">
+                      <button onClick={() => toggleSelectOfflineId(p.pool_id)} className="mt-1 flex-shrink-0">
+                        {isSelected
+                          ? <CheckSquare className="w-5 h-5 text-star-500" />
+                          : <Square className="w-5 h-5 text-slate-300" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 break-words">{p.question_text || '（无题干）'}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[p.type as QuestionType] ?? p.type}</span>
+                          <span className={cn('text-xs px-1.5 py-0.5 rounded',
+                            p.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
+                            p.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
+                            {p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}
+                          </span>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                            下线原因：{p.offline_reason === 'manual' ? '手动下线' : '自动下线'}
+                          </span>
+                          {p.offlined_at && <span className="text-xs text-slate-400">下线时间：{new Date(p.offlined_at).toLocaleString()}</span>}
+                        </div>
+                        {p.explanation && <p className="text-xs text-slate-400 mt-1">{p.explanation}</p>}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <div className="text-xs text-red-500">错 {p.wrong_count ?? 0} 次</div>
+                        <div className="text-xs text-amber-600">错误率 {Math.round(p.error_rate ?? 0)}%</div>
+                        <div className="text-xs text-slate-400">共答 {p.attempt_count ?? 0} 次</div>
                       </div>
                     </div>
                   </Card>
                 );
               })}
             </div>
-          )}
-        </>
-      ) : subView === 'pool' ? (
-        <>
-          {/* 上线中错题池 */}
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">选择孩子查看上线中错题池</label>
-                <Select value={poolMemberId} onChange={e => setPoolMemberId(e.target.value)}>
-                  <option value="">请选择…</option>
-                  {childMembers.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </Select>
-              </div>
-              {poolMemberId && (
-                <span className="text-xs text-slate-500">池中：{pool.length} 题</span>
-              )}
-            </div>
-          </Card>
-
-          {!poolMemberId ? (
-            <EmptyState icon="🎯" title="请选择孩子" description="选择孩子后查看其上线中错题池" />
-          ) : poolLoading ? (
-            <Loading />
-          ) : pool.length === 0 ? (
-            <EmptyState icon="🎉" title="上线中错题池为空" description="切换到「错题筛选」勾选题目后批量导入" />
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <button onClick={toggleSelectAllPoolIds} className="text-sm text-slate-600 hover:text-star-600 flex items-center gap-1">
-                  {selectedPoolIds.size === pool.length
-                    ? <CheckSquare className="w-4 h-4 text-star-500" />
-                    : <Square className="w-4 h-4" />}
-                  {selectedPoolIds.size === pool.length ? '取消全选' : '全选'}
-                </button>
-                {selectedPoolIds.size > 0 && (
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" onClick={handleBatchOffline}>
-                      <Layers className="w-4 h-4" /> 手动下线（{selectedPoolIds.size}）
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setPoolTargetLevelId(''); setShowPoolMoveModal(true); }} title="移动到普通关卡">
-                      <ArrowRight className="w-4 h-4" /> 移至关卡（{selectedPoolIds.size}）
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setPoolTargetLevelId(''); setShowPoolCopyModal(true); }} title="复制到普通关卡">
-                      <Copy className="w-4 h-4" /> 复制到关卡（{selectedPoolIds.size}）
-                    </Button>
-                    <Button size="sm" danger onClick={handleBatchDeleteActive}>
-                      <Trash2 className="w-4 h-4" /> 永久删除（{selectedPoolIds.size}）
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                {pool.map(p => {
-                  const isSelected = selectedPoolIds.has(p.pool_id);
-                  return (
-                    <Card key={p.pool_id} className={cn('p-3 transition-colors', isSelected && 'border-star-300 bg-star-50')}>
-                      <div className="flex items-start gap-3">
-                        <button onClick={() => toggleSelectPoolId(p.pool_id)} className="mt-1 flex-shrink-0">
-                          {isSelected
-                            ? <CheckSquare className="w-5 h-5 text-star-500" />
-                            : <Square className="w-5 h-5 text-slate-300" />}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-slate-800 break-words">{p.question_text || '（无题干）'}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[p.type as QuestionType] ?? p.type}</span>
-                            <span className={cn('text-xs px-1.5 py-0.5 rounded',
-                              p.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
-                              p.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
-                              {p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}
-                            </span>
-                            <span className="text-xs text-slate-400">加入时间：{new Date(p.added_at).toLocaleString()}</span>
-                          </div>
-                          {p.explanation && <p className="text-xs text-slate-400 mt-1">{p.explanation}</p>}
-                        </div>
-                        <div className="flex-shrink-0 text-right">
-                          <div className="text-xs text-red-500">错 {p.wrong_count ?? 0} 次</div>
-                          <div className="text-xs text-amber-600">错误率 {Math.round(p.error_rate ?? 0)}%</div>
-                          <div className="text-xs text-slate-400">共答 {p.attempt_count ?? 0} 次</div>
-                        </div>
-                        <button onClick={() => handleRemoveOne(p.pool_id)} className="text-amber-500 hover:text-amber-600 flex-shrink-0 ml-2" title="下线该题">
-                          <Layers className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-        <>
-          {/* 已下线错题池 */}
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">选择孩子查看已下线错题池</label>
-                <Select value={poolMemberId} onChange={e => setPoolMemberId(e.target.value)}>
-                  <option value="">请选择…</option>
-                  {childMembers.map(m => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </Select>
-              </div>
-              {poolMemberId && (
-                <span className="text-xs text-slate-500">已下线：{offlinePool.length} 题</span>
-              )}
-            </div>
-          </Card>
-
-          {!poolMemberId ? (
-            <EmptyState icon="📦" title="请选择孩子" description="选择孩子后查看其已下线错题池" />
-          ) : offlineLoading ? (
-            <Loading />
-          ) : offlinePool.length === 0 ? (
-            <EmptyState icon="📭" title="已下线错题池为空" description="答对次数达标或手动下线的题目会出现在这里" />
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <button onClick={toggleSelectAllOfflineIds} className="text-sm text-slate-600 hover:text-star-600 flex items-center gap-1">
-                  {selectedOfflineIds.size === offlinePool.length
-                    ? <CheckSquare className="w-4 h-4 text-star-500" />
-                    : <Square className="w-4 h-4" />}
-                  {selectedOfflineIds.size === offlinePool.length ? '取消全选' : '全选'}
-                </button>
-                {selectedOfflineIds.size > 0 && (
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleBatchReonline}>
-                      <Swords className="w-4 h-4" /> 重新上线（{selectedOfflineIds.size}）
-                    </Button>
-                    <Button size="sm" danger onClick={handleBatchDeleteOffline}>
-                      <Trash2 className="w-4 h-4" /> 永久删除（{selectedOfflineIds.size}）
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                {offlinePool.map(p => {
-                  const isSelected = selectedOfflineIds.has(p.pool_id);
-                  return (
-                    <Card key={p.pool_id} className={cn('p-3 transition-colors opacity-75', isSelected && 'border-star-300 bg-star-50 opacity-100')}>
-                      <div className="flex items-start gap-3">
-                        <button onClick={() => toggleSelectOfflineId(p.pool_id)} className="mt-1 flex-shrink-0">
-                          {isSelected
-                            ? <CheckSquare className="w-5 h-5 text-star-500" />
-                            : <Square className="w-5 h-5 text-slate-300" />}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-slate-800 break-words">{p.question_text || '（无题干）'}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">{QUESTION_TYPE_LABEL[p.type as QuestionType] ?? p.type}</span>
-                            <span className={cn('text-xs px-1.5 py-0.5 rounded',
-                              p.difficulty === 'easy' ? 'bg-emerald-50 text-emerald-600' :
-                              p.difficulty === 'hard' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>
-                              {p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}
-                            </span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
-                              下线原因：{p.offline_reason === 'manual' ? '手动下线' : '自动下线'}
-                            </span>
-                            {p.offlined_at && <span className="text-xs text-slate-400">下线时间：{new Date(p.offlined_at).toLocaleString()}</span>}
-                          </div>
-                          {p.explanation && <p className="text-xs text-slate-400 mt-1">{p.explanation}</p>}
-                        </div>
-                        <div className="flex-shrink-0 text-right">
-                          <div className="text-xs text-red-500">错 {p.wrong_count ?? 0} 次</div>
-                          <div className="text-xs text-amber-600">错误率 {Math.round(p.error_rate ?? 0)}%</div>
-                          <div className="text-xs text-slate-400">共答 {p.attempt_count ?? 0} 次</div>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {showPoolMoveModal && (
         <Modal open onClose={() => setShowPoolMoveModal(false)} title="移动到普通关卡" size="sm">
