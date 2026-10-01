@@ -309,6 +309,7 @@ export function StudyCompanionModal({
       const gain = (result as any)?.happiness_gain ?? minutes2;
       setHappinessGain(gain);
       setSubmittedForReview(true);
+      setRewardClaimed(true);
       if (result?.success) {
         refreshMembers();
         onCompleted();
@@ -321,7 +322,7 @@ export function StudyCompanionModal({
 
   // 倒计时归零后：点击小狗提交家长审核（记录一次学习，不直接发放奖励）
   const handleClaimReward = async () => {
-    if (rewardClaimed || !studyEnded) return;
+    if (rewardClaimed || submittedForReview || !studyEnded) return;
     try {
       const tasksForRecord = taskList.map(t => ({ text: t.text, reward: t.reward, done: t.done }));
       const { data, error } = await supabase.rpc('study_reward', {
