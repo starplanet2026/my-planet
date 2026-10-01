@@ -43,7 +43,7 @@ with rec as (
     r.question_id,
     count(*) filter (where not r.is_correct) as wrong_count,
     count(*) filter (where r.is_correct) as correct_count,
-    max(r.created_at) filter (where not r.is_correct) as last_wrong_at,
+    max(r.answered_at) filter (where not r.is_correct) as last_wrong_at,
     max(q.challenge_set_id) as challenge_set_id,
     max(q.level_id) as level_id
   from public.question_records r
