@@ -85,18 +85,8 @@ export function PetPage() {
     } catch { return new Set(); }
   });
 
-  // 每次登录/刷新：所有宠物默认"回家"（隐藏），不渲染到页面
-  // 用户可在"我的宠物"中手动点击"出来玩"让宠物显示
-  // 注意：依赖 currentChildId 而非 child 对象引用，避免 refreshMembers 导致 child 引用变化而重复隐藏
-  useEffect(() => {
-    if (!currentChildId || pets.length === 0) return;
-    const allHidden = new Set(pets.map(p => p.id));
-    localStorage.setItem(hiddenIdsKey, JSON.stringify([...allHidden]));
-    setHiddenPetIds(allHidden);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentChildId, pets.length]);
-
-  // 切换用户时重新读取对应用户的 hidden 集合
+  // 切换用户时重新读取对应用户的 hidden 集合；不再强制所有宠物回家，
+  // 保留用户上次的"出来玩/回家"选择（localStorage 已持久化）
   useEffect(() => {
     try {
       const saved = localStorage.getItem(hiddenIdsKey);

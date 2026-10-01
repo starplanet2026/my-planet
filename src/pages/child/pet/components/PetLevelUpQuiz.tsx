@@ -7,6 +7,7 @@ import { cn } from '../../../../lib/utils';
 import { fetchWrongBattlePool } from '../../../../api/challenges';
 import { completePetLevelup, recordLevelupQuizAnswer } from '../../../../api/pets';
 import type { Pet } from '../../../../api/types';
+import { NumberKeypad } from '../../challenge/questions/NumberKeypad';
 
 // 通过分数线
 const PASS_THRESHOLD = 0.8;
@@ -80,6 +81,9 @@ export function PetLevelUpQuiz({
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [result, setResult] = useState<{ correct: number; total: number; passed: boolean } | null>(null);
   const [poolEmpty, setPoolEmpty] = useState(false);
+  // 自定义键盘：activeBlank = -1 表示单空题，0/1 表示双空题的第几个空
+  const [showKeypad, setShowKeypad] = useState(false);
+  const [activeBlank, setActiveBlank] = useState(-1);
 
   const shuffle = <T,>(arr: T[]): T[] => {
     const a = [...arr];
@@ -259,6 +263,31 @@ export function PetLevelUpQuiz({
     });
   };
 
+  // 自定义键盘按键处理
+  const handleKey = (key: string) => {
+    if (!current) return;
+    if (revealed[current.id]) return;
+    if (activeBlank === -1) {
+      // 单空题
+      const cur = answers[current.id] ?? '';
+      const next = key === '⌫' ? cur.slice(0, -1) : cur + key;
+      setAnswers(prev => ({ ...prev, [current.id]: next }));
+    } else {
+      // 双空题
+      const cur = answers[current.id] ?? '';
+      const parts = splitBlanks(cur);
+      while (parts.length < activeBlank + 1) parts.push('');
+      parts[activeBlank] = key === '⌫' ? (parts[activeBlank] ?? '').slice(0, -1) : (parts[activeBlank] ?? '') + key;
+      setAnswers(prev => ({ ...prev, [current.id]: parts.join('||') }));
+    }
+  };
+
+  // 切换题目时重置键盘状态
+  useEffect(() => {
+    setShowKeypad(false);
+    setActiveBlank(-1);
+  }, [currentIndex]);
+
   return (
     <Modal open onClose={onClose} title="升级挑战" size="md">
       {loading ? (
@@ -380,26 +409,27 @@ export function PetLevelUpQuiz({
                 const val = parts[blank.idx] ?? '';
                 const results = blankResults(current);
                 const ok = results[blank.idx];
+                const isActive = showKeypad && activeBlank === blank.idx;
                 return (
                   <div key={blank.idx} className="space-y-1">
                     <label className="text-xs font-medium text-slate-500">
                       {blank.label}
                     </label>
-                    <input
-                      type="text"
-                      value={val}
-                      onChange={e => setBlankAnswer(current.id, blank.idx, e.target.value)}
-                      disabled={revealed[current.id]}
-                      placeholder={`请输入${blank.label}`}
+                    <div
+                      onClick={() => { if (!revealed[current.id]) { setActiveBlank(blank.idx); setShowKeypad(true); } }}
                       className={cn(
-                        'w-full px-3 py-2.5 rounded-xl border-2 text-sm outline-none transition-colors',
+                        'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
                         revealed[current.id]
                           ? (ok
                               ? 'border-emerald-400 bg-emerald-50'
                               : 'border-red-400 bg-red-50')
-                          : 'border-slate-200 focus:border-blue-400'
+                          : isActive
+                            ? 'border-blue-400 bg-blue-50'
+                            : 'border-slate-200 hover:border-slate-300'
                       )}
-                    />
+                    >
+                      {val || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入{blank.label}</span>)}
+                    </div>
                     {revealed[current.id] && !ok && (
                       <p className="text-xs text-red-600">
                         ✗ 正确答案：{blank.answer}
@@ -415,29 +445,34 @@ export function PetLevelUpQuiz({
               )}
             </div>
           ) : (
-            // 单空填空题：原有逻辑，仅 1 个输入框
+            // 单空填空题
             <div className="space-y-2">
-              <input
-                type="text"
-                value={answers[current.id] ?? ''}
-                onChange={e => handleAnswer(current.id, e.target.value, false)}
-                disabled={revealed[current.id]}
-                placeholder="请输入答案"
+              <div
+                onClick={() => { if (!revealed[current.id]) { setActiveBlank(-1); setShowKeypad(true); } }}
                 className={cn(
-                  'w-full px-3 py-2.5 rounded-xl border-2 text-sm outline-none transition-colors',
+                  'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
                   revealed[current.id]
                     ? (isCorrect(current)
                         ? 'border-emerald-400 bg-emerald-50'
                         : 'border-red-400 bg-red-50')
-                    : 'border-slate-200 focus:border-blue-400'
+                    : showKeypad
+                      ? 'border-blue-400 bg-blue-50'
+                      : 'border-slate-200 hover:border-slate-300'
                 )}
-              />
+              >
+                {answers[current.id] || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入答案</span>)}
+              </div>
               {revealed[current.id] && (
                 <p className={cn('text-xs', isCorrect(current) ? 'text-emerald-600' : 'text-red-600')}>
                   {isCorrect(current) ? '✓ 回答正确' : `✗ 正确答案：${current.correct_answer}`}
                 </p>
               )}
             </div>
+          )}
+
+          {/* 自定义数字键盘 */}
+          {showKeypad && !revealed[current.id] && (
+            <NumberKeypad onKey={handleKey} onClose={() => setShowKeypad(false)} />
           )}
 
           {/* 解释 */}

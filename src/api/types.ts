@@ -247,6 +247,9 @@ export interface ChallengeLevel {
   published: boolean;
   knowledge_points: string | null;
   knowledge_points_images: string[] | null;
+  reward_easy: number | null;
+  reward_medium: number | null;
+  reward_hard: number | null;
   created_at: string;
   sort_order?: number; // from challenge_set_levels junction
 }
@@ -259,6 +262,9 @@ export interface LevelWithProgress {
   title: string | null;
   description: string | null;
   pass_reward: number;
+  reward_easy?: number | null;
+  reward_medium?: number | null;
+  reward_hard?: number | null;
   status: string;
   subject?: string | null;
   target_section?: string | null;
@@ -734,6 +740,7 @@ export interface GameWordStat {
   word_id: string;
   challenge_count: number;
   wrong_count: number;
+  review_wrong_count: number;
   last_played_at: string | null;
   // join 数据
   word?: PetWord;

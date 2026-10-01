@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '../../../../lib/utils';
-import type { QuestionComponentProps } from '../QuestionRenderer';
+import type { QuestionComponentProps } from './QuestionRenderer';
+
+// 兼容 Question 与 WrongBattlePoolItem：仅依赖题干、正确答案、第二空答案
+type FillBlankQuestionLike = { question_text: string; correct_answer: string; answer2?: string | null };
+
+type FillBlankQuestionProps = Omit<QuestionComponentProps, 'question'> & { question: FillBlankQuestionLike };
 
 // 标准化答案：去首尾空格、全角转半角
 function normalizeAnswer(s: string): string {
@@ -26,7 +31,7 @@ function checkAnswer(userAnswer: string, correctAnswer: string): boolean {
   return equivs.includes(ua);
 }
 
-export function FillBlankQuestion({ question: q, answer, setAnswer, showResult, isCorrect, disabled }: QuestionComponentProps) {
+export function FillBlankQuestion({ question: q, answer, setAnswer, showResult, isCorrect, disabled }: FillBlankQuestionProps) {
   // 从 question_text 中按 ______ 分割
   const parts = q.question_text.split(/______/);
   const blankCount = parts.length - 1;

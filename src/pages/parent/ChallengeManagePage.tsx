@@ -10,7 +10,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square, Swords, Layers, Filter, Copy, Flag } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Edit, Eye, EyeOff, Lightbulb, Save, Upload, Minus, ChevronUp, ChevronDown, CheckSquare, Square, Swords, Layers, Filter, Copy, Flag, Download } from 'lucide-react';
 import {
   fetchChallengeSets, createChallengeSet, deleteChallengeSet, publishChallengeSet, updateChallengeSet,
   createQuestion, deleteQuestion, createQuestionsBatch, updateQuestion, deleteQuestionsBatch, setQuestionsActiveBatch, updateQuestionOrder,
@@ -2520,6 +2520,71 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
     finally { setPoolActionLoading(false); }
   };
 
+  // 导出选中题目为 Excel（列结构与关卡创建上传模板完全一致）
+  const exportQuestionsToExcel = async (
+    items: Array<{
+      question_text: string;
+      options: string[] | null;
+      correct_answer: string;
+      answer2: string | null;
+      explanation: string | null;
+      type: string;
+      difficulty: string;
+      source_challenge_set_id: string | null;
+    }>,
+    filename: string,
+  ) => {
+    if (items.length === 0) { toast.error('请先选择要导出的题目'); return; }
+    try {
+      const mod = await import('xlsx');
+      const XLSX = (mod as any).default ?? mod;
+
+      // 题型映射为导入可识别的中文标签
+      const typeLabel = (t: string) =>
+        t === 'multi_choice' ? '多选' :
+        t === 'fill_blank' ? '填空' :
+        t === 'math' ? '数学' : '单选';
+      const diffLabel = (d: string) =>
+        d === 'easy' ? '简单' : d === 'hard' ? '困难' : '中等';
+
+      // 关卡名称：优先取来源题集标题，否则用"错题导出"
+      const levelNameOf = (setId: string | null) =>
+        sets.find(s => s.id === setId)?.title ?? '错题导出';
+
+      const header = ['关卡名称', '题目', '题型', '难度', '正确答案', '正确答案2', '解析',
+        '选项A', '选项B', '选项C', '选项D', '选项E', '选项F', '选项G', '选项H'];
+      const rows = items.map(it => {
+        const opts = it.options ?? [];
+        const row: any[] = [
+          levelNameOf(it.source_challenge_set_id),
+          it.question_text ?? '',
+          typeLabel(it.type),
+          diffLabel(it.difficulty),
+          it.correct_answer ?? '',
+          it.answer2 ?? '',
+          it.explanation ?? '',
+        ];
+        for (let i = 0; i < 8; i++) row.push(opts[i] ?? '');
+        return row;
+      });
+      const aoa = [header, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // 列宽
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 40 }, { wch: 8 }, { wch: 8 },
+        { wch: 14 }, { wch: 14 }, { wch: 30 },
+        { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+        { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '题目');
+      XLSX.writeFile(wb, filename);
+      toast.success(`已导出 ${items.length} 道题目`);
+    } catch (e: any) {
+      toast.error(e?.message ?? '导出失败');
+    }
+  };
+
   // 池子勾选
   const toggleSelectPoolId = (pid: string) => {
     setSelectedPoolIds(prev => {
@@ -2716,6 +2781,9 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
                   <Button size="sm" variant="ghost" onClick={() => { setPoolTargetLevelId(''); setShowPoolCopyModal(true); }} title="复制到普通关卡">
                     <Copy className="w-4 h-4" /> 复制到关卡（{selectedPoolIds.size}）
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => exportQuestionsToExcel(pool.filter(p => selectedPoolIds.has(p.pool_id)), `错题导出_上线中_${new Date().toISOString().slice(0, 10)}.xlsx`)} title="导出选中题目为Excel">
+                    <Download className="w-4 h-4" /> 导出题目（{selectedPoolIds.size}）
+                  </Button>
                   <Button size="sm" danger onClick={handleBatchDeleteActive}>
                     <Trash2 className="w-4 h-4" /> 永久删除（{selectedPoolIds.size}）
                   </Button>
@@ -2790,6 +2858,9 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleBatchReonline}>
                     <Swords className="w-4 h-4" /> 重新上线（{selectedOfflineIds.size}）
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => exportQuestionsToExcel(offlinePool.filter(p => selectedOfflineIds.has(p.pool_id)), `错题导出_已下线_${new Date().toISOString().slice(0, 10)}.xlsx`)} title="导出选中题目为Excel">
+                    <Download className="w-4 h-4" /> 导出题目（{selectedOfflineIds.size}）
                   </Button>
                   <Button size="sm" danger onClick={handleBatchDeleteOffline}>
                     <Trash2 className="w-4 h-4" /> 永久删除（{selectedOfflineIds.size}）

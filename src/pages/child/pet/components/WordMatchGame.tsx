@@ -19,12 +19,13 @@ interface WordMatchGameProps {
   onReward: () => void;
 }
 
-// 判断词书是否通关：所有单词 challenge_count>0 且 wrong_count===0
+// 判断词书是否通关：所有单词 challenge_count>0 且 review_wrong_count===0
+// （review_wrong_count 是当前待复习错误次数，复习答对后清零；wrong_count 是历史累计，不清零）
 function isBookCleared(words: PetWord[], stats: Record<string, GameWordStat>): boolean {
   if (words.length === 0) return false;
   return words.every(w => {
     const s = stats[w.id];
-    return s && s.challenge_count > 0 && s.wrong_count === 0;
+    return s && s.challenge_count > 0 && (s.review_wrong_count ?? 0) === 0;
   });
 }
 

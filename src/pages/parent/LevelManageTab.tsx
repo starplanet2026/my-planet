@@ -268,6 +268,9 @@ function LevelEditModal({ level, customSubjects, onClose, onSaved }: {
   const [title, setTitle] = useState(level?.title ?? '');
   const [description, setDescription] = useState(level?.description ?? '');
   const [passReward, setPassReward] = useState(level?.pass_reward ?? 3);
+  const [rewardEasy, setRewardEasy] = useState<number | ''>(level?.reward_easy ?? '');
+  const [rewardMedium, setRewardMedium] = useState<number | ''>(level?.reward_medium ?? '');
+  const [rewardHard, setRewardHard] = useState<number | ''>(level?.reward_hard ?? '');
   const [subject, setSubject] = useState<string>(level?.subject ?? '');
   const [targetSection, setTargetSection] = useState<LevelTargetSection | ''>(level?.target_section ?? '');
   const [published, setPublished] = useState(level?.published ?? false);
@@ -312,6 +315,9 @@ function LevelEditModal({ level, customSubjects, onClose, onSaved }: {
         published,
         knowledge_points: kpText.trim() || null,
         knowledge_points_images: kpImages.length > 0 ? kpImages : null,
+        reward_easy: rewardEasy === '' ? null : Number(rewardEasy),
+        reward_medium: rewardMedium === '' ? null : Number(rewardMedium),
+        reward_hard: rewardHard === '' ? null : Number(rewardHard),
       };
       if (isEdit && level) {
         await updateChallengeLevel(level.id, payload);
@@ -362,6 +368,23 @@ function LevelEditModal({ level, customSubjects, onClose, onSaved }: {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">通关奖励星光值</label>
           <Input type="number" min={0} value={passReward} onChange={e => setPassReward(Number(e.target.value))} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">题目难度星光值（留空则使用默认 1/2/3）</label>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <span className="text-xs text-emerald-600 font-medium">简单</span>
+              <Input type="number" min={0} value={rewardEasy} onChange={e => setRewardEasy(e.target.value === '' ? '' : Number(e.target.value))} placeholder="1" />
+            </div>
+            <div>
+              <span className="text-xs text-amber-600 font-medium">中等</span>
+              <Input type="number" min={0} value={rewardMedium} onChange={e => setRewardMedium(e.target.value === '' ? '' : Number(e.target.value))} placeholder="2" />
+            </div>
+            <div>
+              <span className="text-xs text-red-600 font-medium">困难</span>
+              <Input type="number" min={0} value={rewardHard} onChange={e => setRewardHard(e.target.value === '' ? '' : Number(e.target.value))} placeholder="3" />
+            </div>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">发布状态</label>

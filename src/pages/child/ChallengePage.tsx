@@ -14,6 +14,8 @@ import { playClick, playCorrect, playWrong } from '../../lib/audio';
 import { cn } from '../../lib/utils';
 import { Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight, AlertCircle, Layers, Eye, Flag } from 'lucide-react';
 import { QuestionRenderer } from './challenge/questions/QuestionRenderer';
+import { MathQuestion } from './challenge/questions/MathQuestion';
+import { FillBlankQuestion } from './challenge/questions/FillBlankQuestion';
 import {
   fetchChallengeSets, fetchQuestions, fetchWords, fetchWordProgress,
   fetchActiveQuestions, getChallengeAnalysis, awardPerfectChallengeBonus,
@@ -61,11 +63,9 @@ const DIFFICULTY_BADGE: Record<string, string> = {
   hard: 'bg-red-50 text-red-600',
 };
 
-// 按学科取难度星光值（独立关卡无题集奖励配置时使用）
-function getSubjectRewards(subject?: string | null) {
-  const s = (subject || '');
-  if (s.includes('英语') || s.toLowerCase().includes('english')) return { easy: 1, medium: 2, hard: 3 };
-  return { easy: 2, medium: 4, hard: 6 };
+// 默认难度星光值（题集/关卡均未配置时使用，统一 1/2/3）
+function getSubjectRewards(_subject?: string | null) {
+  return { easy: 1, medium: 2, hard: 3 };
 }
 
 // 单词发音
@@ -401,6 +401,7 @@ export function ChallengePage() {
                 onSelectLevel={(lv) => {
                   // 独立关卡：合成 fakeSet 路由到 LevelPlayer
                   setSnapshot(null);
+                  const def = getSubjectRewards(lv.subject);
                   const fakeSet: ChallengeSet = {
                     id: 'standalone:' + lv.id,
                     title: lv.title || `关卡 ${lv.level_no}`,
@@ -408,7 +409,9 @@ export function ChallengePage() {
                     type: 'choice' as ChallengeSetType,
                     board: bcfg.type,
                     subject: (lv.subject as ChallengeSubject) ?? null,
-                    reward_easy: 1, reward_medium: 2, reward_hard: 3,
+                    reward_easy: lv.reward_easy ?? def.easy,
+                    reward_medium: lv.reward_medium ?? def.medium,
+                    reward_hard: lv.reward_hard ?? def.hard,
                     knowledge_points: lv.knowledge_points ?? null,
                     knowledge_points_images: lv.knowledge_points_images ?? null,
                     status: 'active' as any,
@@ -631,9 +634,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                 )}
                 {/* ③ 难度星光值 */}
                 <div className="flex items-center justify-center gap-1.5 text-[9px]">
-                  <span className="text-emerald-500">简单 {set.reward_easy}星</span>
-                  <span className="text-amber-500">中级 {set.reward_medium}星</span>
-                  <span className="text-red-400">困难 {set.reward_hard}星</span>
+                  <span className="text-emerald-500">简单 {set.reward_easy}🌟</span>
+                  <span className="text-amber-500">中级 {set.reward_medium}🌟</span>
+                  <span className="text-red-400">困难 {set.reward_hard}🌟</span>
                 </div>
                 {/* ④ 进度信息 */}
                 {total > 0 && (
@@ -706,9 +709,9 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                   const r = getSubjectRewards(lv.subject);
                   return (
                     <div className="flex items-center justify-center gap-1.5 text-[9px]">
-                      <span className="text-emerald-500">简单 {r.easy}星</span>
-                      <span className="text-amber-500">中级 {r.medium}星</span>
-                      <span className="text-red-400">困难 {r.hard}星</span>
+                      <span className="text-emerald-500">简单 {lv.reward_easy ?? r.easy}🌟</span>
+                      <span className="text-amber-500">中级 {lv.reward_medium ?? r.medium}🌟</span>
+                      <span className="text-red-400">困难 {lv.reward_hard ?? r.hard}🌟</span>
                     </div>
                   );
                 })()}
@@ -1055,8 +1058,26 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
               );
             })}
           </div>
+        ) : q.type === 'math' ? (
+          <MathQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
+        ) : q.type === 'fill_blank' ? (
+          <FillBlankQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
         ) : (
-          <Input type="number" value={answer} onChange={e => setAnswer(e.target.value)}
+          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
             placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
         )}
         {showResult && q.explanation && (
@@ -1298,8 +1319,26 @@ function WrongBattlePlayer({ childId, onBack }: {
               );
             })}
           </div>
+        ) : q.type === 'math' ? (
+          <MathQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
+        ) : q.type === 'fill_blank' ? (
+          <FillBlankQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
         ) : (
-          <Input type="number" value={answer} onChange={e => setAnswer(e.target.value)}
+          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
             placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
         )}
         {showResult && q.explanation && (
@@ -2256,8 +2295,26 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
               );
             })}
           </div>
+        ) : q.type === 'math' ? (
+          <MathQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
+        ) : q.type === 'fill_blank' ? (
+          <FillBlankQuestion
+            question={q}
+            answer={answer}
+            setAnswer={setAnswer}
+            showResult={showResult}
+            isCorrect={isCorrect}
+            disabled={showResult}
+          />
         ) : (
-          <Input type="number" value={answer} onChange={e => setAnswer(e.target.value)}
+          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
             placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
         )}
         {showResult && q.explanation && (

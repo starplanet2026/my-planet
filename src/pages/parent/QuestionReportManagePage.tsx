@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
-import { Input } from '../../components/common/Input';
+import { Input, Textarea, Select } from '../../components/common/Input';
 import { Modal } from '../../components/common/Modal';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { Flag, Trash2, Edit, Check } from 'lucide-react';
+import { ROUTES } from '../../lib/constants';
+import { Flag, Trash2, Edit, Check, ArrowLeft } from 'lucide-react';
 import {
   fetchQuestionReports,
   deleteQuestionReport,
@@ -17,6 +19,7 @@ import {
 import type { Question } from '../../api/types';
 
 export function QuestionReportManagePage() {
+  const navigate = useNavigate();
   const toast = useToastStore();
   const [reports, setReports] = useState<QuestionReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +52,12 @@ export function QuestionReportManagePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => navigate(ROUTES.PARENT_DASHBOARD)}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
         <Flag className="w-5 h-5 text-red-400" />
         <h2 className="text-lg font-bold text-slate-800">题目报错</h2>
         <span className="text-xs text-slate-400">{reports.length} 条</span>
@@ -134,7 +143,10 @@ function EditReportedQuestionModal({
   const [questionText, setQuestionText] = useState('');
   const [options, setOptions] = useState<string[]>([]);
   const [correctAnswer, setCorrectAnswer] = useState('');
+  const [answer2, setAnswer2] = useState('');
   const [explanation, setExplanation] = useState('');
+  const [qType, setQType] = useState<Question['type']>('choice');
+  const [difficulty, setDifficulty] = useState<Question['difficulty']>('medium');
 
   useEffect(() => {
     (async () => {
@@ -152,7 +164,10 @@ function EditReportedQuestionModal({
         setQuestionText(q.question_text);
         setOptions(q.options ?? []);
         setCorrectAnswer(q.correct_answer ?? '');
+        setAnswer2(q.answer2 ?? '');
         setExplanation(q.explanation ?? '');
+        setQType(q.type);
+        setDifficulty(q.difficulty);
       } catch (e: any) {
         toast.error(e?.message ?? '加载题目失败');
       } finally {
@@ -171,9 +186,12 @@ function EditReportedQuestionModal({
     try {
       await updateQuestion(question.id, {
         question_text: questionText.trim(),
-        options: options.length > 0 ? options : null,
+        options: (qType === 'choice' || qType === 'multi_choice') && options.length > 0 ? options : null,
         correct_answer: correctAnswer || null,
+        answer2: qType === 'fill_blank' && answer2 ? answer2 : null,
         explanation: explanation || null,
+        type: qType,
+        difficulty,
       });
       onSaved();
     } catch (e: any) {
@@ -187,8 +205,22 @@ function EditReportedQuestionModal({
     setOptions(prev => prev.map((o, i) => i === idx ? val : o));
   };
 
+  const addOption = () => {
+    if (options.length >= 8) {
+      toast.warning('最多 8 个选项');
+      return;
+    }
+    setOptions(prev => [...prev, '']);
+  };
+
+  const removeOption = (idx: number) => {
+    const letter = String.fromCharCode(65 + idx);
+    setOptions(prev => prev.filter((_, i) => i !== idx));
+    setCorrectAnswer(prev => prev.replace(new RegExp(letter, 'g'), ''));
+  };
+
   const toggleCorrect = (letter: string) => {
-    if (question?.type === 'multi_choice') {
+    if (qType === 'multi_choice') {
       setCorrectAnswer(prev => {
         if (prev.includes(letter)) {
           return prev.replace(new RegExp(letter, 'g'), '');
@@ -201,19 +233,45 @@ function EditReportedQuestionModal({
   };
 
   return (
-    <Modal open onClose={onClose} title="编辑题目（全局生效）" size="md">
+    <Modal open onClose={onClose} title="编辑题目（全局生效）" size="lg">
       {loading ? (
         <div className="py-8 text-center text-sm text-slate-400">加载中...</div>
       ) : question ? (
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-slate-500 font-medium">题干</label>
-            <Input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="题目内容" />
+        <div className="space-y-4">
+          {/* 题型 + 难度 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 font-medium">题型</label>
+              <Select value={qType} onChange={e => setQType(e.target.value as Question['type'])}>
+                <option value="choice">单选题</option>
+                <option value="multi_choice">多选题</option>
+                <option value="fill_blank">填空题</option>
+                <option value="math">数学计算</option>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium">难度</label>
+              <Select value={difficulty} onChange={e => setDifficulty(e.target.value as Question['difficulty'])}>
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+              </Select>
+            </div>
           </div>
 
-          {question.type !== 'math' && (
+          {/* 题干 */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium">题干</label>
+            <Textarea value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="题目内容（支持多行）" rows={3} />
+          </div>
+
+          {/* 选项：仅选择类题型 */}
+          {(qType === 'choice' || qType === 'multi_choice') && (
             <div>
-              <label className="text-xs text-slate-500 font-medium">选项（点击字母标记正确答案）</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-slate-500 font-medium">选项（点击字母标记正确答案）</label>
+                <button onClick={addOption} className="text-xs text-star-500 hover:text-star-600">+ 添加选项</button>
+              </div>
               <div className="space-y-2">
                 {options.map((opt, i) => {
                   const letter = String.fromCharCode(65 + i);
@@ -233,26 +291,93 @@ function EditReportedQuestionModal({
                         placeholder={`选项 ${letter}`}
                         className="flex-1"
                       />
+                      <button onClick={() => removeOption(i)} className="text-slate-300 hover:text-red-500 p-1" title="删除选项">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })}
+                {options.length === 0 && (
+                  <p className="text-xs text-slate-400">暂无选项，点击「添加选项」</p>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                {question.type === 'multi_choice' ? '多选题：点击多个字母标记正确答案' : '单选题：点击字母标记正确答案'}
+                {qType === 'multi_choice' ? '多选题：可点击多个字母标记正确答案' : '单选题：点击字母标记唯一正确答案'}
               </p>
             </div>
           )}
 
-          {question.type === 'math' && (
-            <div>
-              <label className="text-xs text-slate-500 font-medium">正确答案</label>
-              <Input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="如：42" />
+          {/* 正确答案：填空题 / 数学题直接填写 */}
+          {(qType === 'fill_blank' || qType === 'math') && (
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-slate-500 font-medium">
+                  正确答案{qType === 'fill_blank' ? '（第一空）' : ''}
+                </label>
+                <Input
+                  value={correctAnswer}
+                  onChange={e => setCorrectAnswer(e.target.value)}
+                  placeholder={qType === 'math' ? '如：42' : '如：天空'}
+                />
+              </div>
+              {qType === 'fill_blank' && (
+                <div>
+                  <label className="text-xs text-slate-500 font-medium">正确答案2（第二空，选填）</label>
+                  <Input
+                    value={answer2}
+                    onChange={e => setAnswer2(e.target.value)}
+                    placeholder="双空填空题的第二空答案，单空题留空"
+                  />
+                </div>
+              )}
             </div>
           )}
 
+          {/* 解析 */}
           <div>
             <label className="text-xs text-slate-500 font-medium">解析（选填）</label>
-            <Input value={explanation} onChange={e => setExplanation(e.target.value)} placeholder="解题思路" />
+            <Textarea value={explanation} onChange={e => setExplanation(e.target.value)} placeholder="解题思路或答案解释" rows={2} />
+          </div>
+
+          {/* 题目预览卡片 */}
+          <div>
+            <label className="text-xs text-slate-500 font-medium">题目预览</label>
+            <Card className="p-3 bg-slate-50">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn('text-xs px-1.5 py-0.5 rounded',
+                  difficulty === 'easy' ? 'bg-emerald-100 text-emerald-600' :
+                  difficulty === 'hard' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600')}>
+                  {difficulty === 'easy' ? '简单' : difficulty === 'hard' ? '困难' : '中等'}
+                </span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">
+                  {qType === 'multi_choice' ? '多选题' : qType === 'fill_blank' ? '填空题' : qType === 'math' ? '数学计算' : '单选题'}
+                </span>
+              </div>
+              <p className="text-sm text-slate-800 break-words mb-2">{questionText || '（题干）'}</p>
+              {(qType === 'choice' || qType === 'multi_choice') && options.length > 0 && (
+                <div className="space-y-1">
+                  {options.map((opt, i) => {
+                    const letter = String.fromCharCode(65 + i);
+                    const isCorrect = correctAnswer.includes(letter);
+                    return (
+                      <div key={i} className={cn('flex items-center gap-2 text-sm', isCorrect ? 'text-emerald-600 font-medium' : 'text-slate-600')}>
+                        <span className="w-5 text-center">{letter}.</span>
+                        <span className="flex-1 break-words">{opt || `（选项${letter}）`}</span>
+                        {isCorrect && <span className="text-xs">✓ 正确答案</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {(qType === 'fill_blank' || qType === 'math') && correctAnswer && (
+                <p className="text-sm text-emerald-600">
+                  正确答案：{correctAnswer}{answer2 ? ` / ${answer2}` : ''}
+                </p>
+              )}
+              {explanation && (
+                <p className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200">解析：{explanation}</p>
+              )}
+            </Card>
           </div>
 
           {report.reason && (

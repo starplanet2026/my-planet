@@ -631,8 +631,9 @@ export async function deleteWrongBattleQuestions(poolIds: string[]): Promise<num
   return data as number;
 }
 
-// 获取错题统计（后台筛选用，支持按关卡筛选）
-// 直接从 wrong_questions 表查询，不依赖 RPC（避免 question_progress 无记录时漏数据）
+// 获取错题统计（查看错题弹窗用，支持按题集/关卡筛选）
+// 统一从 question_progress 读取计数（与错题混战池 RPC 同一数据源），
+// wrong = attempt_count - correct_count，保证 答对+答错=总作答 恒成立。
 export async function fetchWrongQuestionStats(
   memberId?: string,
   challengeSetId?: string,
@@ -801,6 +802,9 @@ export async function createChallengeLevel(data: {
   published?: boolean;
   knowledge_points?: string | null;
   knowledge_points_images?: string[] | null;
+  reward_easy?: number | null;
+  reward_medium?: number | null;
+  reward_hard?: number | null;
 }): Promise<ChallengeLevel> {
   const { challenge_set_id, knowledge_points, knowledge_points_images, ...levelData } = data;
   const payload: Record<string, any> = { ...levelData };

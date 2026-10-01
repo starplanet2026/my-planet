@@ -109,12 +109,12 @@ export function DictationPlayPage() {
                   grading && isCorrect && 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-300'
                 )}
               >
-                <div className="text-[10px] text-slate-400">{i + 1}</div>
-                <div className="font-bold text-slate-800 leading-tight text-sm break-all whitespace-normal">
+                <div className="text-[15px] text-slate-400">{i + 1}</div>
+                <div className="font-bold text-slate-800 leading-tight text-[21px] break-all whitespace-normal">
                   {prompt}
                 </div>
                 {grading && (
-                  <div className="text-emerald-500 font-extrabold leading-tight mt-1 text-xs break-all whitespace-normal">
+                  <div className="text-emerald-500 font-extrabold leading-tight mt-1 text-[18px] break-all whitespace-normal">
                     {w.answer}
                   </div>
                 )}
