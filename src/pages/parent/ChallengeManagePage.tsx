@@ -590,6 +590,9 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
   const toast = useToastStore();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
   const [showAddQuestion, setShowAddQuestion] = useState(false);
   const [showBatchImport, setShowBatchImport] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
@@ -605,11 +608,13 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
     fetchGlobalLevels().then(setAllLevels).catch(() => {/* ignore */});
   }, []);
 
-  const load = async () => {
+  const load = async (p: number = page) => {
     setLoading(true);
     try {
-      const data = await fetchLevelQuestionsAll(level.id);
-      setQuestions(data);
+      const { questions: list, total: t } = await fetchLevelQuestionsAll(level.id, p, pageSize);
+      setQuestions(list);
+      setTotal(t);
+      setPage(p);
       setSelectedIds(new Set());
     } catch (e: any) {
       toast.error(e?.message ?? '加载失败');
@@ -618,7 +623,7 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
     }
   };
 
-  useEffect(() => { load(); }, [level.id]);
+  useEffect(() => { setPage(1); load(1); }, [level.id]);
 
   const handleDeleteQuestion = async (id: string) => {
     try { await deleteQuestion(id); toast.success('已删除'); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
@@ -852,6 +857,21 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
         </div>
       )}
 
+      {/* 分页器 */}
+      {total > pageSize && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => load(page - 1)}>
+            <ChevronUp className="w-4 h-4 rotate-[-90deg]" /> 上一页
+          </Button>
+          <span className="text-sm text-slate-500">
+            第 {page} / {Math.ceil(total / pageSize)} 页（共 {total} 题）
+          </span>
+          <Button variant="ghost" size="sm" disabled={page >= Math.ceil(total / pageSize)} onClick={() => load(page + 1)}>
+            下一页 <ChevronUp className="w-4 h-4 rotate-90" />
+          </Button>
+        </div>
+      )}
+
       {showAddQuestion && (
         <AddQuestionModal
           levelId={level.id}
@@ -863,7 +883,7 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
       {showBatchImport && (
         <BatchImportQuestionsModal
           levelId={level.id}
-          existingCount={questions.length}
+          existingCount={total}
           levels={[]}
           onClose={() => setShowBatchImport(false)}
           onImported={load}

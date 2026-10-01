@@ -419,74 +419,13 @@ export async function fetchChallengeProgress(
 
 // ====== 二次开发新增：板块/关卡/快照/错题混战 ======
 
-// 一次性拉取4板块题集+关卡+解锁状态
+// 一次性拉取4板块题集+关卡+解锁状态（含难度计数，RPC 服务端聚合，避免全量拉题目）
 export async function fetchChallengeBoards(memberId: string): Promise<ChallengeBoard[]> {
   const { data, error } = await supabase.rpc('get_challenge_boards', {
     p_member_id: memberId,
   });
   if (error) throw error;
-  const boards = (data ?? []) as ChallengeBoard[];
-
-  // 拉取各关卡的难度分布（避免依赖 RPC 迁移）
-  const setLevelIds = boards.flatMap(b => b.sets.flatMap(s => s.levels.map(l => l.id)));
-  const standaloneLevelIds = boards.flatMap(b => (b.levels ?? []).map(l => l.id));
-  const allLevelIds = [...setLevelIds, ...standaloneLevelIds];
-  if (allLevelIds.length > 0) {
-    const { data: qData } = await supabase
-      .from('questions')
-      .select('difficulty, level_id')
-      .in('level_id', allLevelIds)
-      .eq('is_active', true);
-    if (qData) {
-      // level_id -> set_id 映射
-      const levelToSet = new Map<string, string>();
-      for (const b of boards) {
-        for (const s of b.sets) {
-          for (const l of s.levels) levelToSet.set(l.id, s.id);
-        }
-      }
-      // 按题集统计各难度数量
-      const counts = new Map<string, { easy: number; medium: number; hard: number }>();
-      for (const q of qData as { difficulty: string; level_id: string }[]) {
-        const setId = levelToSet.get(q.level_id);
-        if (!setId) continue;
-        const c = counts.get(setId) ?? { easy: 0, medium: 0, hard: 0 };
-        if (q.difficulty === 'easy') c.easy++;
-        else if (q.difficulty === 'medium') c.medium++;
-        else if (q.difficulty === 'hard') c.hard++;
-        counts.set(setId, c);
-      }
-      // 写回 boards - sets
-      for (const b of boards) {
-        for (const s of b.sets) {
-          const c = counts.get(s.id);
-          s.easy_count = c?.easy ?? 0;
-          s.medium_count = c?.medium ?? 0;
-          s.hard_count = c?.hard ?? 0;
-        }
-      }
-
-      // 写回 boards - standalone levels
-      const levelCounts = new Map<string, { easy: number; medium: number; hard: number }>();
-      for (const q of qData as { difficulty: string; level_id: string }[]) {
-        const c = levelCounts.get(q.level_id) ?? { easy: 0, medium: 0, hard: 0 };
-        if (q.difficulty === 'easy') c.easy++;
-        else if (q.difficulty === 'medium') c.medium++;
-        else if (q.difficulty === 'hard') c.hard++;
-        levelCounts.set(q.level_id, c);
-      }
-      for (const b of boards) {
-        for (const lv of b.levels ?? []) {
-          const c = levelCounts.get(lv.id);
-          lv.easy_count = c?.easy ?? 0;
-          lv.medium_count = c?.medium ?? 0;
-          lv.hard_count = c?.hard ?? 0;
-        }
-      }
-    }
-  }
-
-  return boards;
+  return (data ?? []) as ChallengeBoard[];
 }
 
 // 按关卡 ID 拉取题目（按 display_order 排序，仅活跃题，孩子端用）
@@ -536,16 +475,26 @@ export async function fetchLevelQuestions(levelId: string): Promise<Question[]> 
     (a.display_order ?? 999) - (b.display_order ?? 999));
 }
 
-// 按关卡 ID 拉取全部题目（含下线题，后台管理用）
-export async function fetchLevelQuestionsAll(levelId: string): Promise<Question[]> {
-  const { data, error } = await supabase
+// 按关卡 ID 拉取全部题目（含下线题，后台管理用）—— 支持分页
+export async function fetchLevelQuestionsAll(
+  levelId: string,
+  page: number = 1,
+  pageSize: number = 50,
+): Promise<{ questions: Question[]; total: number }> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
     .from('questions')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('level_id', levelId)
-    .order('created_at');
+    .order('display_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .range(from, to);
   if (error) throw error;
-  return ((data ?? []) as Question[]).sort((a, b) =>
-    (a.display_order ?? 999) - (b.display_order ?? 999));
+  return {
+    questions: ((data ?? []) as Question[]),
+    total: count ?? 0,
+  };
 }
 
 // 保存关卡进度快照（断点续做）
