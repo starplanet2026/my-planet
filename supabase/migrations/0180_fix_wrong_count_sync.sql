@@ -115,6 +115,7 @@ returns table(is_correct boolean, reward integer, is_mastered boolean, bonus_rew
 language plpgsql security definer as $$
 declare
   v_q public.questions%rowtype;
+  v_set public.challenge_sets%rowtype;
   v_family_id uuid;
   v_star int;
   v_reward int := 0;
@@ -137,6 +138,9 @@ declare
 begin
   select * into v_q from public.questions where id = p_question_id;
   if not found then raise exception '题目不存在'; end if;
+
+  -- 读取题集奖励配置（challenge_set_id 可能为 null，如错题混战/独立关卡）
+  select * into v_set from public.challenge_sets where id = v_q.challenge_set_id;
 
   select family_id into v_family_id from public.members where id = p_member_id;
 
@@ -188,10 +192,12 @@ begin
 
   -- 更新 question_progress（单一真值来源）
   if v_correct then
+    -- 按题目难度读取题集配置的奖励值；题集无配置或为空时回退默认 2/4/6
     v_reward := case v_q.difficulty
-      when 'easy' then 1
-      when 'hard' then 3
-      else 2
+      when 'easy' then coalesce(v_set.reward_easy, 2)
+      when 'hard' then coalesce(v_set.reward_hard, 6)
+      when 'medium' then coalesce(v_set.reward_medium, 4)
+      else coalesce(v_set.reward_medium, 4)
     end;
     select star_value into v_star from public.members where id = p_member_id for update;
     v_star := v_star + v_reward;
