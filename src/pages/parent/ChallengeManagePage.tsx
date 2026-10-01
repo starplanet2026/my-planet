@@ -2368,6 +2368,9 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
   const [minWrongCount, setMinWrongCount] = useState<number>(0);
   const [minErrorRate, setMinErrorRate] = useState<number>(0);
 
+  // 池子视图切换（横置排列，点击查看对应题目）
+  const [subView, setSubView] = useState<'pool' | 'offline'>('pool');
+
   // 当前题集下的关卡列表（关卡筛选用）
   const [setLevels, setSetLevels] = useState<ChallengeLevel[]>([]);
 
@@ -2630,15 +2633,42 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
         </div>
       </Card>
 
-      {/* 上线中错题池 */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Swords className="w-4 h-4 text-purple-500" />
-          <h3 className="text-sm font-semibold text-slate-700">上线中错题池</h3>
-          {memberId && (
-            <span className="text-xs text-slate-400">（筛选后 {filteredPool.length} 题）</span>
+      {/* 池子视图切换（横置排列） */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSubView('pool')}
+          className={cn('px-4 py-2 rounded-lg text-sm flex items-center gap-1.5',
+            subView === 'pool' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}
+        >
+          <Swords className="w-4 h-4" /> 上线中错题池
+          {memberId && filteredPool.length > 0 && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full', subView === 'pool' ? 'bg-star-200 text-star-700' : 'bg-slate-200 text-slate-500')}>
+              {filteredPool.length}
+            </span>
           )}
-        </div>
+        </button>
+        <button
+          onClick={() => setSubView('offline')}
+          className={cn('px-4 py-2 rounded-lg text-sm flex items-center gap-1.5',
+            subView === 'offline' ? 'bg-star-100 text-star-600 font-medium' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}
+        >
+          <Layers className="w-4 h-4" /> 已下线错题池
+          {memberId && filteredOfflinePool.length > 0 && (
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full', subView === 'offline' ? 'bg-star-200 text-star-700' : 'bg-slate-200 text-slate-500')}>
+              {filteredOfflinePool.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {subView === 'pool' ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-700">上线中错题池</h3>
+            {memberId && (
+              <span className="text-xs text-slate-400">（筛选后 {filteredPool.length} 题）</span>
+            )}
+          </div>
 
         {!memberId ? (
           <EmptyState icon="🎯" title="请选择孩子" description="选择孩子后查看其上线中错题池" />
@@ -2712,11 +2742,9 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
           </>
         )}
       </div>
-
-      {/* 已下线错题池 */}
+      ) : (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-700">已下线错题池</h3>
           {memberId && (
             <span className="text-xs text-slate-400">（筛选后 {filteredOfflinePool.length} 题）</span>
@@ -2789,6 +2817,7 @@ function WrongBattleManageTab({ sets }: { sets: ChallengeSet[] }) {
           </>
         )}
       </div>
+      )}
 
       {showPoolMoveModal && (
         <Modal open onClose={() => setShowPoolMoveModal(false)} title="移动到普通关卡" size="sm">
