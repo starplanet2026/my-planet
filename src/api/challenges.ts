@@ -719,30 +719,18 @@ export async function fetchWrongQuestionStats(
   const qIds = questions.map(q => q.id);
   const qMap = new Map(questions.map(q => [q.id, q]));
 
-  // 2. 查询 wrong_questions（直接读 wrong_count，不依赖 question_progress）
-  // 不限制 status，只看 wrong_count > 0 的记录，前端按 wrong_count > correct_count 过滤
-  let wQuery = supabase
-    .from('wrong_questions')
-    .select('question_id, wrong_count, correct_count, status')
-    .in('question_id', qIds)
-    .gt('wrong_count', 0);
-  if (memberId) wQuery = wQuery.eq('member_id', memberId);
-  const { data: wrongRecords, error: wErr } = await wQuery;
-  if (wErr) throw wErr;
-
-  // 3. 查询答题记录统计
-  const { data: records, error: rErr } = await supabase
-    .from('question_records')
-    .select('question_id, is_correct')
+  // 2. 查询 question_progress（与错题混战池 RPC 同一数据源，保证 答对+答错=总作答）
+  let pQuery = supabase
+    .from('question_progress')
+    .select('question_id, attempt_count, correct_count')
     .in('question_id', qIds);
-  if (rErr) throw rErr;
+  if (memberId) pQuery = pQuery.eq('member_id', memberId);
+  const { data: progressRows, error: pErr } = await pQuery;
+  if (pErr) throw pErr;
 
-  const attemptMap = new Map<string, { attempt: number; correct: number }>();
-  for (const r of (records ?? []) as { question_id: string; is_correct: boolean }[]) {
-    const cur = attemptMap.get(r.question_id) ?? { attempt: 0, correct: 0 };
-    cur.attempt++;
-    if (r.is_correct) cur.correct++;
-    attemptMap.set(r.question_id, cur);
+  const progMap = new Map<string, { attempt: number; correct: number }>();
+  for (const p of (progressRows ?? []) as { question_id: string; attempt_count: number; correct_count: number }[]) {
+    progMap.set(p.question_id, { attempt: p.attempt_count, correct: p.correct_count });
   }
 
   // 查询成员名
@@ -754,29 +742,31 @@ export async function fetchWrongQuestionStats(
 
   // 下线条件：答对次数 = 错误次数 + 1（即 correct_count >= wrong_count + 1）
   // 显示条件：correct_count <= wrong_count（答对次数 <= 错误次数时保留）
-  return ((wrongRecords ?? []) as any[])
-    .filter(w => (w.wrong_count as number) >= (w.correct_count as number))
-    .map(w => {
-      const q = qMap.get(w.question_id);
-      const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
-      const total = stats.attempt;
+  return Array.from(progMap.entries())
+    .map(([qid, s]) => {
+      const wrong = s.attempt - s.correct;
+      if (wrong <= 0) return null;
+      const mastered = s.correct >= wrong + 1;
+      if (mastered) return null;
+      const q = qMap.get(qid);
       return {
-        question_id: w.question_id,
+        question_id: qid,
         challenge_set_id: q?.challenge_set_id ?? null,
         question_text: q?.question_text ?? '',
         type: q?.type ?? 'choice',
         difficulty: q?.difficulty ?? 'medium',
         display_order: 0,
-        attempt_count: total,
-        correct_count: w.correct_count as number,
-        wrong_count: w.wrong_count as number,
-        error_rate: total > 0 ? ((w.wrong_count as number) / total) * 100 : 0,
-        is_mastered: w.status === 'mastered',
+        attempt_count: s.attempt,
+        correct_count: s.correct,
+        wrong_count: wrong,
+        error_rate: s.attempt > 0 ? (wrong / s.attempt) * 100 : 0,
+        is_mastered: mastered,
         member_id: memberId ?? null,
         member_name: memberName,
         level_id: q?.level_id ?? null,
       } as unknown as WrongQuestionStat;
-    });
+    })
+    .filter((x): x is WrongQuestionStat => x !== null);
 }
 
 // 获取指定关卡的错题统计（用于"查看错题"和"挑战错题"）
@@ -795,54 +785,45 @@ export async function fetchLevelWrongQuestionStats(
   const qIds = questions.map(q => q.id);
   const qMap = new Map(questions.map(q => [q.id, q]));
 
-  // 2. 查询该成员对这些题目的错题记录（含已掌握，前端判断显示）
-  const { data: wrongRecords, error: wErr } = await supabase
-    .from('wrong_questions')
-    .select('question_id, wrong_count, correct_count, status')
+  // 2. 查询 question_progress（与错题混战池 RPC 同一数据源，保证 答对+答错=总作答）
+  const { data: progressRows, error: pErr } = await supabase
+    .from('question_progress')
+    .select('question_id, attempt_count, correct_count')
     .eq('member_id', memberId)
     .in('question_id', qIds);
-  if (wErr) throw wErr;
+  if (pErr) throw pErr;
 
-  // 3. 查询答题记录统计
-  const { data: records, error: rErr } = await supabase
-    .from('question_records')
-    .select('question_id, is_correct')
-    .eq('member_id', memberId)
-    .in('question_id', qIds);
-  if (rErr) throw rErr;
-
-  const attemptMap = new Map<string, { attempt: number; correct: number }>();
-  for (const r of (records ?? []) as { question_id: string; is_correct: boolean }[]) {
-    const cur = attemptMap.get(r.question_id) ?? { attempt: 0, correct: 0 };
-    cur.attempt++;
-    if (r.is_correct) cur.correct++;
-    attemptMap.set(r.question_id, cur);
+  const progMap = new Map<string, { attempt: number; correct: number }>();
+  for (const p of (progressRows ?? []) as { question_id: string; attempt_count: number; correct_count: number }[]) {
+    progMap.set(p.question_id, { attempt: p.attempt_count, correct: p.correct_count });
   }
 
   // 下线条件：答对次数 = 错误次数 + 1（即 correct_count >= wrong_count + 1）
   // 显示条件：correct_count <= wrong_count（答对次数 <= 错误次数时保留）
-  return ((wrongRecords ?? []) as any[])
-    .filter(w => (w.wrong_count as number) >= (w.correct_count as number))
-    .map(w => {
-      const q = qMap.get(w.question_id);
-      const stats = attemptMap.get(w.question_id) ?? { attempt: 0, correct: 0 };
-      const total = stats.attempt;
+  return Array.from(progMap.entries())
+    .map(([qid, s]) => {
+      const wrong = s.attempt - s.correct;
+      if (wrong <= 0) return null;
+      const mastered = s.correct >= wrong + 1;
+      if (mastered) return null;
+      const q = qMap.get(qid);
       return {
-        question_id: w.question_id,
+        question_id: qid,
         challenge_set_id: null,
         question_text: q?.question_text ?? '',
         type: q?.type ?? 'choice',
         difficulty: q?.difficulty ?? 'medium',
         display_order: 0,
-        attempt_count: total,
-        correct_count: w.correct_count as number,
-        wrong_count: w.wrong_count as number,
-        error_rate: total > 0 ? ((w.wrong_count as number) / total) * 100 : 0,
-        is_mastered: w.status === 'mastered',
+        attempt_count: s.attempt,
+        correct_count: s.correct,
+        wrong_count: wrong,
+        error_rate: s.attempt > 0 ? (wrong / s.attempt) * 100 : 0,
+        is_mastered: mastered,
         member_id: memberId,
         member_name: null,
       } as unknown as WrongQuestionStat;
-    });
+    })
+    .filter((x): x is WrongQuestionStat => x !== null);
 }
 
 // ====== 关卡 CRUD（后台管理） ======
