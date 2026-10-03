@@ -626,7 +626,12 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
   useEffect(() => { setPage(1); load(1); }, [level.id]);
 
   const handleDeleteQuestion = async (id: string) => {
-    try { await deleteQuestion(id); toast.success('已删除'); load(); } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
+    try {
+      await deleteQuestion(id);
+      toast.success('已删除');
+      setQuestions(prev => prev.filter(q => q.id !== id));
+      setTotal(prev => Math.max(0, prev - 1));
+    } catch (e: any) { toast.error(e?.message ?? '删除失败'); }
   };
 
   const toggleQuestionActive = async (q: Question) => {
@@ -634,7 +639,7 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
     try {
       await updateQuestion(q.id, { is_active: newActive });
       toast.success(newActive ? '已上线' : '已下线');
-      load();
+      setQuestions(prev => prev.map(item => item.id === q.id ? { ...item, is_active: newActive } : item));
     } catch (e: any) { toast.error(e?.message ?? '切换失败'); }
   };
 
@@ -643,7 +648,9 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
     try {
       await deleteQuestionsBatch([...selectedIds]);
       toast.success(`已删除 ${selectedIds.size} 题`);
-      load();
+      setQuestions(prev => prev.filter(q => !selectedIds.has(q.id)));
+      setTotal(prev => Math.max(0, prev - selectedIds.size));
+      setSelectedIds(new Set());
     } catch (e: any) { toast.error(e?.message ?? '批量删除失败'); }
   };
 
@@ -652,7 +659,8 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
     try {
       await setQuestionsActiveBatch([...selectedIds], isActive);
       toast.success(`已${isActive ? '上线' : '下线'} ${selectedIds.size} 题`);
-      load();
+      setQuestions(prev => prev.map(q => selectedIds.has(q.id) ? { ...q, is_active: isActive } : q));
+      setSelectedIds(new Set());
     } catch (e: any) { toast.error(e?.message ?? '批量操作失败'); }
   };
 
@@ -679,7 +687,9 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
       toast.success(`已将 ${selectedIds.size} 题移至关卡"${allLevels.find(l => l.id === moveTargetLevelId)?.title ?? '?'}"`);
       setShowMoveModal(false);
       setMoveTargetLevelId('');
-      load();
+      setQuestions(prev => prev.filter(q => !selectedIds.has(q.id)));
+      setTotal(prev => Math.max(0, prev - selectedIds.size));
+      setSelectedIds(new Set());
     } catch (e: any) { toast.error(e?.message ?? '移动失败'); }
   };
 
@@ -894,7 +904,10 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
           question={editingQuestion}
           isChoiceSet={editingQuestion.type === 'choice' || editingQuestion.type === 'multi_choice'}
           onClose={() => setEditingQuestion(null)}
-          onSaved={() => { setEditingQuestion(null); load(); }}
+          onSaved={(updated: Partial<Question>) => {
+            setQuestions(prev => prev.map(q => q.id === editingQuestion.id ? { ...q, ...updated } : q));
+            setEditingQuestion(null);
+          }}
         />
       )}
 
@@ -951,7 +964,7 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
 
 // ====== 编辑题目弹窗 ======
 function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
-  question: Question; isChoiceSet: boolean; onClose: () => void; onSaved: () => void;
+  question: Question; isChoiceSet: boolean; onClose: () => void; onSaved: (updated: Partial<Question>) => void;
 }) {
   const toast = useToastStore();
   const isChoice = q.type === 'choice' || q.type === 'multi_choice';
@@ -1011,7 +1024,14 @@ function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
           difficulty,
         });
         toast.success('已保存');
-        onSaved();
+        onSaved({
+          type: questionType,
+          question_text: questionText.trim(),
+          options: opts,
+          correct_answer: correctLetters.split('').sort().join(''),
+          explanation: explanation.trim() || null,
+          difficulty,
+        });
       } catch (e: any) {
         toast.error(e?.message ?? '保存失败');
       } finally {
@@ -1028,7 +1048,12 @@ function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
           difficulty,
         });
         toast.success('已保存');
-        onSaved();
+        onSaved({
+          question_text: questionText.trim(),
+          correct_answer: correctAnswer.trim(),
+          explanation: explanation.trim() || null,
+          difficulty,
+        });
       } catch (e: any) {
         toast.error(e?.message ?? '保存失败');
       } finally {

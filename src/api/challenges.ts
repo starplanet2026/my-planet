@@ -648,10 +648,11 @@ export async function fetchWrongQuestionStats(
     qQuery = qQuery.eq('level_id', levelId);
   } else if (challengeSetId) {
     // 通过 challenge_set_levels 关联表查找题集下所有关卡 ID
-    const { data: junctionLevels } = await supabase
+    const { data: junctionLevels, error: jErr } = await supabase
       .from('challenge_set_levels')
       .select('level_id')
-      .eq('challenge_set_id', challengeSetId);
+      .eq('set_id', challengeSetId);
+    if (jErr) throw jErr;
     const lvIds = (junctionLevels ?? []).map(l => l.level_id);
     // 同时匹配直接绑定题集和通过关卡间接绑定题集的题目
     if (lvIds.length > 0) {

@@ -327,6 +327,10 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   };
 
   const handleLevelUpClick = (pet: Pet) => {
+    if (pet.is_sick) {
+      toast.info('宠物生病了，请先治愈');
+      return;
+    }
     setLevelUpPet(pet);
   };
 
@@ -444,8 +448,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none', zIndex: petZIndex(pet.id) }}
             onDoubleClick={(e) => { e.stopPropagation(); bringToFront(pet.id); }}
           >
-            {/* 升级挑战悬浮按钮：经验满 + 未满级时显示 */}
-            {(pet.pending_levelup || pet.exp >= expNeeded(pet.level, pet.rarity as PetRarity)) && pet.level < pet.max_level && (
+            {/* 升级挑战悬浮按钮：经验满 + 未满级 + 未生病时显示 */}
+            {(pet.pending_levelup || pet.exp >= expNeeded(pet.level, pet.rarity as PetRarity)) && pet.level < pet.max_level && !pet.is_sick && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); handleLevelUpClick(pet); }}

@@ -66,6 +66,20 @@ export async function updatePetShopItem(id: string, patch: Partial<PetShopItem>)
     .select()
     .single();
   if (error) throw error;
+
+  // 同步 base_coin_per_day / upgrade_coin_reward 到所有已领养该物品的宠物
+  // （领养时从商店物品复制，后续改物品需同步，否则宠物显示的产金/升级奖励与物品不一致）
+  const petPatch: Record<string, unknown> = {};
+  if (patch.base_coin_per_day !== undefined) petPatch.base_coin_per_day = patch.base_coin_per_day;
+  if (patch.upgrade_coin_reward !== undefined) petPatch.upgrade_coin_reward = patch.upgrade_coin_reward;
+  if (Object.keys(petPatch).length > 0) {
+    const { error: petErr } = await supabase
+      .from('pets')
+      .update(petPatch)
+      .eq('shop_item_id', id);
+    if (petErr) throw petErr;
+  }
+
   return data as PetShopItem;
 }
 
@@ -709,7 +723,7 @@ export async function completePetLevelup(memberId: string, petId: string): Promi
   return row as Pet;
 }
 
-// 记录宠物升级挑战单题答题（不发星光、不改进度，仅计入今日答题数）
+// 记录宠物升级挑战单题答题（不发星光，计入进度、答对达标下线错题池，与普通答题逻辑一致）
 export async function recordLevelupQuizAnswer(
   memberId: string,
   questionId: string,

@@ -821,6 +821,7 @@ export interface BoardingHistoryItem {
   happiness_gain: number;
   exp_gain: number;
   coin_gain: number;
+  stars_cost: number;
 }
 
 // 进修宠物信息

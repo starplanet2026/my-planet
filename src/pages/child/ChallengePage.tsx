@@ -1499,7 +1499,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   // 原始题目列表（关卡内全部题，按 display_order 排序）
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   // 本轮已消题 ID（答对的永久消失）
-  const [clearedIds, setClearedIds] = useState<string[]>(restoreSnapshot?.clearedIds ?? []);
+  const [clearedIds, setClearedIds] = useState<string[]>([...new Set(restoreSnapshot?.clearedIds ?? [])]);
   // 本轮每题结果（true=对 false=错），用于正确率计算
   const [results, setResults] = useState<boolean[]>(restoreSnapshot?.results ?? []);
   // 当前题目索引（在剩余题目中的位置）
@@ -1543,7 +1543,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
         // 如果有服务端快照，加载已消题列表
         const snap = await loadLevelSnapshot(childId, levelId);
         if (snap && snap.cleared_question_ids?.length > 0) {
-          setClearedIds(snap.cleared_question_ids);
+          setClearedIds([...new Set(snap.cleared_question_ids)]);
           // 初始化本轮题目（排除已消题）
           setRoundQuestions(data.filter(q => !snap.cleared_question_ids.includes(q.id)));
         } else {
@@ -1600,7 +1600,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
       if (result.is_correct) {
         if (result.new_star != null) patchMember(childId, { star_value: result.new_star });
         // 答对：题目永久消失（加入 clearedIds）
-        setClearedIds(prev => [...prev, q.id]);
+        setClearedIds(prev => prev.includes(q.id) ? prev : [...prev, q.id]);
         const bonusMsg = result.bonus_reward > 0 ? ` 首次掌握奖励 +${result.bonus_reward}!` : '';
         toast.success(`答对了！+${result.reward} 星光值${bonusMsg}`);
       } else {
@@ -1732,7 +1732,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   if (showRoundResult) {
     const correctCount = results.filter(Boolean).length;
     const wrongCount = results.length - correctCount;
-    const accuracy = originalTotal > 0 ? Math.round((clearedIds.length / originalTotal) * 100) : 0;
+    const accuracy = originalTotal > 0 ? Math.min(100, Math.round((clearedIds.length / originalTotal) * 100)) : 0;
     const isTodayReview = board === 'today_review';
 
     return (
@@ -1747,7 +1747,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
           <div className="text-5xl mb-3">{accuracy === 100 ? '🎉' : accuracy >= 60 ? '🌟' : '💪'}</div>
           <div className="text-4xl font-bold text-emerald-500 mb-1">{accuracy}%</div>
           <p className="text-sm text-slate-500">
-            已消题 {clearedIds.length} / 原始总题 {originalTotal}
+            已消题 {Math.min(clearedIds.length, originalTotal)} / 原始总题 {originalTotal}
           </p>
           <p className="text-sm text-slate-500 mt-1">
             本轮答对 {correctCount} 题，答错 {wrongCount} 题
@@ -1841,10 +1841,10 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
         <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
             className="h-full bg-emerald-400 rounded-full transition-all"
-            style={{ width: `${originalTotal > 0 ? (clearedIds.length / originalTotal) * 100 : 0}%` }}
+            style={{ width: `${originalTotal > 0 ? Math.min(100, (clearedIds.length / originalTotal) * 100) : 0}%` }}
           />
         </div>
-        <span className="text-xs text-slate-500 flex-shrink-0">{clearedIds.length}/{originalTotal}</span>
+        <span className="text-xs text-slate-500 flex-shrink-0">{Math.min(clearedIds.length, originalTotal)}/{originalTotal}</span>
       </div>
 
       <Card className="p-6">

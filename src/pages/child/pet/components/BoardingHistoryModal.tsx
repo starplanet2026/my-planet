@@ -64,6 +64,7 @@ export function BoardingHistoryModal({ memberId, onClose }: {
             const isToday = date === todayStr;
             const totalCoin = items.reduce((s, i) => s + Number(i.coin_gain || 0), 0);
             const totalExp = items.reduce((s, i) => s + (i.exp_gain || 0), 0);
+            const totalStars = items.reduce((s, i) => s + (i.stars_cost || 0), 0);
             return (
               <div key={date} className={cn(
                 'rounded-xl border-2 overflow-hidden',
@@ -79,6 +80,7 @@ export function BoardingHistoryModal({ memberId, onClose }: {
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-slate-500">
                     <span>{items.length} 只</span>
+                    {totalStars > 0 && <span className="text-purple-600">星光-{totalStars}</span>}
                     {totalExp > 0 && <span className="text-emerald-600">经验+{totalExp}</span>}
                     {totalCoin > 0 && <span className="text-amber-600">金币+{Math.round(totalCoin)}</span>}
                   </div>
@@ -97,13 +99,14 @@ export function BoardingHistoryModal({ memberId, onClose }: {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-700 truncate">{item.pet_name}</p>
                         <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-500 flex-wrap">
+                          {item.stars_cost > 0 && <span className="text-purple-500">星光-{item.stars_cost}</span>}
                           {item.hunger_gain > 0 && <span className="text-orange-500">体力+{item.hunger_gain}</span>}
                           {item.clean_gain > 0 && <span className="text-sky-500">清洁+{item.clean_gain}</span>}
                           {item.happiness_gain > 0 && <span className="text-pink-500">心情+{item.happiness_gain}</span>}
                           {item.exp_gain > 0 && <span className="text-emerald-500">经验+{item.exp_gain}</span>}
                           {Number(item.coin_gain) > 0 && <span className="text-amber-500">金币+{Math.round(Number(item.coin_gain))}</span>}
-                          {item.hunger_gain === 0 && item.clean_gain === 0 && item.happiness_gain === 0 && item.exp_gain === 0 && Number(item.coin_gain) === 0 && (
-                            <span className="text-slate-400">属性已满，无收益变化</span>
+                          {item.hunger_gain === 0 && item.clean_gain === 0 && item.happiness_gain === 0 && item.exp_gain === 0 && Number(item.coin_gain) === 0 && item.stars_cost === 0 && (
+                            <span className="text-slate-400">星光不足，未执行托管</span>
                           )}
                         </div>
                       </div>
