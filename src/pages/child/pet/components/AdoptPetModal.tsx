@@ -5,6 +5,7 @@ import { Button } from '../../../../components/common/Button';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
+import { usePetTraits } from '../../../../hooks/usePetTraits';
 import { cn } from '../../../../lib/utils';
 import { ShoppingBag, Heart, Dices, Sparkles } from 'lucide-react';
 import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo, fetchGachaConfig } from '../../../../api/pets';
@@ -170,6 +171,7 @@ export function AdoptPetModal({
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? members.find(m => m.role === 'child')?.id ?? '';
+  const { traitMap } = usePetTraits();
 
   const [mode, setMode] = useState<AdoptMode>('menu');
   const [quizStep, setQuizStep] = useState(0);
@@ -282,6 +284,7 @@ export function AdoptPetModal({
         status: 'active',
         rarity: result.drawn_item_rarity ?? 'common',
         base_coin_per_day: result.drawn_item_coin_per_day ?? 0,
+        trait_id: result.drawn_item_trait_id ?? null,
       } as PetShopItem);
       setGachaDraws(1);
     } catch (e: any) {
@@ -319,6 +322,7 @@ export function AdoptPetModal({
         status: 'active',
         rarity: result.drawn_item_rarity ?? 'common',
         base_coin_per_day: result.drawn_item_coin_per_day ?? 0,
+        trait_id: result.drawn_item_trait_id ?? null,
       } as PetShopItem);
       setGachaDraws(prev => prev + 1);
     } catch (e: any) {
@@ -709,6 +713,9 @@ export function AdoptPetModal({
                   </span>
                   <span className={cn('px-2 py-0.5 rounded-full font-medium', RARITY_CLS[drawnItem.rarity ?? 'common'])}>
                     {RARITY_LABEL[drawnItem.rarity ?? 'common'] ?? drawnItem.rarity}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full font-medium bg-purple-50 text-purple-600">
+                    🌟 {(drawnItem.trait_id && traitMap[drawnItem.trait_id]?.shop_card_text) || '无特质'}
                   </span>
                 </div>
               </div>

@@ -27,6 +27,7 @@ import { ROUTES } from '../lib/constants';
 // 按需加载：智慧星战、萌宠星球两大管理页面分包，首页不加载其代码
 const ChallengeManagePage = lazy(() => import('../pages/parent/ChallengeManagePage').then(m => ({ default: m.ChallengeManagePage })));
 const PetManagePage = lazy(() => import('../pages/parent/PetManagePage').then(m => ({ default: m.PetManagePage })));
+const PetTraitManagePage = lazy(() => import('../pages/parent/PetTraitManagePage').then(m => ({ default: m.PetTraitManagePage })));
 
 function PageFallback() {
   return (
@@ -70,6 +71,7 @@ export function AppRoutes() {
           <Route path="shop" element={<ShopManagePage />} />
           <Route path="challenges" element={<Suspense fallback={<PageFallback />}><ChallengeManagePage /></Suspense>} />
           <Route path="pets" element={<Suspense fallback={<PageFallback />}><PetManagePage /></Suspense>} />
+          <Route path="pet-traits" element={<Suspense fallback={<PageFallback />}><PetTraitManagePage /></Suspense>} />
           <Route path="word-challenge" element={<WordChallengeManagePage />} />
           <Route path="question-reports" element={<QuestionReportManagePage />} />
           <Route path="dictation" element={<DictationManagePage />} />

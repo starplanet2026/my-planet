@@ -6,6 +6,7 @@ import { EmptyState } from '../../../../components/common/EmptyState';
 import { Loading } from '../../../../components/common/Loading';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
+import { usePetTraits } from '../../../../hooks/usePetTraits';
 import { cn } from '../../../../lib/utils';
 import { Star, Coins } from 'lucide-react';
 import {
@@ -22,7 +23,6 @@ import type {
   PetRarity,
   Pet,
 } from '../../../../api/types';
-import { TRAIT_DESC } from '../../../../api/types';
 
 // 一级 tab：宠物 / 用品
 const MAIN_TABS: { id: PetShopItemType; label: string }[] = [
@@ -131,6 +131,7 @@ export function PetShopModal({
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
+  const { traitMap } = usePetTraits();
 
   const [activeMain, setActiveMain] = useState<PetShopItemType>(jumpDoghouse ? 'supply' : 'pet');
   const [activeSub, setActiveSub] = useState<PetSubcategory>(jumpDoghouse ? 'doghouse' : 'dog');
@@ -521,11 +522,9 @@ export function PetShopModal({
                   <div className="text-[10px] text-yellow-600 font-medium">
                     💰 {item.base_coin_per_day}/天
                   </div>
-                  {item.trait && (
-                    <div className="text-[10px] text-purple-500 font-medium">
-                      🌟 {item.trait}
-                    </div>
-                  )}
+                  <div className="text-[10px] text-purple-500 font-medium">
+                    🌟 {(item.trait_id && traitMap[item.trait_id]?.shop_card_text) || '无特质'}
+                  </div>
                 </div>
                 {soldOut && !owned && (
                   <span className="text-[10px] text-slate-400">已售罄</span>
@@ -588,9 +587,9 @@ export function PetShopModal({
                     {detail.gender === 'male' ? '♂ 公' : '♀ 母'}
                   </span>
                 )}
-                {detail.type === 'pet' && detail.trait && (
+                {detail.type === 'pet' && (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
-                    🌟 {detail.trait}
+                    🌟 {(detail.trait_id && traitMap[detail.trait_id]?.shop_card_text) || '无特质'}
                   </span>
                 )}
                 {owned && (
@@ -627,7 +626,7 @@ export function PetShopModal({
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-slate-500">特质效果</span>
                     <span className="text-xs font-bold text-purple-600">
-                      {detail.trait ? (TRAIT_DESC[detail.trait] || '无') : '无'}
+                      {(detail.trait_id && traitMap[detail.trait_id]?.detail_text) || '无'}
                     </span>
                   </div>
                 </div>

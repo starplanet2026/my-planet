@@ -502,6 +502,7 @@ export interface PetShopItem {
   upgrade_coin_reward: number;
   upgrade_percent: number;
   trait: string | null;
+  trait_id: string | null;
   valid_days: number | null;
   created_at: string;
   updated_at: string;
@@ -642,6 +643,7 @@ export interface Pet {
   study_total_star: number;
   last_check_at: string;
   created_at: string;
+  trait_id: string | null;
 }
 
 export type PetActionType = 'feed' | 'clean' | 'play' | 'heal' | 'claim_coin';
@@ -768,9 +770,20 @@ export function getLevelConfig(level: number): LevelRewardConfig {
 
 // ====== 萌宠星球：特质 / 托管 / 进修 ======
 
-export type PetTrait =
-  | '体质强健' | '爱干净' | '大胃好养' | '乐天派'
-  | '娇弱易感' | '容易脏' | '胃口消耗快' | '平平无奇';
+export interface PetTrait {
+  id: string;
+  name: string;
+  hunger_initial: number;
+  clean_initial: number;
+  happiness_initial: number;
+  exp_multiplier: number;
+  coin_multiplier: number;
+  sickness_days: number;
+  severe_days: number;
+  shop_card_text: string;
+  detail_text: string;
+  is_active: boolean;
+}
 
 export const TRAIT_DESC: Record<string, string> = {
   '体质强健': '体力消耗速度-20%，清洁消耗速度-20%',

@@ -9,6 +9,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
+import { usePetTraits } from '../../hooks/usePetTraits';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import {
@@ -67,25 +68,6 @@ const RARITY_CONFIG: Record<PetRarity, { label: string; color: string }> = {
   rare: { label: '稀有', color: 'bg-blue-100 text-blue-600' },
   epic: { label: '史诗', color: 'bg-purple-100 text-purple-600' },
 };
-
-// 稀有度属性范围配置
-const RARITY_STATS: Record<PetRarity, {
-  priceStar: [number, number];
-  baseCoin: [number, number];
-  maxLevel: number;
-  maxBlood: [number, number];
-  upgradeReward: [number, number];
-  upgradePercent: number;
-  dailyDecay: [number, number];
-}> = {
-  common: { priceStar: [30, 80], baseCoin: [1, 2], maxLevel: 3, maxBlood: [80, 100], upgradeReward: [3, 8], upgradePercent: 5, dailyDecay: [3, 5] },
-  rare: { priceStar: [100, 250], baseCoin: [2, 3], maxLevel: 5, maxBlood: [100, 120], upgradeReward: [8, 15], upgradePercent: 8, dailyDecay: [5, 7] },
-  epic: { priceStar: [300, 600], baseCoin: [3, 4], maxLevel: 7, maxBlood: [120, 150], upgradeReward: [15, 30], upgradePercent: 12, dailyDecay: [8, 10] },
-};
-
-function randomInRange(min: number, max: number): number {
-  return Math.round(min + Math.random() * (max - min));
-}
 
 // 宠物各子分类的 emoji 备选
 const PET_EMOJIS: Record<'dog' | 'cat', string[]> = {
@@ -878,6 +860,7 @@ function useImageUpload(initialUrl: string, toast: ReturnType<typeof useToastSto
 function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const family = useFamilyStore(s => s.family);
   const toast = useToastStore();
+  const { traits } = usePetTraits();
   const { fileRef, imageUrl, setImageUrl, handleImageUpload, uploading: imgUploading } = useImageUpload('', toast, family!.id, 'shop');
 
   const [type, setType] = useState<PetShopItemType>('pet');
@@ -891,35 +874,18 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [baseCoinPerDay, setBaseCoinPerDay] = useState(1);
   const [rarity, setRarity] = useState<PetRarity>('common');
   const [maxLevel, setMaxLevel] = useState(3);
-  const [maxBloodBar, setMaxBloodBar] = useState(90);
-  const [upgradeCoinReward, setUpgradeCoinReward] = useState(5);
-  const [upgradePercent, setUpgradePercent] = useState(5);
-  const [dailyDecayBase, setDailyDecayBase] = useState(4);
+  // 这些字段不再随稀有度自动生成，保留默认值写入数据库，后续可在编辑弹窗调整
+  const maxBloodBar = 90;
+  const upgradeCoinReward = 5;
+  const upgradePercent = 5;
+  const dailyDecayBase = 4;
+  const [traitId, setTraitId] = useState<string | null>(null);
   const [doghouseLevel, setDoghouseLevel] = useState<number>(1);
   const [recoveryValue, setRecoveryValue] = useState<number>(20);
   const [validDays, setValidDays] = useState<number>(1);
   const [saving, setSaving] = useState(false);
 
   const emojiOptions = getEmojiOptions(type, subcategory);
-
-  // 根据稀有度自动生成属性
-  const applyRarity = (r: PetRarity) => {
-    setRarity(r);
-    const cfg = RARITY_STATS[r];
-    setPriceStar(randomInRange(cfg.priceStar[0], cfg.priceStar[1]));
-    setBaseCoinPerDay(randomInRange(cfg.baseCoin[0], cfg.baseCoin[1]));
-    setMaxLevel(cfg.maxLevel);
-    setMaxBloodBar(randomInRange(cfg.maxBlood[0], cfg.maxBlood[1]));
-    setUpgradeCoinReward(randomInRange(cfg.upgradeReward[0], cfg.upgradeReward[1]));
-    setUpgradePercent(cfg.upgradePercent);
-    setDailyDecayBase(randomInRange(cfg.dailyDecay[0], cfg.dailyDecay[1]));
-  };
-
-  // 初始化：生成 common 默认属性
-  useEffect(() => {
-    applyRarity('common');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // 切换类型时重置子分类与 emoji
   const switchType = (t: PetShopItemType) => {
@@ -969,6 +935,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
         upgrade_coin_reward: type === 'pet' ? upgradeCoinReward : undefined,
         upgrade_percent: type === 'pet' ? upgradePercent : undefined,
         daily_decay_base: type === 'pet' ? dailyDecayBase : undefined,
+        trait_id: type === 'pet' ? traitId : undefined,
       });
       toast.success('已添加');
       onCreated();
@@ -1117,7 +1084,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
           )}
         </div>
 
-        {/* 宠物专属字段：品种 / 稀有度 / 性别 / 产金 */}
+        {/* 宠物专属字段：品种 / 稀有度 / 性别 / 特质 / 产金 */}
         {type === 'pet' && (
           <>
             <div>
@@ -1131,7 +1098,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
                   {(Object.keys(RARITY_CONFIG) as PetRarity[]).map(r => (
                     <button
                       key={r}
-                      onClick={() => applyRarity(r)}
+                      onClick={() => setRarity(r)}
                       className={cn(
                         'flex-1 py-2 rounded-lg text-sm',
                         rarity === r ? RARITY_CONFIG[r].color : 'bg-slate-100 text-slate-400'
@@ -1166,18 +1133,48 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 </div>
               </div>
             </div>
-            {/* 稀有度属性预览 */}
-            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
-              <p className="text-xs font-medium text-slate-500">自动生成属性（选择稀有度后随机生成）</p>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
-                <span>日产金: <strong className="text-yellow-600">{baseCoinPerDay}</strong>/天</span>
-                <span>满级: <strong className="text-slate-700">Lv.{maxLevel}</strong></span>
-                <span>升级奖励: <strong className="text-slate-700">{upgradeCoinReward}</strong>金币</span>
-                <span>血条上限: <strong className="text-slate-700">{maxBloodBar}</strong></span>
-                <span>升级加成: <strong className="text-slate-700">{upgradePercent}%</strong></span>
-                <span>日衰减: <strong className="text-slate-700">{dailyDecayBase}</strong></span>
+            {/* 特质选择 */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">特质</label>
+              <select
+                value={traitId ?? ''}
+                onChange={e => setTraitId(e.target.value || null)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-star-300"
+              >
+                <option value="">不指定（无特质）</option>
+                {traits.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}{t.shop_card_text ? ` · ${t.shop_card_text}` : ''}
+                  </option>
+                ))}
+              </select>
+              {traitId && traits.find(t => t.id === traitId)?.detail_text && (
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  {traits.find(t => t.id === traitId)?.detail_text}
+                </p>
+              )}
+            </div>
+            {/* 基础产金（手动设置，不再随稀有度自动生成） */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">日产金/天</label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  value={baseCoinPerDay}
+                  onChange={e => setBaseCoinPerDay(Number(e.target.value))}
+                />
               </div>
-              <p className="text-[10px] text-slate-400">价格已自动设为 {priceStar} 星光值</p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">满级</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={maxLevel}
+                  onChange={e => setMaxLevel(Number(e.target.value))}
+                />
+              </div>
             </div>
           </>
         )}
@@ -1260,6 +1257,7 @@ function EditItemModal({
 }) {
   const toast = useToastStore();
   const family = useFamilyStore(s => s.family);
+  const { traits } = usePetTraits();
   const { fileRef, imageUrl, setImageUrl, handleImageUpload, uploading: imgUploading } = useImageUpload(item.image_url || '', toast, family?.id || '', 'shop');
 
   const [subcategory, setSubcategory] = useState<PetSubcategory>(
@@ -1273,6 +1271,7 @@ function EditItemModal({
   const [breed, setBreed] = useState(item.breed || '');
   const [baseCoinPerDay, setBaseCoinPerDay] = useState(item.base_coin_per_day);
   const [rarity, setRarity] = useState<PetRarity>(item.rarity);
+  const [traitId, setTraitId] = useState<string | null>(item.trait_id ?? null);
   const [recoveryValue, setRecoveryValue] = useState<number>(item.recovery_value ?? 20);
   const [validDays, setValidDays] = useState<number>(item.valid_days ?? 1);
   const [saving, setSaving] = useState(false);
@@ -1301,6 +1300,7 @@ function EditItemModal({
         base_coin_per_day: item.type === 'pet' ? baseCoinPerDay : undefined,
         rarity: item.type === 'pet' ? rarity : undefined,
         gender: item.type === 'pet' ? gender : undefined,
+        trait_id: item.type === 'pet' ? traitId : undefined,
         recovery_value: item.type === 'supply' ? recoveryValue : undefined,
         valid_days: (item.type === 'supply' && subcategory === 'foster') ? validDays : undefined,
       });
@@ -1432,6 +1432,27 @@ function EditItemModal({
                   </button>
                 </div>
               </div>
+            </div>
+            {/* 特质选择 */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">特质</label>
+              <select
+                value={traitId ?? ''}
+                onChange={e => setTraitId(e.target.value || null)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-star-300"
+              >
+                <option value="">不指定（无特质）</option>
+                {traits.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}{t.shop_card_text ? ` · ${t.shop_card_text}` : ''}
+                  </option>
+                ))}
+              </select>
+              {traitId && traits.find(t => t.id === traitId)?.detail_text && (
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  {traits.find(t => t.id === traitId)?.detail_text}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">基础产金/天</label>

@@ -3,6 +3,7 @@ import { Modal } from '../../../../components/common/Modal';
 import { Loading } from '../../../../components/common/Loading';
 import { EmptyState } from '../../../../components/common/EmptyState';
 import { useToastStore } from '../../../../store/toastStore';
+import { usePetTraits } from '../../../../hooks/usePetTraits';
 import { cn } from '../../../../lib/utils';
 import { fetchPetShopItems, fetchPets } from '../../../../api/pets';
 import type { PetShopItem, Pet, PetRarity } from '../../../../api/types';
@@ -26,6 +27,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
   onClose: () => void;
 }) {
   const toast = useToastStore();
+  const { traitMap } = usePetTraits();
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +115,11 @@ export function PetDexModal({ familyId, memberId, onClose }: {
                     )}
                   >
                     {rarityLabel[item.rarity]}
+                  </span>
+
+                  {/* 特质 */}
+                  <span className="text-[8px] px-1 py-0.5 rounded-full font-medium bg-purple-50 text-purple-600 truncate w-full text-center">
+                    🌟 {(item.trait_id && traitMap[item.trait_id]?.shop_card_text) || '无特质'}
                   </span>
 
                   {/* 是否拥有 */}

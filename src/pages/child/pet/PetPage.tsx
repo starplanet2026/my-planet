@@ -9,7 +9,8 @@ import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
-import { expNeeded, TRAIT_DESC } from '../../../api/types';
+import { expNeeded } from '../../../api/types';
+import { usePetTraits } from '../../../hooks/usePetTraits';
 import { PetGrassland } from './components/PetGrassland';
 import { TopActionBar } from './components/TopActionBar';
 import { PetShopModal } from './components/PetShopModal';
@@ -45,6 +46,7 @@ export function PetPage() {
   const currentChildId = useModeStore(s => s.currentChildId);
   const child = members.find(m => m.id === currentChildId && m.role === 'child') ?? members.find(m => m.role === 'child');
   const toast = useToastStore();
+  const { traitMap } = usePetTraits();
 
   const [pets, setPets] = useState<Pet[]>([]);
   const [dogHouse, setDogHouse] = useState<DogHouse | null>(null);
@@ -696,11 +698,9 @@ export function PetPage() {
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
                             <span>{pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
                             <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
-                            {pet.trait && (
-                              <span className="text-emerald-600 bg-emerald-50 px-1 rounded" title={TRAIT_DESC[pet.trait] || ''}>
-                                🌟 {pet.trait}
-                              </span>
-                            )}
+                            <span className="text-emerald-600 bg-emerald-50 px-1 rounded" title={(pet.trait_id && traitMap[pet.trait_id]?.detail_text) || ''}>
+                              🌟 {(pet.trait_id && traitMap[pet.trait_id]?.detail_text) || '无特质'}
+                            </span>
                           </div>
                           {/* 经验条 */}
                           <div className="flex items-center gap-1.5 mt-1">

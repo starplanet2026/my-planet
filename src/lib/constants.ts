@@ -79,6 +79,8 @@ export const ROUTES = {
   PARENT_MEMBERS: '/parent/members',
   PARENT_CHALLENGES: '/parent/challenges',
   PARENT_PETS: '/parent/pets',
+  // 萌宠星球：特质配置管理
+  PARENT_PET_TRAITS: '/parent/pet-traits',
   // 萌宠闯关管理（原"单词管理"，从萌宠星球管理提取至外层）
   PARENT_WORD_CHALLENGE: '/parent/word-challenge',
   // 题目报错管理

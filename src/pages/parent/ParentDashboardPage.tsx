@@ -242,6 +242,7 @@ export function ParentDashboardPage() {
     { label: '用户管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=user'), badge: 0 },
     { label: '背景管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg'), badge: 0 },
     { label: '新宠抽卡', onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha'), badge: 0 },
+    { label: '特质配置', onClick: () => go(ROUTES.PARENT_PET_TRAITS), badge: 0 },
     { label: '新宠测试', onClick: () => handlePlaceholder('新宠测试'), badge: 0 },
     { label: '新宠奇遇', onClick: () => handlePlaceholder('新宠奇遇'), badge: 0 },
     { label: '宠物店', onClick: () => handlePlaceholder('宠物店'), badge: 0 },

@@ -1,6 +1,6 @@
 import { supabase } from './client';
 import type {
-  PetShopItem, Pet, PetShopItemType, PetSubcategory, PetRarity,
+  PetShopItem, Pet, PetShopItemType, PetSubcategory, PetRarity, PetTrait,
   PetInventory, PetCheckin, DogHouse, PetWord, PetWordProgress, PetWordBook,
   BuyPetItemResult, ClaimPetCoinsResult,
   CheckinResult, UpgradeDogHouseResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
@@ -48,6 +48,7 @@ export async function createPetShopItem(data: {
   upgrade_coin_reward?: number;
   upgrade_percent?: number;
   valid_days?: number;
+  trait_id?: string | null;
 }): Promise<PetShopItem> {
   const { data: result, error } = await supabase
     .from('pet_shop_items')
@@ -74,6 +75,7 @@ export async function updatePetShopItem(id: string, patch: Partial<PetShopItem>)
   if (patch.upgrade_coin_reward !== undefined) petPatch.upgrade_coin_reward = patch.upgrade_coin_reward;
   if (patch.rarity !== undefined) petPatch.rarity = patch.rarity;
   if (patch.max_level !== undefined) petPatch.max_level = patch.max_level;
+  if (patch.trait_id !== undefined) petPatch.trait_id = patch.trait_id;
   if (Object.keys(petPatch).length > 0) {
     const { error: petErr } = await supabase
       .from('pets')
@@ -101,6 +103,36 @@ export async function batchUpdatePetShopStatus(ids: string[], status: 'active' |
 export async function batchDeletePetShopItems(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const { error } = await supabase.from('pet_shop_items').delete().in('id', ids);
+  if (error) throw error;
+}
+
+// ====== 特质配置（后台管理用）======
+
+// 获取所有启用的特质配置
+export async function fetchPetTraits(): Promise<PetTrait[]> {
+  const { data, error } = await supabase.rpc('get_pet_traits');
+  if (error) throw error;
+  return (data ?? []) as PetTrait[];
+}
+
+// 更新特质配置（仅传需要修改的字段）
+export async function updatePetTrait(
+  id: string,
+  patch: Partial<Omit<PetTrait, 'id' | 'is_active'>>,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_pet_trait', {
+    p_id: id,
+    p_name: patch.name ?? null,
+    p_hunger_initial: patch.hunger_initial ?? null,
+    p_clean_initial: patch.clean_initial ?? null,
+    p_happiness_initial: patch.happiness_initial ?? null,
+    p_exp_multiplier: patch.exp_multiplier ?? null,
+    p_coin_multiplier: patch.coin_multiplier ?? null,
+    p_sickness_days: patch.sickness_days ?? null,
+    p_severe_days: patch.severe_days ?? null,
+    p_shop_card_text: patch.shop_card_text ?? null,
+    p_detail_text: patch.detail_text ?? null,
+  });
   if (error) throw error;
 }
 
