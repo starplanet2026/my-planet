@@ -714,8 +714,8 @@ export function AdoptPetModal({
                   <span className={cn('px-2 py-0.5 rounded-full font-medium', RARITY_CLS[drawnItem.rarity ?? 'common'])}>
                     {RARITY_LABEL[drawnItem.rarity ?? 'common'] ?? drawnItem.rarity}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full font-medium bg-purple-50 text-purple-600">
-                    🌟 {(drawnItem.trait_id && traitMap[drawnItem.trait_id]?.name) || '无特质'}
+                  <span className={cn('px-2 py-0.5 rounded-full font-medium', (drawnItem.trait_id && traitMap[drawnItem.trait_id]?.name) ? 'bg-teal-50 text-teal-600' : 'text-slate-400')}>
+                    {(drawnItem.trait_id && traitMap[drawnItem.trait_id]?.name) || '无特质'}
                   </span>
                 </div>
               </div>

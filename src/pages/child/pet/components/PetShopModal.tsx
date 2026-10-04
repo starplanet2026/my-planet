@@ -66,6 +66,15 @@ const RARITY_META: Record<PetRarity, { label: string; cls: string }> = {
   epic: { label: '史诗', cls: 'bg-purple-100 text-purple-600' },
 };
 
+// 稀有度排序权重: epic > rare > common
+const RARITY_RANK: Record<PetRarity, number> = { epic: 3, rare: 2, common: 1 };
+
+// 特质标签样式：有特质用青色(区别于史诗紫色)，无特质灰色无底色
+const traitTagCls = (hasTrait: boolean) =>
+  hasTrait
+    ? 'bg-teal-50 text-teal-600'
+    : 'text-slate-400';
+
 // 商品图标：优先 image_url，否则 emoji，再否则占位
 function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
   // 统一 3:4 竖版比例
@@ -169,7 +178,12 @@ export function PetShopModal({
         fetchPets(childId),
       ]);
       // 寄养(foster)商品不在用品栏展示，托管卡仅在托管板块内购买
-      setItems(data.filter(i => i.subcategory !== 'foster'));
+      const filtered = data.filter(i => i.subcategory !== 'foster');
+      // 宠物按稀有度排序: 史诗 > 稀有 > 普通
+      if (activeMain === 'pet') {
+        filtered.sort((a, b) => RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity]);
+      }
+      setItems(filtered);
       setOwnedPets(myPets);
     } catch (e: any) {
       toast.error(e?.message ?? '加载商品失败');
@@ -522,8 +536,10 @@ export function PetShopModal({
                   <div className="text-[10px] text-yellow-600 font-medium">
                     💰 {item.base_coin_per_day}/天
                   </div>
-                  <div className="text-[10px] text-purple-500 font-medium">
-                    🌟 {(item.trait_id && traitMap[item.trait_id]?.name) || '无特质'}
+                  <div className="text-[10px] font-medium">
+                    <span className={cn('px-1.5 py-0.5 rounded-full', traitTagCls(!!(item.trait_id && traitMap[item.trait_id]?.name)))}>
+                      {(item.trait_id && traitMap[item.trait_id]?.name) || '无特质'}
+                    </span>
                   </div>
                 </div>
                 {soldOut && !owned && (
@@ -588,8 +604,8 @@ export function PetShopModal({
                   </span>
                 )}
                 {detail.type === 'pet' && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
-                    🌟 {(detail.trait_id && traitMap[detail.trait_id]?.name) || '无特质'}
+                  <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', traitTagCls(!!(detail.trait_id && traitMap[detail.trait_id]?.name)))}>
+                    {(detail.trait_id && traitMap[detail.trait_id]?.name) || '无特质'}
                   </span>
                 )}
                 {owned && (

@@ -155,7 +155,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
                     <span
                       className={cn(
                         'text-[8px] truncate flex-1 text-center',
-                        hasTrait ? 'text-purple-600' : 'text-slate-400',
+                        hasTrait ? 'text-teal-600' : 'text-slate-400',
                       )}
                     >
                       {traitName || '无特质'}
