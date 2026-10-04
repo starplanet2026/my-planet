@@ -918,7 +918,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
       await createPetShopItem({
         type,
         subcategory,
-        name: type === 'supply' ? name.trim() : undefined,
+        name: name.trim() || null,
         emoji: imageUrl ? undefined : emoji,
         image_url: imageUrl || undefined,
         description: description.trim() || undefined,
@@ -1179,13 +1179,13 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </>
         )}
 
-        {/* 用品专属字段：名称 / 描述 */}
-        {type === 'supply' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">名称</label>
-            <Input value={name} onChange={e => setName(e.target.value)} placeholder="如：高级狗粮、逗猫棒" />
-          </div>
-        )}
+        {/* 名称（宠物品种名 / 用品名） */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            {type === 'pet' ? '品种名称' : '名称'}
+          </label>
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder={type === 'pet' ? '如：德国牧羊犬' : '如：高级狗粮、逗猫棒'} />
+        </div>
 
         {/* 星光值价格（所有购买用星光值） */}
         <div>
@@ -1291,7 +1291,7 @@ function EditItemModal({
     try {
       await updatePetShopItem(item.id, {
         subcategory,
-        name: item.type === 'supply' ? name.trim() : name.trim() || null,
+        name: name.trim() || null,
         emoji: imageUrl ? null : emoji,
         image_url: imageUrl || null,
         description: description.trim() || null,
@@ -1467,13 +1467,13 @@ function EditItemModal({
           </>
         )}
 
-        {/* 用品字段 */}
-        {item.type === 'supply' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">名称</label>
-            <Input value={name} onChange={e => setName(e.target.value)} />
-          </div>
-        )}
+        {/* 名称（宠物品种名 / 用品名） */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            {item.type === 'pet' ? '品种名称' : '名称'}
+          </label>
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder={item.type === 'pet' ? '如：德国牧羊犬' : ''} />
+        </div>
 
         {/* 星光值价格 */}
         <div>
