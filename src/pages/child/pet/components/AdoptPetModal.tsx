@@ -280,7 +280,7 @@ export function AdoptPetModal({
         price_star: adoptCost,
         price_coin: 0,
         status: 'active',
-        rarity: 'common',
+        rarity: result.drawn_item_rarity ?? 'common',
       } as PetShopItem);
       setGachaDraws(1);
     } catch (e: any) {
@@ -316,7 +316,7 @@ export function AdoptPetModal({
         price_star: adoptCost,
         price_coin: 0,
         status: 'active',
-        rarity: 'common',
+        rarity: result.drawn_item_rarity ?? 'common',
       } as PetShopItem);
       setGachaDraws(prev => prev + 1);
     } catch (e: any) {
