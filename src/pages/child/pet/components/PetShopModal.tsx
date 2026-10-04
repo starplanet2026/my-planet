@@ -98,6 +98,26 @@ export function isPetUnlocked(
   return true;
 }
 
+// 返回下一个待达成的解锁条件提示文案；全部已解锁返回 null
+function getNextUnlockHint(
+  ownedCount: number,
+  hasStudyingPet: boolean,
+): { text: string; progress: string } | null {
+  if (ownedCount < 2) {
+    return { text: '领养满 2 只宠物，解锁【稀有】狗狗', progress: `${ownedCount}/2` };
+  }
+  if (ownedCount < 5) {
+    return { text: '领养满 5 只宠物，解锁【史诗】狗狗', progress: `${ownedCount}/5` };
+  }
+  if (ownedCount < 10) {
+    return { text: '领养满 10 只宠物，解锁【猫咪】', progress: `${ownedCount}/10` };
+  }
+  if (!hasStudyingPet) {
+    return { text: '送 1 只宠物去店内进修，即可解锁【猫咪】', progress: '进修中 0/1' };
+  }
+  return null;
+}
+
 // 商品图标：优先 image_url，否则 emoji，再否则占位
 function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
   // 统一 3:4 竖版比例
@@ -512,7 +532,24 @@ export function PetShopModal({
         </div>
       ) : (
         /* 宠物 tab：按子分类筛选展示 */
-        <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-3">
+          {/* 解锁条件提示横幅：仅在宠物 tab 且有待解锁宠物时显示 */}
+          {activeMain === 'pet' && (() => {
+            const studying = ownedPets.some(p => p.is_studying);
+            const hint = getNextUnlockHint(ownedPets.length, studying);
+            if (!hint) return null;
+            return (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                <span className="text-lg">🔓</span>
+                <span className="text-xs text-amber-700 font-medium flex-1">{hint.text}</span>
+                <span className="text-xs font-bold text-amber-600 bg-white/70 px-2 py-0.5 rounded-full">
+                  {hint.progress}
+                </span>
+              </div>
+            );
+          })()}
+
+          <div className="grid grid-cols-3 gap-3">
           {items.map(item => {
             const soldOut = item.stock !== null && item.stock <= 0;
             const owned = item.type === 'pet' && isOwned(item.id);
@@ -520,8 +557,10 @@ export function PetShopModal({
             const disabled = soldOut || !unlocked;
             const cardCls = cn(
               'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
-              disabled
-                ? 'border-slate-200 bg-slate-50 opacity-50 cursor-not-allowed'
+              !unlocked
+                ? 'border-slate-200 bg-slate-50/60 cursor-not-allowed'
+                : soldOut
+                ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed'
                 : owned
                 ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:shadow-md active:scale-[0.98]'
                 : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
@@ -549,17 +588,20 @@ export function PetShopModal({
                     已领养
                   </span>
                 )}
-                {/* 锁图标：未解锁时居中覆盖 */}
+                {/* 未解锁：右上角小锁图标 + 卡片轻微降饱和，宠物本体保持清晰可见 */}
                 {!unlocked && (
-                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                    <span className="text-3xl drop-shadow">🔒</span>
-                  </div>
+                  <span className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-slate-700/70 text-white text-[10px] shadow">
+                    🔒
+                  </span>
                 )}
                 <ItemIcon item={item} size="sm" />
-                <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
+                <div className={cn(
+                  'font-medium text-sm line-clamp-1 w-full',
+                  !unlocked ? 'text-slate-500' : 'text-slate-700'
+                )}>
                   {item.breed || item.name || '未命名'}
                 </div>
-                <div className="w-full space-y-0.5">
+                <div className={cn('w-full space-y-0.5', !unlocked && 'opacity-70')}>
                   <div className="text-[10px] text-amber-500 font-medium">
                     ⭐ {item.price_star} 星光值
                   </div>
@@ -575,9 +617,13 @@ export function PetShopModal({
                 {soldOut && !owned && (
                   <span className="text-[10px] text-slate-400">已售罄</span>
                 )}
+                {!unlocked && !soldOut && (
+                  <span className="text-[10px] text-slate-400 font-medium">未解锁</span>
+                )}
               </button>
             );
           })}
+          </div>
         </div>
       )}
 
