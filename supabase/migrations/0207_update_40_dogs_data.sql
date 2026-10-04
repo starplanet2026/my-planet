@@ -222,7 +222,6 @@ union all
 update public.pets p
 set
   name = d.name,
-  breed = d.breed,
   rarity = d.rarity,
   gender = d.gender,
   base_coin_per_day = d.base_coin_per_day,
