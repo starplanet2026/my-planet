@@ -229,7 +229,7 @@ set
   trait_id = d.trait_id,
   max_level = d.max_level
 from data d
-join public.pet_shop_items psi on psi.id = p.shop_item_id
-where psi.breed = d.breed;
+join public.pet_shop_items psi on psi.breed = d.breed
+where psi.id = p.shop_item_id;
 
 notify pgrst, 'reload schema';
