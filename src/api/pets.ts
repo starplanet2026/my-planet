@@ -141,14 +141,19 @@ export async function updatePetTrait(
 export async function fetchPets(memberId: string): Promise<Pet[]> {
   const { data, error } = await supabase
     .from('pets')
-    .select('*, pet_shop_items(image_url)')
+    .select('*, pet_shop_items(image_url, dialogue_new_pet, dialogue_low_stats, dialogue_medium_stats, dialogue_high_stats, dialogue_study)')
     .eq('member_id', memberId)
     .order('created_at');
   if (error) throw error;
-  // 家长更新商店形象图后，已购宠物应同步展示最新图片
+  // 家长更新商店形象图后，已购宠物应同步展示最新图片；同时带出品种定制会话
   return ((data ?? []) as any[]).map(p => ({
     ...p,
     image_url: p.pet_shop_items?.image_url ?? p.image_url,
+    dialogue_new_pet: p.pet_shop_items?.dialogue_new_pet ?? null,
+    dialogue_low_stats: p.pet_shop_items?.dialogue_low_stats ?? null,
+    dialogue_medium_stats: p.pet_shop_items?.dialogue_medium_stats ?? null,
+    dialogue_high_stats: p.pet_shop_items?.dialogue_high_stats ?? null,
+    dialogue_study: p.pet_shop_items?.dialogue_study ?? null,
   })) as Pet[];
 }
 
@@ -1046,6 +1051,14 @@ export async function clearPetMessages(memberId: string): Promise<void> {
 export async function markPetMessagesRead(memberId: string): Promise<void> {
   const { error } = await supabase.rpc('mark_pet_messages_read', { p_member_id: memberId });
   if (error) throw error;
+}
+
+// 获取宠物当前状态对应的定制会话（low/medium/high stats）
+export async function getPetGreeting(petId: string): Promise<{ scenario: string; dialogue: string }> {
+  const { data, error } = await supabase.rpc('get_pet_greeting', { p_pet_id: petId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return { scenario: row?.scenario ?? 'none', dialogue: row?.dialogue ?? '' };
 }
 
 // ====== 抽卡配置 ======

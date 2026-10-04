@@ -74,7 +74,7 @@ function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
     return (
       <img
         src={item.image_url}
-        alt={item.breed || item.name ?? ''}
+        alt={item.breed || item.name || ''}
         className={cn(boxCls, 'object-cover rounded-2xl mx-auto')}
       />
     );
@@ -523,7 +523,7 @@ export function PetShopModal({
                     💰 {item.base_coin_per_day}/天
                   </div>
                   <div className="text-[10px] text-purple-500 font-medium">
-                    🌟 {(item.trait_id && traitMap[item.trait_id]?.shop_card_text) || '无特质'}
+                    🌟 {(item.trait_id && traitMap[item.trait_id]?.name) || '无特质'}
                   </div>
                 </div>
                 {soldOut && !owned && (
@@ -589,7 +589,7 @@ export function PetShopModal({
                 )}
                 {detail.type === 'pet' && (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
-                    🌟 {(detail.trait_id && traitMap[detail.trait_id]?.shop_card_text) || '无特质'}
+                    🌟 {(detail.trait_id && traitMap[detail.trait_id]?.name) || '无特质'}
                   </span>
                 )}
                 {owned && (

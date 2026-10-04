@@ -12,20 +12,12 @@ import {
   fetchStudyRecords,
   fetchStudyTaskTemplates,
   updateStudyTaskTemplate,
+  fetchPetShopItems,
 } from '../../../../api/pets';
 import type { StudyRecord } from '../../../../api/pets';
 
 // 心情恢复 = 分钟数（1分钟=1心情值）
 const calcHappinessGain = (minutes: number) => minutes;
-
-// 陪伴学习鼓励语（每 10 分钟轮换）
-const STUDY_MESSAGES = [
-  '加油！专注的你最棒！',
-  '你已经坚持很久了，继续！',
-  '快完成啦，再坚持一下！',
-  '学习让你更强大！💪',
-  '你的宠物也在陪着你努力哦！',
-];
 
 interface StudyTask {
   id: string;
@@ -59,6 +51,8 @@ export function StudyCompanionModal({
 
   const [step, setStep] = useState<'select' | 'timer' | 'done' | 'records'>('select');
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
+  // 当前选中宠物的陪伴学习定制会话（来自 pet_shop_items.dialogue_study）
+  const [petStudyDialogue, setPetStudyDialogue] = useState<string>('');
   const [minutes, setMinutes] = useState(15);
   const [taskList, setTaskList] = useState<StudyTask[]>([]);
   const [taskTemplates, setTaskTemplates] = useState<StudyTask[]>([]);
@@ -146,6 +140,27 @@ export function StudyCompanionModal({
       }
     }
   }, []);
+
+  // 选中宠物变化时，拉取该宠物品种的陪伴学习定制会话（dialogue_study）
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedPet?.shop_item_id) {
+      setPetStudyDialogue('');
+      return;
+    }
+    (async () => {
+      try {
+        const items = await fetchPetShopItems('pet');
+        const match = items.find(i => i.id === selectedPet.shop_item_id);
+        if (!cancelled) {
+          setPetStudyDialogue(match?.dialogue_study ?? '');
+        }
+      } catch {
+        if (!cancelled) setPetStudyDialogue('');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPet?.shop_item_id]);
 
   // 同步状态到 store（切换 tab 后可恢复）；跳过首次渲染避免覆盖已恢复的进度
   useEffect(() => {
@@ -458,7 +473,7 @@ export function StudyCompanionModal({
                     ) : (
                       <span className="text-2xl">{pet.emoji || '🐾'}</span>
                     )}
-                    <span className="text-[10px] text-slate-500 mt-1 truncate w-full text-center">{pet.name}</span>
+                    <span className="text-[10px] text-slate-500 mt-1 truncate w-full text-center">{pet.name || pet.breed}</span>
                   </button>
                 ))}
               </div>
@@ -638,10 +653,8 @@ export function StudyCompanionModal({
 
   // 倒计时全屏锁定
   if (step === 'timer') {
-    const elapsedSeconds = minutes * 60 - remaining;
-    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-    const messageIdx = Math.floor(elapsedMinutes / 10) % STUDY_MESSAGES.length;
-    const currentMessage = STUDY_MESSAGES[messageIdx];
+    // 仅使用宠物定制的陪伴学习会话（dialogue_study），不再轮换通用鼓励语
+    const currentMessage = petStudyDialogue ?? '';
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'linear-gradient(to bottom, #E8F5E9, #C8E6C9)' }}>
         {/* 最小化按钮（左上角） */}
@@ -702,7 +715,7 @@ export function StudyCompanionModal({
                 <span className="text-sm text-slate-500">
                   {studyEnded
                     ? (rewardClaimed ? '已提交审核' : '点击我提交审核')
-                    : `${selectedPet.name} 陪伴你学习中`}
+                    : `${selectedPet.name || selectedPet.breed} 陪伴你学习中`}
                 </span>
               </button>
             )}

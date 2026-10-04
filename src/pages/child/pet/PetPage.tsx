@@ -648,7 +648,7 @@ export function PetPage() {
                   >
                     <div className="w-12 h-16 flex items-center justify-center rounded-lg overflow-hidden bg-amber-50">
                       {pet.image_url ? (
-                        <img src={pet.image_url} alt={pet.breed || pet.name} className="w-full h-full object-cover" />
+                        <img src={pet.image_url} alt={pet.name || pet.breed || ''} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-2xl">{pet.emoji || '🐾'}</span>
                       )}
@@ -689,7 +689,7 @@ export function PetPage() {
                       ) : (
                         <>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-slate-700 text-sm truncate">{pet.breed || pet.name}</span>
+                            <span className="font-bold text-slate-700 text-sm truncate">{pet.name || pet.breed}</span>
                             <span className={cn('text-[10px] px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[rarity].cls)}>
                               {RARITY_BADGE[rarity].label}
                             </span>
@@ -699,7 +699,7 @@ export function PetPage() {
                             <span>{pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
                             <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
                             <span className="text-emerald-600 bg-emerald-50 px-1 rounded" title={(pet.trait_id && traitMap[pet.trait_id]?.detail_text) || ''}>
-                              🌟 {(pet.trait_id && traitMap[pet.trait_id]?.detail_text) || '无特质'}
+                              🌟 {(pet.trait_id && traitMap[pet.trait_id]?.name) || '无特质'}
                             </span>
                           </div>
                           {/* 经验条 */}
@@ -759,7 +759,7 @@ export function PetPage() {
                           </span>
                         )}
                         <button
-                          onClick={() => { setRenamingPetId(pet.id); setNewName(pet.breed || pet.name); }}
+                          onClick={() => { setRenamingPetId(pet.id); setNewName(pet.name || ''); }}
                           className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs hover:bg-slate-200"
                         >
                           改名

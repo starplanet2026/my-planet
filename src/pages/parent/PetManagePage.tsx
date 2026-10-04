@@ -195,6 +195,7 @@ export function PetManagePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<PetShopItem | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [petSubFilter, setPetSubFilter] = useState<'all' | 'dog' | 'cat'>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<{ petId: string; petName: string; memberName: string } | null>(null);
 
   const loadItems = async () => {
@@ -333,7 +334,10 @@ export function PetManagePage() {
   const showPetGroup = categoryFilter === 'all' || categoryFilter === 'pet';
   const showSupplyGroup = categoryFilter === 'all' || categoryFilter !== 'pet';
   const petItems = showPetGroup
-    ? items.filter(i => i.type === 'pet').sort(sortFn)
+    ? items
+        .filter(i => i.type === 'pet')
+        .filter(i => petSubFilter === 'all' || i.subcategory === petSubFilter)
+        .sort(sortFn)
     : [];
   const supplyItems = showSupplyGroup
     ? items
@@ -457,9 +461,41 @@ export function PetManagePage() {
               {/* 宠物分组 */}
               {petItems.length > 0 && (
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Dog className="w-4 h-4 text-amber-500" />
-                    <h2 className="text-sm font-semibold text-slate-700">宠物（{petItems.length}）</h2>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Dog className="w-4 h-4 text-amber-500" />
+                      <h2 className="text-sm font-semibold text-slate-700">宠物（{petItems.length}）</h2>
+                    </div>
+                    {/* 子分类筛选：全部 / 狗 / 猫 */}
+                    <div className="flex gap-1">
+                      {(['all', 'dog', 'cat'] as const).map(sub => {
+                        const count = sub === 'all'
+                          ? items.filter(i => i.type === 'pet').length
+                          : items.filter(i => i.type === 'pet' && i.subcategory === sub).length;
+                        return (
+                          <button
+                            key={sub}
+                            onClick={() => setPetSubFilter(sub)}
+                            className={cn(
+                              'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                              petSubFilter === sub
+                                ? 'bg-amber-400 text-white shadow-sm'
+                                : 'bg-amber-50 text-slate-600 hover:bg-amber-100'
+                            )}
+                          >
+                            {sub === 'all' ? '全部' : sub === 'dog' ? '🐶 狗' : '🐱 猫'}
+                            {count > 0 && (
+                              <span className={cn(
+                                'ml-1',
+                                petSubFilter === sub ? 'text-white/80' : 'text-slate-400'
+                              )}>
+                                ({count})
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {petItems.map(item => (
@@ -787,13 +823,13 @@ function UserDataTab({
                 <div className="flex items-start gap-3">
                   <div className="w-[60px] h-[80px] rounded-2xl overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-2xl flex-shrink-0">
                     {pet.image_url ? (
-                      <img src={pet.image_url} alt={pet.breed || pet.name} className="w-full h-full object-cover" />
+                      <img src={pet.image_url} alt={pet.name || pet.breed || ''} className="w-full h-full object-cover" />
                     ) : (
                       pet.emoji || '🐶'
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800">{pet.breed || pet.name}</h3>
+                    <h3 className="font-bold text-slate-800">{pet.name || pet.breed}</h3>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Lv.{pet.level}</span>
                       {pet.gender && (
@@ -811,7 +847,7 @@ function UserDataTab({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.breed || pet.name, selectedChild?.name ?? '')}>
+                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.name || pet.breed || '', selectedChild?.name ?? '')}>
                     <Trash2 className="w-4 h-4" /> 删除
                   </Button>
                 </div>

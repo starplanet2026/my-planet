@@ -34,7 +34,9 @@ const GENDER_STYLE: Record<string, string> = {
 
 // 心情状态：统一 emoji 和文案的对应关系
 // 与 moodEmoji / petMessage 共用同一套阈值，确保表情和会话内容一致
+// 会话文案优先使用品种定制会话（来自 pet_shop_items 的 5 个场景），不再用通用模板
 function moodState(pet: Pet): { emoji: string; text: string } {
+  // 生病提示：功能性健康告警，不属于 5 个会话场景，保留引导用户买药
   if (pet.has_severe_illness) {
     return { emoji: '🤢', text: '主人，我生重病了，快带我去医院吧' };
   }
@@ -47,19 +49,17 @@ function moodState(pet: Pet): { emoji: string; text: string } {
   if (pet.is_sick) {
     return { emoji: '😢', text: '我不舒服...快带我去看医生！' };
   }
-  // 新领养宠物：体力/清洁/玩耍均为0，显示欢迎文案
   const h = coalesce0(pet.hunger);
   const c = coalesce0(pet.clean);
   const hp = coalesce0(pet.happiness);
+  // 新领养宠物：体力/清洁/玩耍均为0 → 新宠到家场景
   if (h === 0 && c === 0 && hp === 0) {
-    return { emoji: '🐶', text: '快来和我互动吧，小主人' };
+    return { emoji: '🐶', text: pet.dialogue_new_pet ?? '' };
   }
   const avg = (h + c + hp + coalesce0(pet.health)) / 4;
-  if (avg > 80) return { emoji: '🤩', text: '主人我好开心呀！💕' };
-  if (avg > 60) return { emoji: '😊', text: '今天也是元气满满的一天~' };
-  if (avg > 30) return { emoji: '😐', text: '还行，但还可以更好~' };
-  if (avg > 10) return { emoji: '😟', text: '需要照顾啦...' };
-  return { emoji: '😫', text: '我快不行了...快来救我！' };
+  if (avg > 80) return { emoji: '🤩', text: pet.dialogue_high_stats ?? '' };
+  if (avg > 30) return { emoji: '😊', text: pet.dialogue_medium_stats ?? '' };
+  return { emoji: '😟', text: pet.dialogue_low_stats ?? '' };
 }
 
 function coalesce0(v: number | null | undefined): number {
@@ -251,7 +251,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     const actionCfg = ACTIONS.find(a => a.key === action);
     if (actionCfg) {
       const statVal = pet[actionCfg.stat] ?? 0;
-      console.log('[handleInteract]', { action, petId, petName: pet.breed || pet.name, stat: actionCfg.stat, statVal });
+      console.log('[handleInteract]', { action, petId, petName: pet.name || pet.breed, stat: actionCfg.stat, statVal });
       if (statVal >= actionCfg.max) {
         const fullMsg: Record<string, string> = {
           feed: '我已经饱啦 🍖',
@@ -553,7 +553,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                   <span className={cn('px-1.5 py-0.5 rounded-full text-[9px] font-bold', RARITY_STYLE[pet.rarity ?? 'common'])}>
                     {rarityLabel(pet.rarity)}
                   </span>
-                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.breed || pet.name}</span>
+                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.name || pet.breed}</span>
                   {pet.gender && (
                     <span className={cn(
                       'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',

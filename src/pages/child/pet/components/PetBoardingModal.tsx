@@ -182,13 +182,13 @@ export function PetBoardingModal({ onClose, onBoarded }: {
                   >
                     <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-amber-50 overflow-hidden flex-shrink-0">
                       {pet.image_url ? (
-                        <img src={pet.image_url} alt={pet.name} className="w-full h-full object-cover" />
+                        <img src={pet.image_url} alt={pet.name || pet.breed || ''} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-lg">{pet.emoji || '🐾'}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-700 truncate">{pet.name}</p>
+                      <p className="text-sm font-bold text-slate-700 truncate">{pet.name || pet.breed}</p>
                       <p className="text-[10px] text-slate-400">
                         {boarded ? '✅ 今日已托管' : sick ? '🤒 生病中，无法托管' : selected ? `Lv.${pet.level} · 🏠 托管中` : `Lv.${pet.level} · ${pet.base_coin_per_day || 0}💰/天`}
                       </p>

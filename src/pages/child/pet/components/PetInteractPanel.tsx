@@ -4,8 +4,10 @@ import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { cn } from '../../../../lib/utils';
 import { X } from 'lucide-react';
-import { interactWithPet, checkPet, claimPetCoins, fetchPetInventory, healSevereIllness, getSevereIllnessCost } from '../../../../api/pets';
-import type { Pet, PetInventory, PetSubcategory, TRAIT_DESC } from '../../../../api/types';
+import { interactWithPet, checkPet, claimPetCoins, fetchPetInventory, healSevereIllness, getSevereIllnessCost, getPetGreeting } from '../../../../api/pets';
+import { usePetTraits } from '../../../../hooks/usePetTraits';
+import { TRAIT_DESC } from '../../../../api/types';
+import type { Pet, PetInventory, PetSubcategory } from '../../../../api/types';
 
 const ACTION_SUBCAT: Record<string, PetSubcategory> = {
   feed: 'food',
@@ -52,6 +54,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
   const [inventory, setInventory] = useState<PetInventory[]>([]);
   const [acting, setActing] = useState<string | null>(null);
   const [severeCost, setSevereCost] = useState(20);
+  const { traitMap } = usePetTraits();
   const [showSevereConfirm, setShowSevereConfirm] = useState(false);
 
   const loadInventory = async () => {
@@ -130,6 +133,15 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
       setCurrentPet(updated);
       onUpdated(updated);
       loadInventory();
+      // 互动成功后，拉取宠物当前状态对应的定制会话并展示
+      try {
+        const greeting = await getPetGreeting(currentPet.id);
+        if (greeting.dialogue) {
+          toast.info(`${currentPet.name || currentPet.breed}：${greeting.dialogue}`);
+        }
+      } catch {
+        // 忽略 greeting 拉取失败，不影响主流程
+      }
     } catch (e: any) {
       toast.error(e?.message ?? '操作失败');
     } finally {
@@ -149,6 +161,15 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
         const updated = await checkPet(currentPet.id);
         setCurrentPet(updated);
         onUpdated(updated);
+        // 治疗成功后，拉取宠物当前状态对应的定制会话并展示
+        try {
+          const greeting = await getPetGreeting(currentPet.id);
+          if (greeting.dialogue) {
+            toast.info(`${currentPet.name || currentPet.breed}：${greeting.dialogue}`);
+          }
+        } catch {
+          // 忽略
+        }
       } else {
         toast.error(result.message || '治疗失败');
       }
@@ -168,7 +189,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
         {/* 头部：名字 + 等级 + 特质 + 关闭 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-800 text-base">{currentPet.name}</span>
+            <span className="font-bold text-slate-800 text-base">{currentPet.name || currentPet.breed}</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">Lv.{currentPet.level}</span>
             {currentPet.trait && (
               <span
@@ -303,6 +324,18 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
           >
             {acting === 'claim' ? '领取中...' : `💰 领取 ${Math.floor(currentPet.coin_balance)} 金币`}
           </button>
+        )}
+
+        {/* 特质效果（底部展示加成百分比） */}
+        {currentPet.trait_id && traitMap[currentPet.trait_id]?.detail_text && (
+          <div className="mt-3 p-2.5 rounded-xl bg-purple-50 border border-purple-100">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-purple-600">🌟 {currentPet.trait || traitMap[currentPet.trait_id]?.name}</span>
+            </div>
+            <p className="text-xs text-purple-700 mt-1">
+              {traitMap[currentPet.trait_id]?.detail_text}
+            </p>
+          </div>
         )}
       </div>
 

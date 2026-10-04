@@ -504,6 +504,11 @@ export interface PetShopItem {
   trait: string | null;
   trait_id: string | null;
   valid_days: number | null;
+  dialogue_new_pet: string | null;
+  dialogue_low_stats: string | null;
+  dialogue_medium_stats: string | null;
+  dialogue_high_stats: string | null;
+  dialogue_study: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -601,7 +606,8 @@ export interface Pet {
   family_id: string;
   member_id: string;
   shop_item_id: string | null;
-  name: string;
+  name: string | null;
+  breed: string | null;
   emoji: string | null;
   image_url: string | null;
   gender: 'male' | 'female' | null;
@@ -644,6 +650,12 @@ export interface Pet {
   last_check_at: string;
   created_at: string;
   trait_id: string | null;
+  // 品种定制会话（来自 pet_shop_items，fetchPets 时带出）
+  dialogue_new_pet: string | null;
+  dialogue_low_stats: string | null;
+  dialogue_medium_stats: string | null;
+  dialogue_high_stats: string | null;
+  dialogue_study: string | null;
 }
 
 export type PetActionType = 'feed' | 'clean' | 'play' | 'heal' | 'claim_coin';
