@@ -11,6 +11,18 @@ import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo, fetchGachaConfi
 import { supabase } from '../../../../api/client';
 import type { PetShopItem, Pet, GachaConfig } from '../../../../api/types';
 
+// 稀有度中文标签
+const RARITY_LABEL: Record<string, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+};
+const RARITY_CLS: Record<string, string> = {
+  common: 'bg-slate-100 text-slate-500',
+  rare: 'bg-blue-100 text-blue-600',
+  epic: 'bg-purple-100 text-purple-600',
+};
+
 // 性格测试题
 const QUIZ_QUESTIONS = [
   {
@@ -693,8 +705,8 @@ export function AdoptPetModal({
                   <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
                     💰 {drawnItem.base_coin_per_day || 0}/天
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-medium">
-                    {drawnItem.rarity}
+                  <span className={cn('px-2 py-0.5 rounded-full font-medium', RARITY_CLS[drawnItem.rarity ?? 'common'])}>
+                    {RARITY_LABEL[drawnItem.rarity ?? 'common'] ?? drawnItem.rarity}
                   </span>
                 </div>
               </div>

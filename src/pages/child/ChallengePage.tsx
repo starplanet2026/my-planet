@@ -1732,7 +1732,9 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   if (showRoundResult) {
     const correctCount = results.filter(Boolean).length;
     const wrongCount = results.length - correctCount;
-    const accuracy = originalTotal > 0 ? Math.min(100, Math.round((clearedIds.length / originalTotal) * 100)) : 0;
+    // 已消题 = 本轮答对并消除的题目数（不超过原始总题）
+    const clearedThisRound = Math.min(correctCount, originalTotal);
+    const accuracy = originalTotal > 0 ? Math.min(100, Math.round((clearedThisRound / originalTotal) * 100)) : 0;
     const isTodayReview = board === 'today_review';
 
     return (
@@ -1747,7 +1749,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
           <div className="text-5xl mb-3">{accuracy === 100 ? '🎉' : accuracy >= 60 ? '🌟' : '💪'}</div>
           <div className="text-4xl font-bold text-emerald-500 mb-1">{accuracy}%</div>
           <p className="text-sm text-slate-500">
-            已消题 {Math.min(clearedIds.length, originalTotal)} / 原始总题 {originalTotal}
+            已消题 {clearedThisRound} / 原始总题 {originalTotal}
           </p>
           <p className="text-sm text-slate-500 mt-1">
             本轮答对 {correctCount} 题，答错 {wrongCount} 题

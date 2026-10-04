@@ -67,11 +67,13 @@ export async function updatePetShopItem(id: string, patch: Partial<PetShopItem>)
     .single();
   if (error) throw error;
 
-  // 同步 base_coin_per_day / upgrade_coin_reward 到所有已领养该物品的宠物
-  // （领养时从商店物品复制，后续改物品需同步，否则宠物显示的产金/升级奖励与物品不一致）
+  // 同步 base_coin_per_day / upgrade_coin_reward / rarity / max_level 到所有已领养该物品的宠物
+  // （领养时从商店物品复制，后续改物品需同步，否则宠物显示的产金/稀有度/等级上限与物品不一致）
   const petPatch: Record<string, unknown> = {};
   if (patch.base_coin_per_day !== undefined) petPatch.base_coin_per_day = patch.base_coin_per_day;
   if (patch.upgrade_coin_reward !== undefined) petPatch.upgrade_coin_reward = patch.upgrade_coin_reward;
+  if (patch.rarity !== undefined) petPatch.rarity = patch.rarity;
+  if (patch.max_level !== undefined) petPatch.max_level = patch.max_level;
   if (Object.keys(petPatch).length > 0) {
     const { error: petErr } = await supabase
       .from('pets')
