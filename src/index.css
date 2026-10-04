@@ -38,3 +38,28 @@ button, a {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* 宠物会话框呼吸动效：轻微缩放+透明度变化，吸引用户注意 */
+@keyframes pet-bubble-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.92;
+  }
+}
+.pet-bubble-breathe {
+  animation: pet-bubble-breathe 2.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* 折叠态💬图标呼吸 */
+@keyframes pet-chat-icon-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.8; }
+}
+.pet-chat-icon-pulse {
+  animation: pet-chat-icon-pulse 1.8s ease-in-out infinite;
+}

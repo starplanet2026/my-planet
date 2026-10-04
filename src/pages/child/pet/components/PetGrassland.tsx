@@ -613,7 +613,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
-                        className="text-lg drop-shadow-md hover:scale-110 transition-transform"
+                        className="text-lg drop-shadow-md hover:scale-110 transition-transform pet-chat-icon-pulse"
                       >
                         💬
                       </button>
@@ -623,7 +623,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
                         className="max-w-[200px] cursor-pointer relative"
                       >
-                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-nowrap">
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-nowrap pet-bubble-breathe">
                           {petMessage(pet)}
                         </div>
                       </div>
