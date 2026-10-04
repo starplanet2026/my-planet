@@ -31,6 +31,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subFilter, setSubFilter] = useState<'all' | 'dog' | 'cat'>('all');
 
   useEffect(() => {
     load();
@@ -56,8 +57,21 @@ export function PetDexModal({ familyId, memberId, onClose }: {
   const getOwnedPet = (itemId: string): Pet | undefined =>
     pets.find(p => p.shop_item_id === itemId);
 
-  // 统计：已收集 / 总数
-  const ownedCount = items.filter(it => getOwnedPet(it.id)).length;
+  // 稀有度排序权重: epic > rare > common
+  const rarityRank: Record<PetRarity, number> = { epic: 3, rare: 2, common: 1 };
+
+  // 筛选 + 排序: 史诗-稀有-普通, 每种稀有度下先狗后猫
+  const visibleItems = items
+    .filter(it => subFilter === 'all' ? true : it.subcategory === subFilter)
+    .sort((a, b) => {
+      const rDiff = rarityRank[b.rarity] - rarityRank[a.rarity];
+      if (rDiff !== 0) return rDiff;
+      // 先狗后猫
+      const dogFirst = (s: PetShopItem) => (s.subcategory === 'dog' ? 0 : 1);
+      return dogFirst(a) - dogFirst(b);
+    });
+
+  const filteredOwnedCount = visibleItems.filter(it => getOwnedPet(it.id)).length;
 
   return (
     <Modal open onClose={onClose} title="宠物图鉴" size="lg">
@@ -71,20 +85,41 @@ export function PetDexModal({ familyId, memberId, onClose }: {
         />
       ) : (
         <div className="space-y-4">
-          {/* 收集进度 */}
-          <div className="flex items-center justify-between rounded-xl bg-purple-50 px-4 py-2">
-            <span className="text-sm text-purple-600">收集进度</span>
+          {/* 子分类筛选 + 收集进度 */}
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-lg font-bold text-purple-600">{ownedCount}</span>
-              <span className="text-sm text-purple-400">/ {items.length}</span>
+              {([
+                { key: 'all' as const, label: '全部', emoji: '🐾' },
+                { key: 'dog' as const, label: '狗', emoji: '🐶' },
+                { key: 'cat' as const, label: '猫', emoji: '🐱' },
+              ]).map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setSubFilter(t.key)}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                    subFilter === t.key
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+                  )}
+                >
+                  {t.emoji} {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 rounded-xl bg-purple-50 px-3 py-1">
+              <span className="text-lg font-bold text-purple-600">{filteredOwnedCount}</span>
+              <span className="text-sm text-purple-400">/ {visibleItems.length}</span>
             </div>
           </div>
 
-          {/* 宠物网格 - 问题15: 一行5个，仅展示图片+品种名+稀有度+是否拥有 */}
+          {/* 宠物网格 - 一行5个，仅展示图片+品种名+稀有度+特质+是否拥有 */}
           <div className="grid grid-cols-5 gap-2">
-            {items.map(item => {
+            {visibleItems.map(item => {
               const ownedPet = getOwnedPet(item.id);
               const owned = !!ownedPet;
+              const traitName = item.trait_id ? traitMap[item.trait_id]?.name : null;
+              const hasTrait = !!traitName;
               return (
                 <div
                   key={item.id}
@@ -107,20 +142,25 @@ export function PetDexModal({ familyId, memberId, onClose }: {
                     {item.breed || item.name || '未命名'}
                   </p>
 
-                  {/* 稀有度 */}
-                  <span
-                    className={cn(
-                      'text-[8px] px-1 py-0.5 rounded-full font-medium',
-                      rarityStyle[item.rarity],
-                    )}
-                  >
-                    {rarityLabel[item.rarity]}
-                  </span>
-
-                  {/* 特质 */}
-                  <span className="text-[8px] px-1 py-0.5 rounded-full font-medium bg-purple-50 text-purple-600 truncate w-full text-center">
-                    🌟 {(item.trait_id && traitMap[item.trait_id]?.name) || '无特质'}
-                  </span>
+                  {/* 稀有度 + 特质 同一行 */}
+                  <div className="flex items-center gap-1 w-full">
+                    <span
+                      className={cn(
+                        'text-[8px] px-1 py-0.5 rounded-full font-medium shrink-0',
+                        rarityStyle[item.rarity],
+                      )}
+                    >
+                      {rarityLabel[item.rarity]}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-[8px] truncate flex-1 text-center',
+                        hasTrait ? 'text-purple-600' : 'text-slate-400',
+                      )}
+                    >
+                      {traitName || '无特质'}
+                    </span>
+                  </div>
 
                   {/* 是否拥有 */}
                   <span
