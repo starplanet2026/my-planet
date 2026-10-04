@@ -66,6 +66,20 @@ function coalesce0(v: number | null | undefined): number {
   return typeof v === 'number' ? v : 0;
 }
 
+// RPC 返回的宠物对象不带 pet_shop_items 关联字段（dialogue_*、最新 image_url），
+// 更新本地状态时需要从已有状态中保留这些字段，否则会话气泡会消失
+function mergeShopMeta(updated: Pet, existing?: Pet): Pet {
+  return {
+    ...updated,
+    image_url: existing?.image_url ?? updated.image_url,
+    dialogue_new_pet: existing?.dialogue_new_pet ?? updated.dialogue_new_pet,
+    dialogue_low_stats: existing?.dialogue_low_stats ?? updated.dialogue_low_stats,
+    dialogue_medium_stats: existing?.dialogue_medium_stats ?? updated.dialogue_medium_stats,
+    dialogue_high_stats: existing?.dialogue_high_stats ?? updated.dialogue_high_stats,
+    dialogue_study: existing?.dialogue_study ?? updated.dialogue_study,
+  };
+}
+
 // 对话框文案
 function petMessage(pet: Pet): string | null {
   return moodState(pet).text;
@@ -330,9 +344,9 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
         toast.success(`🎉 今日收获 金币+${coinEarned}`);
       }
       refreshMembers();
-      setPetStates(prev => ({ ...prev, [pet.id]: updated }));
+      setPetStates(prev => ({ ...prev, [pet.id]: mergeShopMeta(updated, prev[pet.id]) }));
       // 问题3: 同步到父组件，避免父组件 re-render 时覆盖本地状态
-      onPetUpdate?.(updated);
+      onPetUpdate?.(mergeShopMeta(updated, pet));
       loadInventory();
     } catch (e: any) {
       toast.error(e?.message ?? '操作失败');
@@ -351,8 +365,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
 
   const handleLevelUpDone = (updated: Pet) => {
     refreshMembers();
-    setPetStates(prev => ({ ...prev, [updated.id]: updated }));
-    onPetUpdate?.(updated);
+    setPetStates(prev => ({ ...prev, [updated.id]: mergeShopMeta(updated, prev[updated.id]) }));
+    onPetUpdate?.(mergeShopMeta(updated, petStates[updated.id]));
   };
 
   const handleClaim = async (petId: string) => {
@@ -366,7 +380,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
         toast.success(result.message);
         refreshMembers();
         const updated = await checkPet(pet.id);
-        setPetStates(prev => ({ ...prev, [pet.id]: updated }));
+        setPetStates(prev => ({ ...prev, [pet.id]: mergeShopMeta(updated, prev[pet.id]) }));
       } else {
         toast.error(result.message);
       }

@@ -258,8 +258,22 @@ export function PetPage() {
       }
       // check_pet RPC 返回的是 pets 表自身的 image_url（旧快照），
       // 用 fetchPets 关联到的商店最新形象图覆盖，保证家长改图后已购宠物同步更新
-      const shopImageById = new Map(petsData.map(p => [p.id, p.image_url]));
-      checked = checked.map(p => ({ ...p, image_url: shopImageById.get(p.id) ?? p.image_url }));
+      // 同时恢复 dialogue_* 字段（来自 pet_shop_items 关联，check_pet 不带这些字段）
+      const shopMetaById = new Map(petsData.map(p => [
+        p.id,
+        {
+          image_url: p.image_url,
+          dialogue_new_pet: p.dialogue_new_pet,
+          dialogue_low_stats: p.dialogue_low_stats,
+          dialogue_medium_stats: p.dialogue_medium_stats,
+          dialogue_high_stats: p.dialogue_high_stats,
+          dialogue_study: p.dialogue_study,
+        },
+      ]));
+      checked = checked.map(p => {
+        const meta = shopMetaById.get(p.id);
+        return meta ? { ...p, ...meta } : p;
+      });
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
@@ -283,8 +297,21 @@ export function PetPage() {
       } catch {
         // fall back to raw data
       }
-      const shopImageById = new Map(petsData.map(p => [p.id, p.image_url]));
-      checked = checked.map(p => ({ ...p, image_url: shopImageById.get(p.id) ?? p.image_url }));
+      const shopMetaById = new Map(petsData.map(p => [
+        p.id,
+        {
+          image_url: p.image_url,
+          dialogue_new_pet: p.dialogue_new_pet,
+          dialogue_low_stats: p.dialogue_low_stats,
+          dialogue_medium_stats: p.dialogue_medium_stats,
+          dialogue_high_stats: p.dialogue_high_stats,
+          dialogue_study: p.dialogue_study,
+        },
+      ]));
+      checked = checked.map(p => {
+        const meta = shopMetaById.get(p.id);
+        return meta ? { ...p, ...meta } : p;
+      });
       setPets(checked);
       setDogHouse(houseData);
     } catch (e: any) {
