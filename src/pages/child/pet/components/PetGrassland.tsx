@@ -118,6 +118,8 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
   // positionsRef：实时镜像最新坐标，避免 onPointerUp 读到闭包旧值导致保存旧坐标
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const dragRef = useRef<{ petId: string; startX: number; startY: number; moved: boolean } | null>(null);
+  // 标记是否已从数据库加载过坐标，避免加载前用默认位置覆盖已保存坐标
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
   // 宠物图层顺序：数组末尾 = 最上层。双击宠物将其置顶。
   // 按用户独立存储，切换用户不互相覆盖
   const layerOrderKey = `pet-layer-order-${childId}`;
@@ -153,48 +155,61 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     return 10 + idx;
   };
 
-  // 初始化宠物状态 + 从数据库加载坐标
+  // 同步宠物状态（仅更新 petStates，不触碰坐标）
   useEffect(() => {
     const map: Record<string, Pet> = {};
     pets.forEach(p => { map[p.id] = p; });
     setPetStates(map);
-    // 从数据库加载已保存的坐标
-    if (childId) {
-      fetchPetPositions(childId).then(saved => {
-        setPositions(prev => {
-          const next = { ...prev };
-          pets.forEach(p => {
-            if (next[p.id]) return; // 已有坐标（含拖拽中），保留
-            const cur = saved[p.id];
-            if (cur) {
-              next[p.id] = {
-                x: Math.max(5, Math.min(95, cur.x)),
-                y: Math.max(10, Math.min(70, cur.y)),
-              };
-            } else {
-              // 新宠到家：首次出现，放置在默认位置
-              next[p.id] = { ...DEFAULT_PET_POSITION };
-            }
-          });
-          positionsRef.current = next;
-          return next;
+  }, [pets]);
+
+  // 从数据库加载坐标：仅在 childId 变化时执行一次，避免每次 pets 变化都重新拉取导致竞态
+  useEffect(() => {
+    setPositionsLoaded(false);
+    if (!childId) { setPositionsLoaded(true); return; }
+    let cancelled = false;
+    fetchPetPositions(childId).then(saved => {
+      if (cancelled) return;
+      setPositions(prev => {
+        const next = { ...prev };
+        Object.entries(saved).forEach(([petId, pos]) => {
+          next[petId] = {
+            x: Math.max(5, Math.min(95, pos.x)),
+            y: Math.max(10, Math.min(70, pos.y)),
+          };
         });
-      }).catch((e) => {
-        // 数据库读取失败时用默认位置
-        console.error('[fetchPetPositions] 失败:', e);
-        setPositions(prev => {
-          const next = { ...prev };
-          pets.forEach(p => {
-            if (!next[p.id]) next[p.id] = { ...DEFAULT_PET_POSITION };
-          });
-          positionsRef.current = next;
-          return next;
-        });
+        positionsRef.current = next;
+        return next;
       });
-    }
-    loadInventory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pets, childId]);
+    }).catch((e) => {
+      console.error('[fetchPetPositions] 失败:', e);
+    }).finally(() => {
+      if (!cancelled) setPositionsLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [childId]);
+
+  // 为没有保存坐标的宠物分配错开的默认位置（网格排布，避免全部重叠在中间）
+  // 仅在数据库坐标加载完成后执行
+  useEffect(() => {
+    if (!positionsLoaded) return;
+    setPositions(prev => {
+      let changed = false;
+      const next = { ...prev };
+      pets.forEach((p, idx) => {
+        if (!next[p.id]) {
+          const col = idx % 5;
+          const row = Math.floor(idx / 5);
+          next[p.id] = {
+            x: Math.max(5, Math.min(95, 20 + col * 15)),
+            y: Math.max(10, Math.min(70, 45 + row * 10)),
+          };
+          changed = true;
+        }
+      });
+      if (changed) positionsRef.current = next;
+      return changed ? next : prev;
+    });
+  }, [pets, positionsLoaded]);
 
   // 加载背包
   const loadInventory = useCallback(async () => {
