@@ -5,11 +5,24 @@ import { cn } from '../../../../lib/utils';
 import { getBoardingHistory } from '../../../../api/pets';
 import type { BoardingHistoryItem } from '../../../../api/types';
 
-// 格式化日期为简洁中文显示
+// 格式化日期为简洁中文显示（使用北京时间，与数据库 board_date 一致）
+function getBeijingDateStr(d: Date = new Date()): string {
+  // board_date 存的是北京时间日期字符串，用 Intl 按 Asia/Shanghai 取年月日
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const y = parts.find(p => p.type === 'year')!.value;
+  const m = parts.find(p => p.type === 'month')!.value;
+  const day = parts.find(p => p.type === 'day')!.value;
+  return `${y}-${m}-${day}`;
+}
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(getBeijingDateStr() + 'T00:00:00');
   const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
   if (diff === 0) return '今日';
   if (diff === 1) return '昨日';
@@ -50,7 +63,7 @@ export function BoardingHistoryModal({ memberId, onClose }: {
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [list]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getBeijingDateStr();
 
   return (
     <Modal open onClose={onClose} title="托管明细" size="md">
