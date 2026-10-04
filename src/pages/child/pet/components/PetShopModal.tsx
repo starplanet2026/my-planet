@@ -75,6 +75,29 @@ const traitTagCls = (hasTrait: boolean) =>
     ? 'px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-600'
     : 'text-slate-400';
 
+// 宠物解锁判断
+// - 普通狗: 始终解锁
+// - 稀有狗: 拥有宠物>=2 解锁
+// - 史诗狗: 拥有宠物>=5 解锁
+// - 猫(所有稀有度): 拥有宠物>=10 且 至少1只正在店内进修 解锁
+export function isPetUnlocked(
+  item: PetShopItem,
+  ownedCount: number,
+  hasStudyingPet: boolean,
+): boolean {
+  if (item.type !== 'pet') return true;
+  if (item.subcategory === 'dog') {
+    if (item.rarity === 'common') return true;
+    if (item.rarity === 'rare') return ownedCount >= 2;
+    if (item.rarity === 'epic') return ownedCount >= 5;
+    return true;
+  }
+  if (item.subcategory === 'cat') {
+    return ownedCount >= 10 && hasStudyingPet;
+  }
+  return true;
+}
+
 // 商品图标：优先 image_url，否则 emoji，再否则占位
 function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
   // 统一 3:4 竖版比例
@@ -493,11 +516,12 @@ export function PetShopModal({
           {items.map(item => {
             const soldOut = item.stock !== null && item.stock <= 0;
             const owned = item.type === 'pet' && isOwned(item.id);
-            const disabled = soldOut;
+            const unlocked = isPetUnlocked(item, ownedPets.length, ownedPets.some(p => p.is_studying));
+            const disabled = soldOut || !unlocked;
             const cardCls = cn(
               'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
               disabled
-                ? 'border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed'
+                ? 'border-slate-200 bg-slate-50 opacity-50 cursor-not-allowed'
                 : owned
                 ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:shadow-md active:scale-[0.98]'
                 : 'border-star-100 bg-white hover:border-amber-300 hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
@@ -505,7 +529,7 @@ export function PetShopModal({
             return (
               <button
                 key={item.id}
-                onClick={() => setDetail(item)}
+                onClick={() => { if (unlocked && !soldOut) setDetail(item); }}
                 disabled={disabled}
                 className={cardCls}
               >
@@ -524,6 +548,12 @@ export function PetShopModal({
                   <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
                     已领养
                   </span>
+                )}
+                {/* 锁图标：未解锁时居中覆盖 */}
+                {!unlocked && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                    <span className="text-3xl drop-shadow">🔒</span>
+                  </div>
                 )}
                 <ItemIcon item={item} size="sm" />
                 <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
@@ -548,23 +578,6 @@ export function PetShopModal({
               </button>
             );
           })}
-
-          {/* 锁定预告卡：仅宠物列表末尾显示 */}
-          <div
-            className={cn(
-              'flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 text-center',
-              'opacity-70 select-none'
-            )}
-            aria-disabled="true"
-          >
-            <div className="text-3xl">🔒</div>
-            <p className="text-[11px] font-medium text-slate-500 leading-tight">
-              限时领养满 2 只宠物后解锁更多萌宠
-            </p>
-            <p className="text-[10px] text-slate-400">
-              当前: {Math.min(ownedPets.length, 2)}/2
-            </p>
-          </div>
         </div>
       )}
 
