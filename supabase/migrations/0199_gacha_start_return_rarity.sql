@@ -1,6 +1,6 @@
--- 0199: gacha_start 返回 drawn_item_rarity 字段
--- Bug: 抽卡弹窗稀有度全部显示为"普通"，因 RPC 未返回 rarity，前端硬编码 'common'
--- 修复: gacha_start 返回表新增 drawn_item_rarity text 字段，前端据此显示真实稀有度
+-- 0199: gacha_start 返回 drawn_item_rarity / drawn_item_coin_per_day 字段
+-- Bug: 抽卡弹窗稀有度全部显示"普通"、日产金币显示0，因 RPC 未返回这些字段，前端硬编码兜底
+-- 修复: gacha_start 返回表新增 drawn_item_rarity、drawn_item_coin_per_day，前端据此展示真实值
 
 drop function if exists public.gacha_start(uuid);
 create function public.gacha_start(p_member_id uuid)
@@ -12,6 +12,7 @@ returns table(
   drawn_item_emoji text,
   drawn_item_image text,
   drawn_item_rarity text,
+  drawn_item_coin_per_day numeric,
   remaining_star int
 )
 language plpgsql security definer as $$
@@ -22,7 +23,7 @@ declare
 begin
   select * into v_member from public.members where id = p_member_id for update;
   if not found then
-    return query select false, '用户不存在', null::uuid, null::text, null::text, null::text, null::text, 0;
+    return query select false, '用户不存在', null::uuid, null::text, null::text, null::text, null::text, null::numeric, 0;
     return;
   end if;
 
@@ -30,11 +31,11 @@ begin
 
   if v_member.star_value < v_cfg.adopt_cost then
     return query select false, '星光值不足，需要'||v_cfg.adopt_cost||'星光值才能抽卡',
-      null::uuid, null::text, null::text, null::text, null::text, v_member.star_value;
+      null::uuid, null::text, null::text, null::text, null::text, null::numeric, v_member.star_value;
     return;
   end if;
 
-  select psi.id, psi.name, psi.emoji, psi.image_url, psi.rarity into v_picked
+  select psi.id, psi.name, psi.emoji, psi.image_url, psi.rarity, psi.base_coin_per_day into v_picked
   from public.pet_shop_items psi
   cross join lateral (
     select case psi.rarity
@@ -57,12 +58,13 @@ begin
 
   if v_picked.id is null then
     return query select false, '暂无可抽的宠物（已全部拥有或概率为0）',
-      null::uuid, null::text, null::text, null::text, null::text, v_member.star_value;
+      null::uuid, null::text, null::text, null::text, null::text, null::numeric, v_member.star_value;
     return;
   end if;
 
   return query select true, '抽卡成功',
-    v_picked.id, v_picked.name, v_picked.emoji, v_picked.image_url, v_picked.rarity, v_member.star_value;
+    v_picked.id, v_picked.name, v_picked.emoji, v_picked.image_url, v_picked.rarity,
+    v_picked.base_coin_per_day, v_member.star_value;
 end;
 $$;
 grant execute on function public.gacha_start(uuid) to anon, authenticated;
