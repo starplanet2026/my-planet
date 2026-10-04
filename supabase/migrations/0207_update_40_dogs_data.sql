@@ -104,16 +104,13 @@ from data d
 where p.type = 'pet' and (p.breed = d.breed or p.breed = '德牧' and d.breed = '德国牧羊犬');
 
 -- ============================================================
--- 二、插入不存在的新品种（柯基、德国牧羊犬、黑豆柴、土松、黑白边牧、陨石边牧、大黄）
+-- 二、插入不存在的新品种（柯基、黑豆柴、土松、黑白边牧、陨石边牧、大黄）
+-- 注：德国牧羊犬=德牧，已通过上面的UPDATE重命名，不新建
 -- ============================================================
 
 insert into public.pet_shop_items (type, subcategory, name, breed, description, rarity, gender, price_star, base_coin_per_day, trait, trait_id, max_level, emoji, status)
 select 'pet', 'dog', '柯基', '柯基', '系着红色三角巾的小短腿柯基，圆滚滚的小屁股走起路来一扭一扭，吐舌傻笑治愈值满分。', 'common', 'female', 135, 1, '有活力', 'a8791b47-22e2-4a8d-b4c5-eeee21203092'::uuid, 10, '🐶', 'active'
 where not exists (select 1 from public.pet_shop_items where breed = '柯基' and type = 'pet');
-
-insert into public.pet_shop_items (type, subcategory, name, breed, description, rarity, gender, price_star, base_coin_per_day, trait, trait_id, max_level, emoji, status)
-select 'pet', 'dog', '德国牧羊犬', '德国牧羊犬', '全能学霸，机警认真执行力强，当得了警犬也当得了你的贴身保镖。', 'common', 'male', 126, 1, '爱学习', '777fdbd6-93ca-460e-b74b-ccd4844cb896'::uuid, 10, '🐶', 'active'
-where not exists (select 1 from public.pet_shop_items where breed = '德国牧羊犬' and type = 'pet');
 
 insert into public.pet_shop_items (type, subcategory, name, breed, description, rarity, gender, price_star, base_coin_per_day, trait, trait_id, max_level, emoji, status)
 select 'pet', 'dog', '黑豆柴', '黑豆柴', '黑得发亮的柴犬，脖子上系着蓝色领结，吐着舌头活泼又讨喜，活像一颗会蹦跶的黑豆。', 'rare', 'male', 300, 2, '小财迷', 'c72c2097-c40f-4c2b-8816-61d87e372777'::uuid, 20, '🐶', 'active'
