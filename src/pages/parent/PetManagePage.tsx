@@ -918,7 +918,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
       await createPetShopItem({
         type,
         subcategory,
-        name: type === 'supply' ? name.trim() || null : null,
+        name: name.trim() || (type === 'pet' ? breed.trim() || '宠物' : '用品'),
         emoji: imageUrl ? undefined : emoji,
         image_url: imageUrl || undefined,
         description: description.trim() || undefined,
@@ -1291,7 +1291,7 @@ function EditItemModal({
     try {
       await updatePetShopItem(item.id, {
         subcategory,
-        name: item.type === 'supply' ? name.trim() || null : null,
+        name: name.trim() || (item.type === 'pet' ? breed.trim() || '宠物' : '用品'),
         emoji: imageUrl ? null : emoji,
         image_url: imageUrl || null,
         description: description.trim() || null,
