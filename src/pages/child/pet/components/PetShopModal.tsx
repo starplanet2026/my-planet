@@ -69,10 +69,10 @@ const RARITY_META: Record<PetRarity, { label: string; cls: string }> = {
 // 稀有度排序权重: epic > rare > common
 const RARITY_RANK: Record<PetRarity, number> = { epic: 3, rare: 2, common: 1 };
 
-// 特质标签样式：有特质用青色(区别于史诗紫色)，无特质灰色无底色
+// 特质标签样式：有特质=青色胶囊(突出)，无特质=纯灰文字(弱化)
 const traitTagCls = (hasTrait: boolean) =>
   hasTrait
-    ? 'bg-teal-50 text-teal-600'
+    ? 'px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-600'
     : 'text-slate-400';
 
 // 商品图标：优先 image_url，否则 emoji，再否则占位
@@ -537,7 +537,7 @@ export function PetShopModal({
                     💰 {item.base_coin_per_day}/天
                   </div>
                   <div className="text-[10px] font-medium">
-                    <span className={cn('px-1.5 py-0.5 rounded-full', traitTagCls(!!(item.trait_id && traitMap[item.trait_id]?.name)))}>
+                    <span className={traitTagCls(!!(item.trait_id && traitMap[item.trait_id]?.name))}>
                       {(item.trait_id && traitMap[item.trait_id]?.name) || '无特质'}
                     </span>
                   </div>
@@ -604,7 +604,7 @@ export function PetShopModal({
                   </span>
                 )}
                 {detail.type === 'pet' && (
-                  <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', traitTagCls(!!(detail.trait_id && traitMap[detail.trait_id]?.name)))}>
+                  <span className={cn('text-xs font-medium', traitTagCls(!!(detail.trait_id && traitMap[detail.trait_id]?.name)))}>
                     {(detail.trait_id && traitMap[detail.trait_id]?.name) || '无特质'}
                   </span>
                 )}

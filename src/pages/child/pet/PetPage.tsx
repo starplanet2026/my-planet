@@ -700,9 +700,8 @@ export function PetPage() {
                             <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
                             <span
                               className={cn(
-                                'px-1.5 py-0.5 rounded-full',
                                 (pet.trait_id && traitMap[pet.trait_id]?.name)
-                                  ? 'bg-teal-50 text-teal-600'
+                                  ? 'px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-600'
                                   : 'text-slate-400'
                               )}
                               title={(pet.trait_id && traitMap[pet.trait_id]?.detail_text) || ''}
