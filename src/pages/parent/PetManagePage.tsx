@@ -609,7 +609,7 @@ function ItemCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-slate-800">
-              {item.name || item.breed || (item.type === 'pet' ? '宠物' : '未命名')}
+              {item.breed || item.name || (item.type === 'pet' ? '宠物' : '未命名')}
             </h3>
             {/* subcategory 标签 */}
             {item.subcategory && (
@@ -787,13 +787,13 @@ function UserDataTab({
                 <div className="flex items-start gap-3">
                   <div className="w-[60px] h-[80px] rounded-2xl overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-2xl flex-shrink-0">
                     {pet.image_url ? (
-                      <img src={pet.image_url} alt={pet.name} className="w-full h-full object-cover" />
+                      <img src={pet.image_url} alt={pet.breed || pet.name} className="w-full h-full object-cover" />
                     ) : (
                       pet.emoji || '🐶'
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800">{pet.name}</h3>
+                    <h3 className="font-bold text-slate-800">{pet.breed || pet.name}</h3>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Lv.{pet.level}</span>
                       {pet.gender && (
@@ -811,7 +811,7 @@ function UserDataTab({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.name, selectedChild?.name ?? '')}>
+                  <Button variant="ghost" size="sm" danger onClick={() => onDeletePet(pet.id, pet.breed || pet.name, selectedChild?.name ?? '')}>
                     <Trash2 className="w-4 h-4" /> 删除
                   </Button>
                 </div>
@@ -918,7 +918,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
       await createPetShopItem({
         type,
         subcategory,
-        name: name.trim() || (type === 'pet' ? breed.trim() || null : null),
+        name: type === 'supply' ? name.trim() || null : null,
         emoji: imageUrl ? undefined : emoji,
         image_url: imageUrl || undefined,
         description: description.trim() || undefined,
@@ -1179,13 +1179,13 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </>
         )}
 
-        {/* 名称（宠物品种名 / 用品名） */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            {type === 'pet' ? '品种名称' : '名称'}
-          </label>
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder={type === 'pet' ? '如：德国牧羊犬' : '如：高级狗粮、逗猫棒'} />
-        </div>
+        {/* 名称（用品专属，宠物用品种字段） */}
+        {type === 'supply' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">名称</label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="如：高级狗粮、逗猫棒" />
+          </div>
+        )}
 
         {/* 星光值价格（所有购买用星光值） */}
         <div>
@@ -1291,7 +1291,7 @@ function EditItemModal({
     try {
       await updatePetShopItem(item.id, {
         subcategory,
-        name: name.trim() || (item.type === 'pet' ? breed.trim() || null : null),
+        name: item.type === 'supply' ? name.trim() || null : null,
         emoji: imageUrl ? null : emoji,
         image_url: imageUrl || null,
         description: description.trim() || null,
@@ -1467,13 +1467,13 @@ function EditItemModal({
           </>
         )}
 
-        {/* 名称（宠物品种名 / 用品名） */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            {item.type === 'pet' ? '品种名称' : '名称'}
-          </label>
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder={item.type === 'pet' ? '如：德国牧羊犬' : ''} />
-        </div>
+        {/* 名称（用品专属，宠物用品种字段） */}
+        {item.type === 'supply' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">名称</label>
+            <Input value={name} onChange={e => setName(e.target.value)} />
+          </div>
+        )}
 
         {/* 星光值价格 */}
         <div>

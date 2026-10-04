@@ -648,7 +648,7 @@ export function PetPage() {
                   >
                     <div className="w-12 h-16 flex items-center justify-center rounded-lg overflow-hidden bg-amber-50">
                       {pet.image_url ? (
-                        <img src={pet.image_url} alt={pet.name} className="w-full h-full object-cover" />
+                        <img src={pet.image_url} alt={pet.breed || pet.name} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-2xl">{pet.emoji || '🐾'}</span>
                       )}
@@ -689,7 +689,7 @@ export function PetPage() {
                       ) : (
                         <>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-slate-700 text-sm truncate">{pet.name}</span>
+                            <span className="font-bold text-slate-700 text-sm truncate">{pet.breed || pet.name}</span>
                             <span className={cn('text-[10px] px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[rarity].cls)}>
                               {RARITY_BADGE[rarity].label}
                             </span>
@@ -759,7 +759,7 @@ export function PetPage() {
                           </span>
                         )}
                         <button
-                          onClick={() => { setRenamingPetId(pet.id); setNewName(pet.name); }}
+                          onClick={() => { setRenamingPetId(pet.id); setNewName(pet.breed || pet.name); }}
                           className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs hover:bg-slate-200"
                         >
                           改名

@@ -74,7 +74,7 @@ function ItemIcon({ item, size }: { item: PetShopItem; size: 'sm' | 'lg' }) {
     return (
       <img
         src={item.image_url}
-        alt={item.name ?? ''}
+        alt={item.breed || item.name ?? ''}
         className={cn(boxCls, 'object-cover rounded-2xl mx-auto')}
       />
     );
@@ -394,7 +394,7 @@ export function PetShopModal({
                     <ItemIcon item={item} size="sm" />
                   </div>
                   <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
-                    {item.name || '未命名'}
+                    {item.breed || item.name || '未命名'}
                   </div>
                   {/* 价格 + 恢复值放一行 */}
                   <div className="w-full flex items-center justify-center gap-2 text-[10px]">
@@ -445,7 +445,7 @@ export function PetShopModal({
                   <ItemIcon item={item} size="sm" />
                 </div>
                 <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
-                  {item.name || '未命名'}
+                  {item.breed || item.name || '未命名'}
                 </div>
                 {/* 价格 + 容量描述放一行 */}
                 <div className="w-full flex items-center justify-center gap-2 text-[10px]">
@@ -513,7 +513,7 @@ export function PetShopModal({
                 )}
                 <ItemIcon item={item} size="sm" />
                 <div className="font-medium text-sm text-slate-700 line-clamp-1 w-full">
-                  {item.name || '未命名'}
+                  {item.breed || item.name || '未命名'}
                 </div>
                 <div className="w-full space-y-0.5">
                   <div className="text-[10px] text-amber-500 font-medium">

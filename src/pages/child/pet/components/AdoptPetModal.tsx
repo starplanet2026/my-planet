@@ -569,7 +569,7 @@ export function AdoptPetModal({
               ) : (
                 <div className="text-6xl">{adoptedPet.emoji || '🐾'}</div>
               )}
-              <p className="font-bold text-slate-700">{adoptedPet.name}</p>
+              <p className="font-bold text-slate-700">{adoptedPet.breed || adoptedPet.name}</p>
               <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
             </div>
           ) : recommendedPet ? (
@@ -581,7 +581,7 @@ export function AdoptPetModal({
                 ) : (
                   <div className="text-6xl">{recommendedPet.emoji || '🐾'}</div>
                 )}
-                <p className="font-bold text-slate-700">{recommendedPet.name}</p>
+                <p className="font-bold text-slate-700">{recommendedPet.breed || recommendedPet.name}</p>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
                     💰 {recommendedPet.base_coin_per_day || 0}/天
@@ -682,7 +682,7 @@ export function AdoptPetModal({
               ) : (
                 <div className="text-6xl">{gachaResult.emoji || '🐾'}</div>
               )}
-              <p className="font-bold text-slate-700">{gachaResult.name}</p>
+              <p className="font-bold text-slate-700">{gachaResult.breed || gachaResult.name}</p>
               <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
             </div>
           ) : drawing ? (
@@ -706,7 +706,7 @@ export function AdoptPetModal({
                 ) : (
                   <div className="text-6xl">{drawnItem.emoji || '🐾'}</div>
                 )}
-                <p className="font-bold text-slate-700">{drawnItem.name}</p>
+                <p className="font-bold text-slate-700">{drawnItem.breed || drawnItem.name}</p>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
                     💰 {drawnItem.base_coin_per_day || 0}/天

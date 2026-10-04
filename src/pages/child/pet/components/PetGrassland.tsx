@@ -251,7 +251,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     const actionCfg = ACTIONS.find(a => a.key === action);
     if (actionCfg) {
       const statVal = pet[actionCfg.stat] ?? 0;
-      console.log('[handleInteract]', { action, petId, petName: pet.name, stat: actionCfg.stat, statVal });
+      console.log('[handleInteract]', { action, petId, petName: pet.breed || pet.name, stat: actionCfg.stat, statVal });
       if (statVal >= actionCfg.max) {
         const fullMsg: Record<string, string> = {
           feed: '我已经饱啦 🍖',
@@ -553,7 +553,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                   <span className={cn('px-1.5 py-0.5 rounded-full text-[9px] font-bold', RARITY_STYLE[pet.rarity ?? 'common'])}>
                     {rarityLabel(pet.rarity)}
                   </span>
-                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.name}</span>
+                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.breed || pet.name}</span>
                   {pet.gender && (
                     <span className={cn(
                       'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',

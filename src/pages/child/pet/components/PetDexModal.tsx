@@ -96,7 +96,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
                   {/* 宠物图标 - 竖版3:4 */}
                   <div className="w-full aspect-[3/4] rounded-lg bg-slate-50 flex items-center justify-center overflow-hidden">
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.name ?? '宠物'} className="w-full h-full object-cover" />
+                      <img src={item.image_url} alt={item.breed || item.name ?? '宠物'} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-xl">{item.emoji || '🐾'}</span>
                     )}
@@ -104,7 +104,7 @@ export function PetDexModal({ familyId, memberId, onClose }: {
 
                   {/* 品种名 */}
                   <p className="text-[10px] font-medium text-slate-700 text-center truncate w-full">
-                    {item.name ?? '未命名'}
+                    {item.breed || item.name ?? '未命名'}
                   </p>
 
                   {/* 稀有度 */}
