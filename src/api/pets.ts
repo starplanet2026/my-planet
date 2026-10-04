@@ -49,6 +49,11 @@ export async function createPetShopItem(data: {
   upgrade_percent?: number;
   valid_days?: number;
   trait_id?: string | null;
+  dialogue_new_pet?: string | null;
+  dialogue_low_stats?: string | null;
+  dialogue_medium_stats?: string | null;
+  dialogue_high_stats?: string | null;
+  dialogue_study?: string | null;
 }): Promise<PetShopItem> {
   const { data: result, error } = await supabase
     .from('pet_shop_items')

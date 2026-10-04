@@ -916,6 +916,11 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const upgradePercent = 5;
   const dailyDecayBase = 4;
   const [traitId, setTraitId] = useState<string | null>(null);
+  const [dialogueNewPet, setDialogueNewPet] = useState('');
+  const [dialogueLowStats, setDialogueLowStats] = useState('');
+  const [dialogueMediumStats, setDialogueMediumStats] = useState('');
+  const [dialogueHighStats, setDialogueHighStats] = useState('');
+  const [dialogueStudy, setDialogueStudy] = useState('');
   const [doghouseLevel, setDoghouseLevel] = useState<number>(1);
   const [recoveryValue, setRecoveryValue] = useState<number>(20);
   const [validDays, setValidDays] = useState<number>(1);
@@ -972,6 +977,11 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
         upgrade_percent: type === 'pet' ? upgradePercent : undefined,
         daily_decay_base: type === 'pet' ? dailyDecayBase : undefined,
         trait_id: type === 'pet' ? traitId : undefined,
+        dialogue_new_pet: type === 'pet' ? (dialogueNewPet.trim() || undefined) : undefined,
+        dialogue_low_stats: type === 'pet' ? (dialogueLowStats.trim() || undefined) : undefined,
+        dialogue_medium_stats: type === 'pet' ? (dialogueMediumStats.trim() || undefined) : undefined,
+        dialogue_high_stats: type === 'pet' ? (dialogueHighStats.trim() || undefined) : undefined,
+        dialogue_study: type === 'pet' ? (dialogueStudy.trim() || undefined) : undefined,
       });
       toast.success('已添加');
       onCreated();
@@ -1212,6 +1222,31 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 />
               </div>
             </div>
+
+            {/* 5 个场景会话（仅宠物可编辑） */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <p className="text-xs font-medium text-slate-500">
+                会话文案（每个场景一句话，留空则不展示）
+              </p>
+              {([
+                { key: 'dialogue_new_pet', label: '🏠 新宠到家', value: dialogueNewPet, set: setDialogueNewPet },
+                { key: 'dialogue_low_stats', label: '📉 低属性（0-50）', value: dialogueLowStats, set: setDialogueLowStats },
+                { key: 'dialogue_medium_stats', label: '📊 中属性（50-90）', value: dialogueMediumStats, set: setDialogueMediumStats },
+                { key: 'dialogue_high_stats', label: '🚀 满属性（90+）', value: dialogueHighStats, set: setDialogueHighStats },
+                { key: 'dialogue_study', label: '📖 陪伴学习', value: dialogueStudy, set: setDialogueStudy },
+              ] as const).map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                  <textarea
+                    value={f.value}
+                    onChange={e => f.set(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-star-300 resize-none"
+                    placeholder="输入该场景的会话文案..."
+                  />
+                </div>
+              ))}
+            </div>
           </>
         )}
 
@@ -1308,6 +1343,11 @@ function EditItemModal({
   const [baseCoinPerDay, setBaseCoinPerDay] = useState(item.base_coin_per_day);
   const [rarity, setRarity] = useState<PetRarity>(item.rarity);
   const [traitId, setTraitId] = useState<string | null>(item.trait_id ?? null);
+  const [dialogueNewPet, setDialogueNewPet] = useState(item.dialogue_new_pet || '');
+  const [dialogueLowStats, setDialogueLowStats] = useState(item.dialogue_low_stats || '');
+  const [dialogueMediumStats, setDialogueMediumStats] = useState(item.dialogue_medium_stats || '');
+  const [dialogueHighStats, setDialogueHighStats] = useState(item.dialogue_high_stats || '');
+  const [dialogueStudy, setDialogueStudy] = useState(item.dialogue_study || '');
   const [recoveryValue, setRecoveryValue] = useState<number>(item.recovery_value ?? 20);
   const [validDays, setValidDays] = useState<number>(item.valid_days ?? 1);
   const [saving, setSaving] = useState(false);
@@ -1337,6 +1377,11 @@ function EditItemModal({
         rarity: item.type === 'pet' ? rarity : undefined,
         gender: item.type === 'pet' ? gender : undefined,
         trait_id: item.type === 'pet' ? traitId : undefined,
+        dialogue_new_pet: item.type === 'pet' ? (dialogueNewPet.trim() || null) : undefined,
+        dialogue_low_stats: item.type === 'pet' ? (dialogueLowStats.trim() || null) : undefined,
+        dialogue_medium_stats: item.type === 'pet' ? (dialogueMediumStats.trim() || null) : undefined,
+        dialogue_high_stats: item.type === 'pet' ? (dialogueHighStats.trim() || null) : undefined,
+        dialogue_study: item.type === 'pet' ? (dialogueStudy.trim() || null) : undefined,
         recovery_value: item.type === 'supply' ? recoveryValue : undefined,
         valid_days: (item.type === 'supply' && subcategory === 'foster') ? validDays : undefined,
       });
@@ -1499,6 +1544,31 @@ function EditItemModal({
                 value={baseCoinPerDay}
                 onChange={e => setBaseCoinPerDay(Number(e.target.value))}
               />
+            </div>
+
+            {/* 5 个场景会话（仅宠物可编辑） */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <p className="text-xs font-medium text-slate-500">
+                会话文案（每个场景一句话，留空则不展示）
+              </p>
+              {([
+                { key: 'dialogue_new_pet', label: '🏠 新宠到家', value: dialogueNewPet, set: setDialogueNewPet },
+                { key: 'dialogue_low_stats', label: '📉 低属性（0-50）', value: dialogueLowStats, set: setDialogueLowStats },
+                { key: 'dialogue_medium_stats', label: '📊 中属性（50-90）', value: dialogueMediumStats, set: setDialogueMediumStats },
+                { key: 'dialogue_high_stats', label: '🚀 满属性（90+）', value: dialogueHighStats, set: setDialogueHighStats },
+                { key: 'dialogue_study', label: '📖 陪伴学习', value: dialogueStudy, set: setDialogueStudy },
+              ] as const).map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{f.label}</label>
+                  <textarea
+                    value={f.value}
+                    onChange={e => f.set(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-star-300 resize-none"
+                    placeholder="输入该场景的会话文案..."
+                  />
+                </div>
+              ))}
             </div>
           </>
         )}
