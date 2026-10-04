@@ -609,7 +609,7 @@ function ItemCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-slate-800">
-              {item.name || (item.type === 'pet' ? '宠物' : '未命名')}
+              {item.name || item.breed || (item.type === 'pet' ? '宠物' : '未命名')}
             </h3>
             {/* subcategory 标签 */}
             {item.subcategory && (
@@ -918,7 +918,7 @@ function CreateItemModal({ onClose, onCreated }: { onClose: () => void; onCreate
       await createPetShopItem({
         type,
         subcategory,
-        name: name.trim() || null,
+        name: name.trim() || (type === 'pet' ? breed.trim() || null : null),
         emoji: imageUrl ? undefined : emoji,
         image_url: imageUrl || undefined,
         description: description.trim() || undefined,
@@ -1291,7 +1291,7 @@ function EditItemModal({
     try {
       await updatePetShopItem(item.id, {
         subcategory,
-        name: name.trim() || null,
+        name: name.trim() || (item.type === 'pet' ? breed.trim() || null : null),
         emoji: imageUrl ? null : emoji,
         image_url: imageUrl || null,
         description: description.trim() || null,
