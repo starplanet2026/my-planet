@@ -474,7 +474,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
     fetchWrongBattlePool(childId).then(data => setBattlePoolCount(data.length)).catch(() => setBattlePoolCount(0));
   }, [boardType, childId]);
 
-  const hasDictationEntry = boardType === 'today_review' && activeDictationSubjects.size > 0;
+  const hasDictationEntry = boardType === 'today_review' && activeDictTasks.length > 0;
   const hasRecitationEntry = boardType === 'today_review' && pendingRecitations.length > 0;
   // 今日复习板块：有题集或有 active 家默任务或有待背诵任务时才渲染
   if (sets.length === 0 && standaloneLevels.length === 0 && boardType !== 'wrong_battle' && !hasDictationEntry && !hasRecitationEntry) return null;
@@ -490,55 +490,38 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
 
       {/* 题集卡片网格 */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-        {/* 家默入口卡片（仅今日复习板块、且该学科有 active 任务时展示，置于最前） */}
-        {boardType === 'today_review' && activeDictationSubjects.has('english') && (
-          <div
-            onClick={() => navigate('/challenge/dictation/english')}
-            className="cursor-pointer rounded-2xl p-3 flex flex-col bg-gradient-to-br from-blue-400 to-indigo-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative"
-          >
-            {/* 学科Tag标签（左上角带底色） */}
-            <span className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
-              英语家默
-            </span>
-            <div className="flex-1 flex flex-col items-center justify-center mt-3">
-              <span className="text-2xl mb-1">📝</span>
-              {activeDictTasks.filter(t => t.subject === 'english').slice(0, 1).map(t => {
-                const count = dictWordCounts[t.id] ?? 0;
-                const total = t.star_per_word * count;
-                return (
-                  <div key={t.id} className="text-center">
-                    <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
-                    <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
-                  </div>
-                );
-              })}
+        {/* 家默入口卡片（每个 active 任务一张卡，置于最前） */}
+        {boardType === 'today_review' && activeDictTasks.map(t => {
+          const isEnglish = t.subject === 'english';
+          const count = dictWordCounts[t.id] ?? 0;
+          const total = t.star_per_word * count;
+          return (
+            <div
+              key={t.id}
+              onClick={() => navigate(`/challenge/dictation/${t.subject}?taskId=${t.id}`)}
+              className={cn(
+                'cursor-pointer rounded-2xl p-3 flex flex-col text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative',
+                isEnglish
+                  ? 'bg-gradient-to-br from-blue-400 to-indigo-500'
+                  : 'bg-gradient-to-br from-rose-400 to-pink-500'
+              )}
+            >
+              <span className={cn(
+                'absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded',
+                isEnglish ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
+              )}>
+                {isEnglish ? '英语家默' : '语文家默'}
+              </span>
+              <div className="flex-1 flex flex-col items-center justify-center mt-3">
+                <span className="text-2xl mb-1">{isEnglish ? '📝' : '✍️'}</span>
+                <div className="text-center">
+                  <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
+                  <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-        {boardType === 'today_review' && activeDictationSubjects.has('chinese') && (
-          <div
-            onClick={() => navigate('/challenge/dictation/chinese')}
-            className="cursor-pointer rounded-2xl p-3 flex flex-col bg-gradient-to-br from-rose-400 to-pink-500 text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative"
-          >
-            {/* 学科Tag标签（左上角带底色） */}
-            <span className="absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
-              语文家默
-            </span>
-            <div className="flex-1 flex flex-col items-center justify-center mt-3">
-              <span className="text-2xl mb-1">✍️</span>
-              {activeDictTasks.filter(t => t.subject === 'chinese').slice(0, 1).map(t => {
-                const count = dictWordCounts[t.id] ?? 0;
-                const total = t.star_per_word * count;
-                return (
-                  <div key={t.id} className="text-center">
-                    <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
-                    <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+          );
+        })}
         {/* 背诵任务入口卡片（每个待作答实例一张，点击进入录音作答页） */}
         {boardType === 'today_review' && pendingRecitations.map(inst => {
           const subject = inst.task?.subject;

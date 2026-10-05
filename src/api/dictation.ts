@@ -253,6 +253,17 @@ export async function getActiveTask(memberId: string, subject: DictationSubject)
   return (data?.[0] ?? null) as DictationTask | null;
 }
 
+// 按 ID 加载指定任务（用于多任务场景下从入口卡片直达指定任务）
+export async function getTaskById(taskId: string): Promise<DictationTask | null> {
+  const { data, error } = await supabase
+    .from('dictation_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+  if (error) throw error;
+  return (data ?? null) as DictationTask | null;
+}
+
 export interface CreateTaskPayload {
   family_id: string;
   member_id: string;

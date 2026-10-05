@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useModeStore } from '../../store/modeStore';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
@@ -10,11 +10,13 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
 import { CheckCircle } from 'lucide-react';
-import { getActiveTask, listTaskWords, submitDictationResult } from '../../api/dictation';
+import { getActiveTask, getTaskById, listTaskWords, submitDictationResult } from '../../api/dictation';
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
 
 export function DictationPlayPage() {
   const { subject } = useParams<{ subject: DictationSubject }>();
+  const [searchParams] = useSearchParams();
+  const taskId = searchParams.get('taskId');
   const navigate = useNavigate();
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? '';
@@ -34,13 +36,15 @@ export function DictationPlayPage() {
   useEffect(() => {
     if (!childId || !subject) return;
     setLoading(true);
-    getActiveTask(childId, subject).then(t => {
+    // 优先加载 URL 中指定的任务（支持多个 active 任务时直达），否则取最新 active 任务
+    const loadTask = taskId ? getTaskById(taskId) : getActiveTask(childId, subject);
+    loadTask.then(t => {
       setTask(t);
       if (t) return listTaskWords(t.id).then(setWords);
       setWords([]);
     }).catch(e => toast.error('加载失败：' + e.message))
       .finally(() => setLoading(false));
-  }, [childId, subject]);
+  }, [childId, subject, taskId]);
 
   if (loading) return <Loading />;
 
