@@ -120,7 +120,7 @@ export interface Purchase {
   expires_at: string | null;
   created_at: string;
   // 关联商品信息
-  items?: { image_url: string | null; weekly_limit: number | null } | null;
+  items?: { image_url: string | null; weekly_limit: number | null; description: string | null; category: string | null } | null;
 }
 
 export interface CoinRecord {

@@ -129,6 +129,8 @@ export function ProfilePage() {
   const [sellQty, setSellQty] = useState(1);
   // 本周使用次数（按 item_id 分组）
   const [weeklyUsage, setWeeklyUsage] = useState<Record<string, number>>({});
+  // 卡片介绍弹窗
+  const [detailTarget, setDetailTarget] = useState<Purchase | null>(null);
 
   const startEdit = () => {
     setEditName(child?.name ?? '');
@@ -352,59 +354,68 @@ export function ProfilePage() {
                   <CardStar className="absolute -top-2 -right-2 w-10 h-10 text-amber-300" />
                   <CardStar className="absolute -bottom-2 -left-2 w-8 h-8 text-amber-300" />
 
-                  {/* 特权图标区 */}
-                  <div className="pt-3 pb-1 flex items-center justify-center relative">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center shadow-inner overflow-hidden">
-                      {p.items?.image_url ? (
-                        <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-2xl sm:text-3xl">🎴</span>
+                  {/* 可点击区域：图标 + 信息，点击弹出卡片介绍 */}
+                  <button
+                    onClick={() => setDetailTarget(p)}
+                    className="block w-full text-left cursor-pointer hover:bg-white/40 transition-colors"
+                  >
+                    {/* 特权图标区 */}
+                    <div className="pt-3 pb-1 flex items-center justify-center relative">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-amber-200 to-star-300 flex items-center justify-center shadow-inner overflow-hidden">
+                        {p.items?.image_url ? (
+                          <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-2xl sm:text-3xl">🎴</span>
+                        )}
+                      </div>
+                      {/* 特权标签 */}
+                      <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-star-500 text-white text-[9px] font-bold shadow">
+                        特权
+                      </div>
+                      {p.quantity > 1 && (
+                        <div className="absolute top-1.5 right-1.5 px-1 py-0.5 rounded-full bg-white/80 text-star-600 text-[9px] font-bold">
+                          x{p.quantity}
+                        </div>
                       )}
                     </div>
-                    {/* 特权标签 */}
-                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-star-500 text-white text-[9px] font-bold shadow">
-                      特权
-                    </div>
-                    {p.quantity > 1 && (
-                      <div className="absolute top-1.5 right-1.5 px-1 py-0.5 rounded-full bg-white/80 text-star-600 text-[9px] font-bold">
-                        x{p.quantity}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* 信息 */}
-                  <div className="px-2 pb-2 text-center relative">
-                    <h4 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-1">{p.item_name_snapshot}</h4>
-                    {p.items?.weekly_limit && p.items.weekly_limit > 0 ? (
-                      <p className="text-[9px] text-amber-500 font-medium mt-0.5">
-                        每周限用{p.items.weekly_limit}次｜本周已用{weeklyUsage[p.item_id] ?? 0}次
+                    {/* 信息 */}
+                    <div className="px-2 pb-1 text-center relative">
+                      <h4 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-1">{p.item_name_snapshot}</h4>
+                      {p.items?.weekly_limit && p.items.weekly_limit > 0 ? (
+                        <p className="text-[9px] text-amber-500 font-medium mt-0.5">
+                          每周限用{p.items.weekly_limit}次｜本周已用{weeklyUsage[p.item_id] ?? 0}次
+                        </p>
+                      ) : (
+                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">无使用限制</p>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
+                        购买于 {formatDate(p.created_at)}
                       </p>
-                    ) : (
-                      <p className="text-[9px] text-slate-400 font-medium mt-0.5">无使用限制</p>
-                    )}
-                    <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
-                      购买于 {formatDate(p.created_at)}
-                    </p>
-                    <div className="flex items-center justify-center gap-1 mt-1 mb-2">
-                      <img src={COIN_ICON_SM} alt="金币" className="w-3 h-3 object-contain" />
-                      <span className="text-[11px] font-bold text-amber-600">{formatCoins(totalPaid)}</span>
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <img src={COIN_ICON_SM} alt="金币" className="w-3 h-3 object-contain" />
+                        <span className="text-[11px] font-bold text-amber-600">{formatCoins(totalPaid)}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 mt-1 flex items-center justify-center gap-0.5">
+                        点击查看介绍
+                      </p>
                     </div>
+                  </button>
 
-                    {/* 操作按钮 */}
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setRedeemTarget(p)}
-                        className="flex-1 py-1 rounded-lg text-[11px] font-bold text-white bg-gradient-to-r from-amber-400 to-star-400 hover:from-amber-500 hover:to-star-500 transition-all shadow-sm"
-                      >
-                        使用
-                      </button>
-                      <button
-                        onClick={() => { setSellTarget(p); setSellQty(1); }}
-                        className="flex-1 py-1 rounded-lg text-[11px] font-bold text-star-600 bg-white/70 hover:bg-white border border-star-200 transition-all"
-                      >
-                        出售
-                      </button>
-                    </div>
+                  {/* 操作按钮 */}
+                  <div className="flex gap-1 px-2 pb-2">
+                    <button
+                      onClick={() => setRedeemTarget(p)}
+                      className="flex-1 py-1 rounded-lg text-[11px] font-bold text-white bg-gradient-to-r from-amber-400 to-star-400 hover:from-amber-500 hover:to-star-500 transition-all shadow-sm"
+                    >
+                      使用
+                    </button>
+                    <button
+                      onClick={() => { setSellTarget(p); setSellQty(1); }}
+                      className="flex-1 py-1 rounded-lg text-[11px] font-bold text-star-600 bg-white/70 hover:bg-white border border-star-200 transition-all"
+                    >
+                      出售
+                    </button>
                   </div>
                 </div>
               );
@@ -807,6 +818,83 @@ export function ProfilePage() {
             ))
           )}
         </div>
+      </Modal>
+
+      {/* 特权卡介绍弹窗 */}
+      <Modal
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
+        title="特权卡介绍"
+        size="sm"
+      >
+        {detailTarget && (
+          <div className="space-y-4">
+            {/* 卡片头：图标 + 名称 + 分类 */}
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-star-200 flex items-center justify-center overflow-hidden shrink-0">
+                {detailTarget.items?.image_url ? (
+                  <img src={detailTarget.items.image_url} alt={detailTarget.item_name_snapshot} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl">🎴</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-800 text-base">{detailTarget.item_name_snapshot}</h3>
+                {detailTarget.items?.category && (
+                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-star-100 text-star-600 text-[10px] font-medium">
+                    {detailTarget.items.category}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* 描述 */}
+            <div className="bg-amber-50 rounded-xl p-3">
+              <p className="text-xs font-medium text-amber-600 mb-1">📖 卡片描述</p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {detailTarget.items?.description?.trim() || '暂无描述'}
+              </p>
+            </div>
+
+            {/* 使用规则 */}
+            <div className="flex flex-wrap gap-2 text-xs">
+              {detailTarget.items?.weekly_limit && detailTarget.items.weekly_limit > 0 ? (
+                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                  每周限用 {detailTarget.items.weekly_limit} 次
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600">
+                  无使用次数限制
+                </span>
+              )}
+              {detailTarget.quantity > 1 && (
+                <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                  持有 {detailTarget.quantity} 张
+                </span>
+              )}
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => setDetailTarget(null)}
+              >
+                关闭
+              </Button>
+              <Button
+                fullWidth
+                onClick={() => {
+                  setRedeemTarget(detailTarget);
+                  setDetailTarget(null);
+                }}
+              >
+                立即使用
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
