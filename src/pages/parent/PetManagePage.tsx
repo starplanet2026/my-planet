@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
@@ -26,9 +26,10 @@ import {
   fetchGachaConfig, updateGachaConfig,
   getSevereIllnessCost, updateSevereIllnessCost,
 } from '../../api/pets';
+import { fetchPurchases, deletePurchase, updatePurchaseQuantity } from '../../api/purchases';
 import type {
   PetShopItem, PetShopItemType, PetSubcategory, PetRarity, Pet,
-  PetBackground,
+  PetBackground, Purchase,
 } from '../../api/types';
 import { uploadImageToStorage, type ImageCategory } from '../../lib/storage';
 
@@ -191,6 +192,7 @@ export function PetManagePage() {
   const [activeTab, setActiveTab] = useState<PageTab>(initialTab);
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [userPets, setUserPets] = useState<Pet[]>([]);
+  const [userPurchases, setUserPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<PetShopItem | null>(null);
@@ -214,7 +216,12 @@ export function PetManagePage() {
     if (!family) return;
     setLoading(true);
     try {
-      setUserPets(await fetchAllPets(family.id));
+      const [pets, purchases] = await Promise.all([
+        fetchAllPets(family.id),
+        fetchPurchases(family.id),
+      ]);
+      setUserPets(pets);
+      setUserPurchases(purchases);
     } catch (e: any) {
       toast.error(e?.message ?? '加载用户数据失败');
     } finally {
@@ -544,8 +551,10 @@ export function PetManagePage() {
       {activeTab === 'user' && (
         <UserDataTab
           pets={userPets}
+          purchases={userPurchases}
           loading={loading}
           onDeletePet={handleDeletePet}
+          onRefresh={loadUserData}
         />
       )}
 
@@ -762,15 +771,24 @@ function ItemCard({
 
 // ====== 用户数据 tab ======
 function UserDataTab({
-  pets, loading, onDeletePet,
+  pets, purchases, loading, onDeletePet, onRefresh,
 }: {
   pets: Pet[];
+  purchases: Purchase[];
   loading: boolean;
   onDeletePet: (id: string, name: string, memberName: string) => void;
+  onRefresh: () => void;
 }) {
   const members = useFamilyStore(s => s.members);
+  const toast = useToastStore();
   const children = members.filter(m => m.role === 'child');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  // 物品编辑弹窗
+  const [editPurchase, setEditPurchase] = useState<Purchase | null>(null);
+  const [editQty, setEditQty] = useState(1);
+  const [editSaving, setEditSaving] = useState(false);
+  // 删除确认
+  const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<Purchase | null>(null);
 
   useEffect(() => {
     if (!selectedChildId && children.length > 0) setSelectedChildId(children[0].id);
@@ -778,10 +796,51 @@ function UserDataTab({
 
   const selectedChild = children.find(c => c.id === selectedChildId);
 
-  // 问题14: 按选中的孩子过滤宠物列表，区分不同孩子的宠物
+  // 按选中的孩子过滤
   const filteredPets = selectedChildId
     ? pets.filter(p => p.member_id === selectedChildId)
     : pets;
+  const filteredPurchases = selectedChildId
+    ? purchases.filter(p => p.member_id === selectedChildId)
+    : purchases;
+
+  // 物品按子分类分组
+  const purchaseGroups = useMemo(() => {
+    const groups: Record<string, Purchase[]> = {};
+    for (const p of filteredPurchases) {
+      const sub = p.items?.subcategory || p.items?.type || 'other';
+      if (!groups[sub]) groups[sub] = [];
+      groups[sub].push(p);
+    }
+    return groups;
+  }, [filteredPurchases]);
+
+  const handleSaveQty = async () => {
+    if (!editPurchase) return;
+    setEditSaving(true);
+    try {
+      await updatePurchaseQuantity(editPurchase.id, editQty);
+      toast.success(`已修改「${editPurchase.item_name_snapshot}」数量为 ${editQty}`);
+      setEditPurchase(null);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? '修改失败');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDeletePurchase = async () => {
+    if (!deletePurchaseTarget) return;
+    try {
+      await deletePurchase(deletePurchaseTarget.id);
+      toast.success(`已删除「${deletePurchaseTarget.item_name_snapshot}」`);
+      setDeletePurchaseTarget(null);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? '删除失败');
+    }
+  };
 
   if (loading) return <Loading />;
   return (
@@ -841,8 +900,8 @@ function UserDataTab({
                     </div>
                     <div className="flex gap-1 mt-1 text-xs text-slate-400">
                       <span>饱腹{pet.hunger}</span>
-                      <span>清洁{pet.cleanliness}</span>
-                      <span>心情{pet.mood}</span>
+                      <span>清洁{pet.clean}</span>
+                      <span>心情{pet.happiness}</span>
                     </div>
                   </div>
                 </div>
@@ -856,6 +915,166 @@ function UserDataTab({
           </div>
         )}
       </div>
+
+      {/* 用户物品（食物、清洁、玩具、特权卡等） */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <ShoppingBag className="w-4 h-4 text-purple-500" />
+          <h2 className="text-sm font-semibold text-slate-700">
+            孩子持有的物品（{filteredPurchases.length}）
+          </h2>
+        </div>
+        {filteredPurchases.length === 0 ? (
+          <EmptyState icon="🎒" title="暂无物品" description="孩子还没有购买任何物品" />
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(purchaseGroups).map(([sub, list]) => (
+              <div key={sub}>
+                <h3 className="text-xs font-medium text-slate-500 mb-2">
+                  {SUB_LABEL[sub] || sub}（{list.length}）
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {list.map(p => (
+                    <Card key={p.id} className="p-3">
+                      <div className="flex items-start gap-3">
+                        {/* 图标 */}
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
+                          {p.items?.image_url ? (
+                            <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                          ) : (
+                            p.items?.emoji || '📦'
+                          )}
+                        </div>
+                        {/* 信息 */}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-slate-800 text-sm">{p.item_name_snapshot}</h4>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={cn(
+                              'text-xs px-1.5 py-0.5 rounded font-medium',
+                              p.status === 'pending' ? 'bg-emerald-50 text-emerald-600'
+                                : p.status === 'redeemed' ? 'bg-slate-100 text-slate-400'
+                                : p.status === 'sold' ? 'bg-amber-50 text-amber-500'
+                                : 'bg-slate-100 text-slate-400'
+                            )}>
+                              {p.status === 'pending' ? '可用' : p.status === 'redeemed' ? '已使用' : p.status === 'sold' ? '已出售' : p.status === 'expired' ? '已过期' : p.status === 'cancelled' ? '已取消' : p.status}
+                            </span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
+                              x{p.quantity}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            购买于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
+                          </p>
+                        </div>
+                      </div>
+                      {/* 操作按钮 */}
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { setEditPurchase(p); setEditQty(p.quantity); }}
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> 修改数量
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          danger
+                          onClick={() => setDeletePurchaseTarget(p)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> 删除
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 修改数量弹窗 */}
+      <Modal
+        open={!!editPurchase}
+        onClose={() => !editSaving && setEditPurchase(null)}
+        title="修改物品数量"
+        size="sm"
+      >
+        {editPurchase && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
+                {editPurchase.items?.image_url ? (
+                  <img src={editPurchase.items.image_url} alt={editPurchase.item_name_snapshot} className="w-full h-full object-cover" />
+                ) : (
+                  editPurchase.items?.emoji || '📦'
+                )}
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">{editPurchase.item_name_snapshot}</h3>
+                <p className="text-xs text-slate-400">当前数量 x{editPurchase.quantity}</p>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 mb-1 block">新数量</label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setEditQty(q => Math.max(0, q - 1))}
+                  className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 font-bold flex items-center justify-center"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  value={editQty}
+                  onChange={e => setEditQty(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-16 text-center border border-slate-200 rounded-lg py-1"
+                />
+                <button
+                  onClick={() => setEditQty(q => q + 1)}
+                  className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 font-bold flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">设为 0 将删除该物品</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" fullWidth onClick={() => setEditPurchase(null)} disabled={editSaving}>
+                取消
+              </Button>
+              <Button fullWidth loading={editSaving} onClick={handleSaveQty}>
+                确认修改
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 删除物品确认 */}
+      <Modal
+        open={!!deletePurchaseTarget}
+        onClose={() => setDeletePurchaseTarget(null)}
+        title="确认删除"
+        size="sm"
+      >
+        {deletePurchaseTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              确认删除「{deletePurchaseTarget.item_name_snapshot}」（x{deletePurchaseTarget.quantity}）吗？此操作不可撤销。
+            </p>
+            <div className="flex gap-2">
+              <Button variant="secondary" fullWidth onClick={() => setDeletePurchaseTarget(null)}>
+                取消
+              </Button>
+              <Button fullWidth danger onClick={handleDeletePurchase}>
+                确认删除
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

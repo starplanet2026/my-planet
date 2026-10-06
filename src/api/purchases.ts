@@ -1,7 +1,7 @@
 import { supabase } from './client';
 import type { Purchase, PurchaseItemResult, SellPurchaseResult, PurchaseStatus } from './types';
 
-// 查询购买记录（关联商品获取图片、周限）
+// 查询购买记录（关联商品获取图片、周限、描述、分类、名称等）
 export async function fetchPurchases(
   familyId: string,
   memberId?: string,
@@ -9,7 +9,7 @@ export async function fetchPurchases(
 ): Promise<Purchase[]> {
   let q = supabase
     .from('purchases')
-    .select('*, items(image_url, weekly_limit, description, category)')
+    .select('*, items(image_url, weekly_limit, description, category, name, emoji, subcategory, type)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (memberId) q = q.eq('member_id', memberId);
@@ -77,6 +77,21 @@ export async function sellPurchase(purchaseId: string, memberId: string, quantit
 // 删除购买记录（后台管理）
 export async function deletePurchase(purchaseId: string): Promise<void> {
   const { error } = await supabase.from('purchases').delete().eq('id', purchaseId);
+  if (error) throw error;
+}
+
+// 修改购买记录数量（后台管理）
+export async function updatePurchaseQuantity(purchaseId: string, quantity: number): Promise<void> {
+  if (quantity < 0) throw new Error('数量不能为负数');
+  if (quantity === 0) {
+    // 数量为 0 时直接删除
+    await deletePurchase(purchaseId);
+    return;
+  }
+  const { error } = await supabase
+    .from('purchases')
+    .update({ quantity })
+    .eq('id', purchaseId);
   if (error) throw error;
 }
 
