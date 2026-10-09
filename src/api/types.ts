@@ -814,15 +814,15 @@ export const TRAIT_DESC: Record<string, string> = {
   '平平无奇': '无特殊修正',
 };
 
-// 经验值需求表（按稀有度 + 等级）
-const EXP_TABLE: Record<PetRarity, Record<number, number>> = {
-  common: { 1:20,2:40,3:60,4:80,5:100,6:140,7:170,8:190,9:220 },
-  rare:   { 1:20,2:40,3:60,4:80,5:100,6:120,7:140,8:160,9:180,10:200,11:310,12:340,13:360,14:390,15:420,16:450,17:480,18:500,19:530 },
-  epic:   { 1:20,2:40,3:60,4:80,5:100,6:120,7:140,8:160,9:180,10:200,11:310,12:340,13:360,14:390,15:420,16:450,17:480,18:500,19:530,20:560,21:590,22:620,23:640,24:670 },
+// 统一经验值需求表（不分稀有度，同等级门槛一致）
+const UNIFIED_EXP_TABLE: Record<number, number> = {
+  1:20, 2:40, 3:60, 4:80, 5:100, 6:120, 7:140, 8:160, 9:180,
+  10:200, 11:240, 12:280, 13:320, 14:360, 15:400, 16:440, 17:480,
+  18:520, 19:560, 20:600, 21:650, 22:700, 23:750, 24:800,
 };
 
-export function expNeeded(level: number, rarity: PetRarity): number {
-  return EXP_TABLE[rarity]?.[level] ?? 999999;
+export function expNeeded(level: number, rarity?: PetRarity): number {
+  return UNIFIED_EXP_TABLE[level] ?? 999999;
 }
 
 // 进修每日星光
