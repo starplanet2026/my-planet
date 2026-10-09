@@ -79,7 +79,7 @@ begin
       (family_id, member_id, amount, balance_after, reason, category, ref_type, ref_id, created_by, balance_type)
     values
       (v_family_id, p_member_id, v_star_amount, v_new_star,
-       '快速复习正确', 'dictation', 'dictation_task', p_task_id::text, p_member_id::text, 'star');
+       '快速复习正确', 'dictation', 'dictation_task', p_task_id, p_member_id, 'star');
   else
     -- 错误：存入错词库（upsert：存在则重置 cycle，不存在则新建）
     select * into v_ew from public.dictation_error_words
