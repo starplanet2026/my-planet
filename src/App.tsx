@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { AppRoutes } from './routes';
 import { ToastContainer } from './components/common/Toast';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useFamilyStore } from './store/familyStore';
 import { supabase } from './api/client';
 import { Loading } from './components/common/Loading';
@@ -51,15 +52,16 @@ export default function App() {
     );
   }
 
-  // 未登录且不在 setup 页 → 重定向
+  // 未登录且不在 setup 页 → 重定向（用 <Navigate> 在渲染期安全跳转，
+  // 避免在 render 中调用 navigate() 触发"渲染期间更新组件"循环告警导致卡死）
   if (!family && window.location.pathname !== '/setup') {
-    navigate('/setup');
+    return <Navigate to="/setup" replace />;
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <AppRoutes />
       <ToastContainer />
-    </>
+    </ErrorBoundary>
   );
 }

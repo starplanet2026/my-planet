@@ -1,7 +1,9 @@
 import { supabase } from './client';
 import type { Purchase, PurchaseItemResult, SellPurchaseResult, PurchaseStatus } from './types';
 
-// 查询购买记录（关联商品获取图片、周限、描述、分类、名称等）
+// 查询购买记录（关联商品获取图片、周限、描述、分类、名称）
+// 注意：purchases.item_id 引用 items 表（非 pet_shop_items），
+// items 表没有 emoji/subcategory/type 字段，不可在 select 中引用
 export async function fetchPurchases(
   familyId: string,
   memberId?: string,
@@ -9,7 +11,7 @@ export async function fetchPurchases(
 ): Promise<Purchase[]> {
   let q = supabase
     .from('purchases')
-    .select('*, items(image_url, weekly_limit, description, category, name, emoji, subcategory, type)')
+    .select('*, items(image_url, weekly_limit, description, category, name)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (memberId) q = q.eq('member_id', memberId);

@@ -39,8 +39,8 @@ export function ProfilePage() {
   const child = members.find(m => m.id === currentChildId && m.role === 'child')
     ?? members.find(m => m.role === 'child');
 
-  const { refresh: refreshRecords } = useCoinRecords();
-  const { purchases, loading: purchasesLoading, redeemPurchase, sellPurchase } = usePurchases();
+  const { refresh: refreshRecords } = useCoinRecords(undefined, child?.id);
+  const { purchases, loading: purchasesLoading, redeemPurchase, sellPurchase } = usePurchases(undefined, child?.id);
 
   // 资产明细日志：星光 / 金币 切换 + 分页
   const [assetTab, setAssetTab] = useState<BalanceType>('coin');

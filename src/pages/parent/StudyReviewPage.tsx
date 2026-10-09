@@ -10,9 +10,9 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
-import { ArrowLeft, Check, X } from 'lucide-react';
+import { ArrowLeft, Check, X, EyeOff } from 'lucide-react';
 import {
-  approveStudyRecord, rejectStudyRecord, fetchPendingStudyReviews,
+  approveStudyRecord, rejectStudyRecord, ignoreStudyRecord, fetchPendingStudyReviews,
 } from '../../api/pets';
 import type { PendingStudyReview } from '../../api/pets';
 
@@ -33,6 +33,7 @@ export function StudyReviewPage() {
   const [rejectTarget, setRejectTarget] = useState<PendingStudyReview | null>(null);
   const [rejectNote, setRejectNote] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [ignoring, setIgnoring] = useState<string | null>(null);
 
   const loadReviews = async () => {
     if (!family) return;
@@ -81,6 +82,24 @@ export function StudyReviewPage() {
       toast.error(e?.message ?? '操作失败');
     } finally {
       setRejecting(false);
+    }
+  };
+
+  const handleIgnore = async (r: PendingStudyReview) => {
+    if (!reviewerId) { toast.error('无法获取家长身份'); return; }
+    setIgnoring(r.id);
+    try {
+      const result = await ignoreStudyRecord(r.id, reviewerId);
+      if (result.success) {
+        toast.success(result.message ?? '已忽略');
+        await loadReviews();
+      } else {
+        toast.error(result.message ?? '操作失败');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '操作失败');
+    } finally {
+      setIgnoring(null);
     }
   };
 
@@ -178,6 +197,15 @@ export function StudyReviewPage() {
                       className="border border-red-200 text-red-500 hover:bg-red-50"
                     >
                       <X className="w-4 h-4" /> 驳回
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleIgnore(r)}
+                      loading={ignoring === r.id}
+                      className="border border-slate-200 text-slate-500 hover:bg-slate-100"
+                    >
+                      <EyeOff className="w-4 h-4" /> 忽略
                     </Button>
                   </div>
                 </div>

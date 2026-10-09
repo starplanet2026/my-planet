@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useItems } from '../../hooks/useItems';
-import { usePurchases } from '../../hooks/usePurchases';
+import { purchaseItem } from '../../api/purchases';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
@@ -137,7 +137,6 @@ export function ShopPage() {
     ?? members.find(m => m.role === 'child');
 
   const { items, loading } = useItems(true);
-  const { purchaseItem } = usePurchases();
   const toast = useToastStore();
 
   const availableItems = items.filter(i =>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useModeStore } from '../../store/modeStore';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
@@ -14,7 +14,8 @@ import { getActiveTask, listTaskWords, submitDictationResult } from '../../api/d
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
 
 export function DictationGradePage() {
-  const { subject } = useParams<{ subject: DictationSubject }>();
+  const { pathname } = useLocation();
+  const subject = pathname.split('/')[3] as DictationSubject | undefined;
   const navigate = useNavigate();
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? '';

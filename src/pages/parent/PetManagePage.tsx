@@ -25,11 +25,12 @@ import {
   migrateBase64ToStorage,
   fetchGachaConfig, updateGachaConfig,
   getSevereIllnessCost, updateSevereIllnessCost,
+  fetchPetInventoryByFamily, updatePetInventoryQuantity, deletePetInventoryItem,
 } from '../../api/pets';
 import { fetchPurchases, deletePurchase, updatePurchaseQuantity } from '../../api/purchases';
 import type {
   PetShopItem, PetShopItemType, PetSubcategory, PetRarity, Pet,
-  PetBackground, Purchase,
+  PetBackground, Purchase, PetInventory,
 } from '../../api/types';
 import { uploadImageToStorage, type ImageCategory } from '../../lib/storage';
 
@@ -193,6 +194,7 @@ export function PetManagePage() {
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [userPets, setUserPets] = useState<Pet[]>([]);
   const [userPurchases, setUserPurchases] = useState<Purchase[]>([]);
+  const [petInventory, setPetInventory] = useState<PetInventory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<PetShopItem | null>(null);
@@ -216,12 +218,14 @@ export function PetManagePage() {
     if (!family) return;
     setLoading(true);
     try {
-      const [pets, purchases] = await Promise.all([
+      const [pets, purchases, inventory] = await Promise.all([
         fetchAllPets(family.id),
         fetchPurchases(family.id),
+        fetchPetInventoryByFamily(family.id),
       ]);
       setUserPets(pets);
       setUserPurchases(purchases);
+      setPetInventory(inventory);
     } catch (e: any) {
       toast.error(e?.message ?? '加载用户数据失败');
     } finally {
@@ -552,6 +556,7 @@ export function PetManagePage() {
         <UserDataTab
           pets={userPets}
           purchases={userPurchases}
+          inventory={petInventory}
           loading={loading}
           onDeletePet={handleDeletePet}
           onRefresh={loadUserData}
@@ -770,11 +775,25 @@ function ItemCard({
 }
 
 // ====== 用户数据 tab ======
+// 统一的可编辑物品类型（宠物用品 pet_inventory + 特权卡 purchases）
+type EditableItem = {
+  id: string;
+  name: string;
+  emoji: string | null;
+  image_url: string | null;
+  subcategory: string;
+  quantity: number;
+  status?: string;
+  created_at: string;
+  source: 'inventory' | 'purchase';
+};
+
 function UserDataTab({
-  pets, purchases, loading, onDeletePet, onRefresh,
+  pets, purchases, inventory, loading, onDeletePet, onRefresh,
 }: {
   pets: Pet[];
   purchases: Purchase[];
+  inventory: PetInventory[];
   loading: boolean;
   onDeletePet: (id: string, name: string, memberName: string) => void;
   onRefresh: () => void;
@@ -784,11 +803,11 @@ function UserDataTab({
   const children = members.filter(m => m.role === 'child');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   // 物品编辑弹窗
-  const [editPurchase, setEditPurchase] = useState<Purchase | null>(null);
+  const [editTarget, setEditTarget] = useState<EditableItem | null>(null);
   const [editQty, setEditQty] = useState(1);
   const [editSaving, setEditSaving] = useState(false);
   // 删除确认
-  const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<Purchase | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EditableItem | null>(null);
 
   useEffect(() => {
     if (!selectedChildId && children.length > 0) setSelectedChildId(children[0].id);
@@ -800,28 +819,65 @@ function UserDataTab({
   const filteredPets = selectedChildId
     ? pets.filter(p => p.member_id === selectedChildId)
     : pets;
+  const filteredInventory = selectedChildId
+    ? inventory.filter(i => i.member_id === selectedChildId)
+    : inventory;
   const filteredPurchases = selectedChildId
     ? purchases.filter(p => p.member_id === selectedChildId)
     : purchases;
 
-  // 物品按子分类分组
-  const purchaseGroups = useMemo(() => {
-    const groups: Record<string, Purchase[]> = {};
+  // 合并宠物用品 + 特权卡为统一列表
+  const allItems: EditableItem[] = useMemo(() => {
+    const list: EditableItem[] = [];
+    for (const i of filteredInventory) {
+      list.push({
+        id: i.id,
+        name: i.item_name_snapshot,
+        emoji: i.item_emoji,
+        image_url: i.item_image_url,
+        subcategory: i.subcategory,
+        quantity: i.quantity,
+        created_at: i.created_at,
+        source: 'inventory',
+      });
+    }
     for (const p of filteredPurchases) {
-      const sub = p.items?.subcategory || p.items?.type || 'other';
-      if (!groups[sub]) groups[sub] = [];
-      groups[sub].push(p);
+      list.push({
+        id: p.id,
+        name: p.item_name_snapshot,
+        emoji: null,
+        image_url: p.items?.image_url ?? null,
+        subcategory: p.items?.category || 'privilege',
+        quantity: p.quantity,
+        status: p.status,
+        created_at: p.created_at,
+        source: 'purchase',
+      });
+    }
+    return list;
+  }, [filteredInventory, filteredPurchases]);
+
+  // 按子分类分组
+  const itemGroups = useMemo(() => {
+    const groups: Record<string, EditableItem[]> = {};
+    for (const item of allItems) {
+      if (!groups[item.subcategory]) groups[item.subcategory] = [];
+      groups[item.subcategory].push(item);
     }
     return groups;
-  }, [filteredPurchases]);
+  }, [allItems]);
 
   const handleSaveQty = async () => {
-    if (!editPurchase) return;
+    if (!editTarget) return;
     setEditSaving(true);
     try {
-      await updatePurchaseQuantity(editPurchase.id, editQty);
-      toast.success(`已修改「${editPurchase.item_name_snapshot}」数量为 ${editQty}`);
-      setEditPurchase(null);
+      if (editTarget.source === 'inventory') {
+        await updatePetInventoryQuantity(editTarget.id, editQty);
+      } else {
+        await updatePurchaseQuantity(editTarget.id, editQty);
+      }
+      toast.success(`已修改「${editTarget.name}」数量为 ${editQty}`);
+      setEditTarget(null);
       onRefresh();
     } catch (e: any) {
       toast.error(e?.message ?? '修改失败');
@@ -830,12 +886,16 @@ function UserDataTab({
     }
   };
 
-  const handleDeletePurchase = async () => {
-    if (!deletePurchaseTarget) return;
+  const handleDeleteItem = async () => {
+    if (!deleteTarget) return;
     try {
-      await deletePurchase(deletePurchaseTarget.id);
-      toast.success(`已删除「${deletePurchaseTarget.item_name_snapshot}」`);
-      setDeletePurchaseTarget(null);
+      if (deleteTarget.source === 'inventory') {
+        await deletePetInventoryItem(deleteTarget.id);
+      } else {
+        await deletePurchase(deleteTarget.id);
+      }
+      toast.success(`已删除「${deleteTarget.name}」`);
+      setDeleteTarget(null);
       onRefresh();
     } catch (e: any) {
       toast.error(e?.message ?? '删除失败');
@@ -921,49 +981,51 @@ function UserDataTab({
         <div className="flex items-center gap-2 mb-3">
           <ShoppingBag className="w-4 h-4 text-purple-500" />
           <h2 className="text-sm font-semibold text-slate-700">
-            孩子持有的物品（{filteredPurchases.length}）
+            孩子持有的物品（{allItems.length}）
           </h2>
         </div>
-        {filteredPurchases.length === 0 ? (
-          <EmptyState icon="🎒" title="暂无物品" description="孩子还没有购买任何物品" />
+        {allItems.length === 0 ? (
+          <EmptyState icon="🎒" title="暂无物品" description="孩子还没有任何物品" />
         ) : (
           <div className="space-y-4">
-            {Object.entries(purchaseGroups).map(([sub, list]) => (
+            {Object.entries(itemGroups).map(([sub, list]) => (
               <div key={sub}>
                 <h3 className="text-xs font-medium text-slate-500 mb-2">
                   {SUB_LABEL[sub] || sub}（{list.length}）
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {list.map(p => (
-                    <Card key={p.id} className="p-3">
+                  {list.map(item => (
+                    <Card key={`${item.source}-${item.id}`} className="p-3">
                       <div className="flex items-start gap-3">
                         {/* 图标 */}
                         <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
-                          {p.items?.image_url ? (
-                            <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                          {item.image_url ? (
+                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                           ) : (
-                            p.items?.emoji || '📦'
+                            item.emoji || '📦'
                           )}
                         </div>
                         {/* 信息 */}
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-slate-800 text-sm">{p.item_name_snapshot}</h4>
+                          <h4 className="font-bold text-slate-800 text-sm">{item.name}</h4>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={cn(
-                              'text-xs px-1.5 py-0.5 rounded font-medium',
-                              p.status === 'pending' ? 'bg-emerald-50 text-emerald-600'
-                                : p.status === 'redeemed' ? 'bg-slate-100 text-slate-400'
-                                : p.status === 'sold' ? 'bg-amber-50 text-amber-500'
-                                : 'bg-slate-100 text-slate-400'
-                            )}>
-                              {p.status === 'pending' ? '可用' : p.status === 'redeemed' ? '已使用' : p.status === 'sold' ? '已出售' : p.status === 'expired' ? '已过期' : p.status === 'cancelled' ? '已取消' : p.status}
-                            </span>
+                            {item.source === 'purchase' && item.status && (
+                              <span className={cn(
+                                'text-xs px-1.5 py-0.5 rounded font-medium',
+                                item.status === 'pending' ? 'bg-emerald-50 text-emerald-600'
+                                  : item.status === 'redeemed' ? 'bg-slate-100 text-slate-400'
+                                  : item.status === 'sold' ? 'bg-amber-50 text-amber-500'
+                                  : 'bg-slate-100 text-slate-400'
+                              )}>
+                                {item.status === 'pending' ? '可用' : item.status === 'redeemed' ? '已使用' : item.status === 'sold' ? '已出售' : item.status === 'expired' ? '已过期' : item.status === 'cancelled' ? '已取消' : item.status}
+                              </span>
+                            )}
                             <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
-                              x{p.quantity}
+                              x{item.quantity}
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1">
-                            购买于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
+                            {item.source === 'purchase' ? '特权卡' : '宠物用品'} · 购买于 {new Date(item.created_at).toLocaleDateString('zh-CN')}
                           </p>
                         </div>
                       </div>
@@ -972,7 +1034,7 @@ function UserDataTab({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => { setEditPurchase(p); setEditQty(p.quantity); }}
+                          onClick={() => { setEditTarget(item); setEditQty(item.quantity); }}
                         >
                           <Pencil className="w-3.5 h-3.5" /> 修改数量
                         </Button>
@@ -980,7 +1042,7 @@ function UserDataTab({
                           variant="ghost"
                           size="sm"
                           danger
-                          onClick={() => setDeletePurchaseTarget(p)}
+                          onClick={() => setDeleteTarget(item)}
                         >
                           <Trash2 className="w-3.5 h-3.5" /> 删除
                         </Button>
@@ -996,24 +1058,24 @@ function UserDataTab({
 
       {/* 修改数量弹窗 */}
       <Modal
-        open={!!editPurchase}
-        onClose={() => !editSaving && setEditPurchase(null)}
+        open={!!editTarget}
+        onClose={() => !editSaving && setEditTarget(null)}
         title="修改物品数量"
         size="sm"
       >
-        {editPurchase && (
+        {editTarget && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
-                {editPurchase.items?.image_url ? (
-                  <img src={editPurchase.items.image_url} alt={editPurchase.item_name_snapshot} className="w-full h-full object-cover" />
+                {editTarget.image_url ? (
+                  <img src={editTarget.image_url} alt={editTarget.name} className="w-full h-full object-cover" />
                 ) : (
-                  editPurchase.items?.emoji || '📦'
+                  editTarget.emoji || '📦'
                 )}
               </div>
               <div>
-                <h3 className="font-bold text-slate-800">{editPurchase.item_name_snapshot}</h3>
-                <p className="text-xs text-slate-400">当前数量 x{editPurchase.quantity}</p>
+                <h3 className="font-bold text-slate-800">{editTarget.name}</h3>
+                <p className="text-xs text-slate-400">当前数量 x{editTarget.quantity}</p>
               </div>
             </div>
             <div>
@@ -1041,7 +1103,7 @@ function UserDataTab({
               <p className="text-[10px] text-slate-400 mt-1">设为 0 将删除该物品</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary" fullWidth onClick={() => setEditPurchase(null)} disabled={editSaving}>
+              <Button variant="secondary" fullWidth onClick={() => setEditTarget(null)} disabled={editSaving}>
                 取消
               </Button>
               <Button fullWidth loading={editSaving} onClick={handleSaveQty}>
@@ -1054,21 +1116,21 @@ function UserDataTab({
 
       {/* 删除物品确认 */}
       <Modal
-        open={!!deletePurchaseTarget}
-        onClose={() => setDeletePurchaseTarget(null)}
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
         title="确认删除"
         size="sm"
       >
-        {deletePurchaseTarget && (
+        {deleteTarget && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
-              确认删除「{deletePurchaseTarget.item_name_snapshot}」（x{deletePurchaseTarget.quantity}）吗？此操作不可撤销。
+              确认删除「{deleteTarget.name}」（x{deleteTarget.quantity}）吗？此操作不可撤销。
             </p>
             <div className="flex gap-2">
-              <Button variant="secondary" fullWidth onClick={() => setDeletePurchaseTarget(null)}>
+              <Button variant="secondary" fullWidth onClick={() => setDeleteTarget(null)}>
                 取消
               </Button>
-              <Button fullWidth danger onClick={handleDeletePurchase}>
+              <Button fullWidth danger onClick={handleDeleteItem}>
                 确认删除
               </Button>
             </div>

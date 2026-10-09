@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useModeStore } from '../../store/modeStore';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
@@ -23,7 +23,8 @@ interface RewardTier {
 }
 
 export function RecitationTaskPage() {
-  const { instanceId } = useParams<{ instanceId: string }>();
+  const { pathname } = useLocation();
+  const instanceId = pathname.split('/')[3] ?? '';
   const navigate = useNavigate();
   const currentChildId = useModeStore(s => s.currentChildId);
   const memberId = currentChildId ?? '';

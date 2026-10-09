@@ -191,6 +191,38 @@ export async function fetchPetInventory(memberId: string): Promise<PetInventory[
   return (data ?? []) as PetInventory[];
 }
 
+// 后台：获取整个家庭的宠物用品库存
+export async function fetchPetInventoryByFamily(familyId: string): Promise<PetInventory[]> {
+  const { data, error } = await supabase
+    .from('pet_inventory')
+    .select('*')
+    .eq('family_id', familyId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as PetInventory[];
+}
+
+// 后台：修改宠物用品数量（设为0则删除）
+export async function updatePetInventoryQuantity(id: string, quantity: number): Promise<void> {
+  if (quantity < 0) throw new Error('数量不能为负数');
+  if (quantity === 0) {
+    const { error } = await supabase.from('pet_inventory').delete().eq('id', id);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase
+    .from('pet_inventory')
+    .update({ quantity })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+// 后台：删除宠物用品
+export async function deletePetInventoryItem(id: string): Promise<void> {
+  const { error } = await supabase.from('pet_inventory').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ====== 签到 ======
 
 export async function fetchPetCheckins(memberId: string): Promise<PetCheckin[]> {
@@ -904,6 +936,17 @@ export async function rejectStudyRecord(recordId: string, reviewerId: string, no
     p_record_id: recordId,
     p_reviewer_id: reviewerId,
     p_note: note ?? null,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as { success: boolean; message: string };
+}
+
+// 家长审核忽略：不发奖、不写备注；该申请从家长审核列表和孩子端学习记录中消失
+export async function ignoreStudyRecord(recordId: string, reviewerId: string): Promise<{ success: boolean; message: string }> {
+  const { data, error } = await supabase.rpc('ignore_study_record', {
+    p_record_id: recordId,
+    p_reviewer_id: reviewerId,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;

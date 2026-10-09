@@ -3,13 +3,16 @@ import { useFamilyStore } from '../store/familyStore';
 import { fetchCoinRecords, adjustCoins, manualAdjustCoins, replyMessage } from '../api/coins';
 import type { CoinRecord, CoinRecordCategory } from '../api/types';
 
-export function useCoinRecords(category?: CoinRecordCategory) {
+export function useCoinRecords(category?: CoinRecordCategory, memberId?: string) {
   const familyId = useFamilyStore(s => s.family?.id);
+
+  const filterParts = familyId ? [`family_id=eq.${familyId}`] : [];
+  if (memberId) filterParts.push(`member_id=eq.${memberId}`);
 
   const { rows: records, loading, refresh } = useRealtimeTable<CoinRecord>({
     table: 'coin_records',
-    filter: familyId ? `family_id=eq.${familyId}` : undefined,
-    fetchFn: () => familyId ? fetchCoinRecords(familyId, undefined, category) : Promise.resolve([]),
+    filter: filterParts.length ? filterParts.join('&') : undefined,
+    fetchFn: () => familyId ? fetchCoinRecords(familyId, memberId, category) : Promise.resolve([]),
     enabled: !!familyId,
   });
 
