@@ -150,8 +150,7 @@ begin
       level = v_new_level,
       exp = v_new_exp,
       exp_to_next = v_new_exp_to_next,
-      pending_levelup = (v_new_level < v_max_level and v_new_exp >= v_new_exp_to_next and v_new_exp_to_next > 0),
-      updated_at = now()
+      pending_levelup = (v_new_level < v_max_level and v_new_exp >= v_new_exp_to_next and v_new_exp_to_next > 0)
     where id = v_pet.id;
 
     raise notice '宠物 % (%): 旧 L% E% → 新 L% E% (total=%)',
