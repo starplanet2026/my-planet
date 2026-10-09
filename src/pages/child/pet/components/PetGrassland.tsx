@@ -606,9 +606,9 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                 ) : (
                   <span className="text-5xl sm:text-6xl md:text-7xl drop-shadow-lg">{pet.emoji || '🐾'}</span>
                 )}
-                {/* 会话框：宠物头部右侧，内外层常驻显示（全局右侧偏移25px） */}
+                {/* 会话框：宠物上方居中，两行展示 */}
                 {petMessage(pet) && (
-                  <div className="absolute top-[25px] left-full -ml-[25px]">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-[180px] text-center">
                     {collapsedChats.has(pet.id) ? (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
@@ -621,9 +621,9 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                       <div
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
-                        className="max-w-[200px] cursor-pointer relative"
+                        className="cursor-pointer relative"
                       >
-                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-normal break-words pet-bubble-breathe">
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-normal pet-bubble-breathe">
                           {petMessage(pet)}
                         </div>
                       </div>
