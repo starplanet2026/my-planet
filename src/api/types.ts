@@ -946,6 +946,7 @@ export interface DictationErrorWord {
 }
 
 export type DictationTaskStatus = 'active' | 'offline' | 'completed';
+export type DictationTaskMode = 'dictation' | 'quick_review';
 
 export interface DictationTask {
   id: string;
@@ -956,6 +957,7 @@ export interface DictationTask {
   task_date: string | null;
   star_per_word: number;
   status: DictationTaskStatus;
+  mode: DictationTaskMode;
   created_at: string;
   updated_at: string;
 }

@@ -1,7 +1,7 @@
 import { supabase } from './client';
 import type {
   DictationSubject, DictationWord, DictationErrorWord, DictationTask,
-  DictationTaskWord, SubmitDictationResult,
+  DictationTaskWord, DictationTaskMode, SubmitDictationResult,
 } from './types';
 
 // ==================== 词条库 ====================
@@ -271,12 +271,13 @@ export interface CreateTaskPayload {
   title: string;
   task_date?: string | null;
   star_per_word: number;
+  mode?: DictationTaskMode;
 }
 
 export async function createTask(payload: CreateTaskPayload): Promise<DictationTask> {
   const { data, error } = await supabase
     .from('dictation_tasks')
-    .insert({ ...payload, status: 'active' })
+    .insert({ ...payload, status: 'active', mode: payload.mode ?? 'dictation' })
     .select('*')
     .single();
   if (error) throw error;
@@ -387,6 +388,53 @@ export async function submitDictationResult(
     correct_count: row?.correct_count ?? 0,
     error_count: row?.error_count ?? 0,
     total_star: row?.total_star ?? 0,
+    new_star: row?.new_star ?? 0,
+  };
+}
+
+// ==================== 快速复习模式 ====================
+
+export interface QuickReviewResult {
+  success: boolean;
+  message: string;
+  new_star: number;
+}
+
+// 快速复习单条判题（正确→加星光值，错误→存入错词库，即时生效）
+export async function judgeQuickReviewWord(
+  taskId: string,
+  memberId: string,
+  word: DictationTaskWord,
+  subject: DictationSubject,
+  isCorrect: boolean,
+  starPerWord: number,
+): Promise<QuickReviewResult> {
+  const wordData = {
+    word_id: word.word_id ?? null,
+    error_word_id: word.error_word_id ?? null,
+    answer: word.answer,
+    word_text: subject === 'english' ? (word.chinese_meaning ?? '') : (word.pinyin ?? ''),
+    subject,
+    textbook_name: word.textbook_name,
+    unit_no: word.unit_no,
+    unit_name: word.unit_name,
+    page_no: word.page_no,
+    chinese_meaning: word.chinese_meaning,
+    part_of_speech: word.part_of_speech,
+    pinyin: word.pinyin,
+  };
+  const { data, error } = await supabase.rpc('judge_quick_review_word', {
+    p_task_id: taskId,
+    p_member_id: memberId,
+    p_word: wordData,
+    p_is_correct: isCorrect,
+    p_star_per_word: starPerWord,
+  });
+  if (error) throw error;
+  const row = (data as any[])?.[0];
+  return {
+    success: row?.success ?? false,
+    message: row?.message ?? '',
     new_star: row?.new_star ?? 0,
   };
 }

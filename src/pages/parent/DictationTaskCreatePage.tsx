@@ -15,7 +15,7 @@ import {
   listWords, listWordTextbooks, listWordUnits, createWord,
   listDueErrorWords, createTask, addTaskWords, deleteTask,
 } from '../../api/dictation';
-import type { DictationSubject, DictationWord, DictationErrorWord } from '../../api/types';
+import type { DictationSubject, DictationWord, DictationErrorWord, DictationTaskMode } from '../../api/types';
 
 interface AddedWord {
   key: string;
@@ -46,6 +46,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   const [subject, setSubject] = useState<DictationSubject>('english');
   const [title, setTitle] = useState('英语家默');
   const [starPerWord, setStarPerWord] = useState(1);
+  const [mode, setMode] = useState<DictationTaskMode>('dictation');
 
   // 词条库筛选
   const [textbooks, setTextbooks] = useState<string[]>([]);
@@ -291,7 +292,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
     try {
       const task = await createTask({
         family_id: family.id, member_id: childId, subject, title,
-        star_per_word: starPerWord,
+        star_per_word: starPerWord, mode,
       });
       try {
         await addTaskWords(task.id, added.map(a => ({
@@ -330,7 +331,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
 
       {/* 基础配置 */}
       <Card className="p-4 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
           <div>
             <label className="text-xs text-slate-500">选择用户</label>
             <Select value={selectedChildId} onChange={e => setSelectedChildId(e.target.value)}>
@@ -358,6 +359,25 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
             </div>
           </div>
           <div>
+            <label className="text-xs text-slate-500">任务模式</label>
+            <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setMode('dictation')}
+                className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  mode === 'dictation' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+              >
+                默写模式
+              </button>
+              <button
+                onClick={() => setMode('quick_review')}
+                className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  mode === 'quick_review' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}
+              >
+                快速复习
+              </button>
+            </div>
+          </div>
+          <div>
             <label className="text-xs text-slate-500">任务标题</label>
             <Input value={title} onChange={e => setTitle(e.target.value)} />
           </div>
@@ -366,6 +386,9 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
             <Input type="number" min={1} value={starPerWord} onChange={e => setStarPerWord(Math.max(1, Number(e.target.value)))} />
           </div>
         </div>
+        {mode === 'quick_review' && (
+          <p className="text-xs text-amber-600 mt-2">⚡ 快速复习模式：孩子点击卡片看答案后自判对错，即时生效，无需批改。</p>
+        )}
       </Card>
 
       {/* 三栏来源 */}

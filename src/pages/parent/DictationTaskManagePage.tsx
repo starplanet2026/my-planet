@@ -275,6 +275,7 @@ export function DictationTaskManagePage() {
         subject: repushTarget.subject,
         title: repushTarget.title,
         star_per_word: repushTarget.star_per_word,
+        mode: repushTarget.mode,
       });
       // 复制词条到新任务
       if (words.length > 0) {
@@ -394,6 +395,9 @@ export function DictationTaskManagePage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm truncate">{task.title}</span>
                       <span className="text-xs text-slate-400">{isEnglish ? '英语' : '语文'}</span>
+                      {task.mode === 'quick_review' && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">⚡复习</span>
+                      )}
                       {memberName && <span className="text-xs text-slate-400">· {memberName}</span>}
                       <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_COLOR[task.status])}>
                         {STATUS_LABEL[task.status]}
@@ -571,6 +575,9 @@ export function DictationTaskManagePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{detailTask.title}</span>
               <span className="text-xs text-slate-400">{detailTask.subject === 'english' ? '英语' : '语文'}</span>
+              {detailTask.mode === 'quick_review' && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">⚡复习</span>
+              )}
               <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_COLOR[detailTask.status])}>
                 {STATUS_LABEL[detailTask.status]}
               </span>

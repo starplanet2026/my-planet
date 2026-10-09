@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils';
 import { CheckCircle } from 'lucide-react';
 import { getActiveTask, getTaskById, listTaskWords, submitDictationResult } from '../../api/dictation';
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
+import { DictationQuickReviewPage } from './DictationQuickReviewPage';
 
 export function DictationPlayPage() {
   const { pathname } = useLocation();
@@ -57,6 +58,11 @@ export function DictationPlayPage() {
         <EmptyState icon="📭" title={`暂无${subjectLabel}家默任务`} description="请家长先在后台创建家默任务" />
       </div>
     );
+  }
+
+  // 快速复习模式：渲染独立组件，默写模式继续走下方原有逻辑
+  if (task.mode === 'quick_review') {
+    return <DictationQuickReviewPage task={task} subject={subject!} childId={childId} />;
   }
 
   const correctCount = correct.size;

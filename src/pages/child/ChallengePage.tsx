@@ -493,6 +493,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
         {/* 家默入口卡片（每个 active 任务一张卡，置于最前） */}
         {boardType === 'today_review' && activeDictTasks.map(t => {
           const isEnglish = t.subject === 'english';
+          const isQuickReview = t.mode === 'quick_review';
           const count = dictWordCounts[t.id] ?? 0;
           const total = t.star_per_word * count;
           return (
@@ -501,19 +502,23 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
               onClick={() => navigate(`/challenge/dictation/${t.subject}?taskId=${t.id}`)}
               className={cn(
                 'cursor-pointer rounded-2xl p-3 flex flex-col text-white min-h-32 hover:shadow-lg transition-shadow aspect-square relative',
-                isEnglish
-                  ? 'bg-gradient-to-br from-blue-400 to-indigo-500'
-                  : 'bg-gradient-to-br from-rose-400 to-pink-500'
+                isQuickReview
+                  ? 'bg-gradient-to-br from-amber-400 to-orange-500'
+                  : isEnglish
+                    ? 'bg-gradient-to-br from-blue-400 to-indigo-500'
+                    : 'bg-gradient-to-br from-rose-400 to-pink-500'
               )}
             >
               <span className={cn(
                 'absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded',
-                isEnglish ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
+                isQuickReview
+                  ? 'bg-amber-100 text-amber-700'
+                  : isEnglish ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
               )}>
-                {isEnglish ? '英语家默' : '语文家默'}
+                {isQuickReview ? '⚡快速复习' : isEnglish ? '英语家默' : '语文家默'}
               </span>
               <div className="flex-1 flex flex-col items-center justify-center mt-3">
-                <span className="text-2xl mb-1">{isEnglish ? '📝' : '✍️'}</span>
+                <span className="text-2xl mb-1">{isQuickReview ? '⚡' : isEnglish ? '📝' : '✍️'}</span>
                 <div className="text-center">
                   <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
                   <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
