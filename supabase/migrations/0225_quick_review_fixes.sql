@@ -97,7 +97,7 @@ begin
 
   return query select true, 'ok', v_star;
 end;
-$$ language plpgsql;
+$$ language plpgsql security definer;
 
 revoke all on function public.save_quick_review_record(uuid, uuid, uuid, text, text, boolean, text, int, int) from public;
 grant execute on function public.save_quick_review_record(uuid, uuid, uuid, text, text, boolean, text, int, int) to anon, authenticated;
