@@ -2,6 +2,7 @@ import { supabase } from './client';
 import type {
   DictationSubject, DictationWord, DictationErrorWord, DictationTask,
   DictationTaskWord, DictationTaskMode, SubmitDictationResult,
+  DictationQuickReviewRecord,
 } from './types';
 
 // ==================== 词条库 ====================
@@ -304,8 +305,8 @@ export async function deleteTask(taskId: string): Promise<void> {
   if (error) throw error;
 }
 
-// 上线/下线任务（active / offline）
-export async function updateTaskStatus(taskId: string, status: 'active' | 'offline'): Promise<void> {
+// 上线/下线/完成任务（active / offline / completed）
+export async function updateTaskStatus(taskId: string, status: 'active' | 'offline' | 'completed'): Promise<void> {
   const { error } = await supabase
     .from('dictation_tasks')
     .update({ status })
@@ -400,7 +401,7 @@ export interface QuickReviewResult {
   new_star: number;
 }
 
-// 快速复习单条判题（正确→加星光值，错误→存入错词库，即时生效）
+// 快速复习单条判题（正确→加星光值，错误→存入错词库，即时生效，记录持久化）
 export async function judgeQuickReviewWord(
   taskId: string,
   memberId: string,
@@ -408,33 +409,39 @@ export async function judgeQuickReviewWord(
   subject: DictationSubject,
   isCorrect: boolean,
   starPerWord: number,
+  roundNo: number = 1,
 ): Promise<QuickReviewResult> {
-  const wordData = {
-    word_id: word.word_id ?? null,
-    error_word_id: word.error_word_id ?? null,
-    answer: word.answer,
-    word_text: subject === 'english' ? (word.chinese_meaning ?? '') : (word.pinyin ?? ''),
-    subject,
-    textbook_name: word.textbook_name,
-    unit_no: word.unit_no,
-    unit_name: word.unit_name,
-    page_no: word.page_no,
-    chinese_meaning: word.chinese_meaning,
-    part_of_speech: word.part_of_speech,
-    pinyin: word.pinyin,
-  };
-  const { data, error } = await supabase.rpc('judge_quick_review_word', {
+  const wordText = subject === 'english' ? (word.chinese_meaning ?? '') : (word.pinyin ?? '');
+  const { data, error } = await supabase.rpc('save_quick_review_record', {
     p_task_id: taskId,
     p_member_id: memberId,
-    p_word: wordData,
+    p_task_word_id: word.id,
+    p_word_text: wordText,
+    p_answer: word.answer,
     p_is_correct: isCorrect,
+    p_subject: subject,
     p_star_per_word: starPerWord,
+    p_round_no: roundNo,
   });
   if (error) throw error;
   const row = (data as any[])?.[0];
   return {
     success: row?.success ?? false,
     message: row?.message ?? '',
-    new_star: row?.new_star ?? 0,
+    new_star: row?.star_gained ?? 0,
   };
+}
+
+// 加载某任务已持久化的快速复习作答记录（用于退出重进恢复状态）
+export async function listQuickReviewRecords(
+  taskId: string,
+  memberId: string,
+): Promise<DictationQuickReviewRecord[]> {
+  const { data, error } = await supabase
+    .from('dictation_quick_review_records')
+    .select('*')
+    .eq('task_id', taskId)
+    .eq('member_id', memberId);
+  if (error) throw error;
+  return (data ?? []) as DictationQuickReviewRecord[];
 }

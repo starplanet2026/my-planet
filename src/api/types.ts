@@ -991,6 +991,19 @@ export interface DictationRecord {
   created_at: string;
 }
 
+// 快速复习作答记录（持久化）
+export interface DictationQuickReviewRecord {
+  id: string;
+  task_id: string;
+  member_id: string;
+  task_word_id: string;
+  word_text: string;
+  answer: string;
+  is_correct: boolean;
+  round_no: number;
+  created_at: string;
+}
+
 export interface GrantDictationResult {
   success: boolean;
   message: string;

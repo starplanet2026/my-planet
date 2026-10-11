@@ -7,8 +7,10 @@ import { Modal } from '../../components/common/Modal';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { CheckCircle, XCircle, RotateCcw, ChevronLeft } from 'lucide-react';
-import { listTaskWords, judgeQuickReviewWord } from '../../api/dictation';
+import { CheckCircle, XCircle, RotateCcw, ChevronLeft, Flag } from 'lucide-react';
+import {
+  listTaskWords, judgeQuickReviewWord, listQuickReviewRecords, updateTaskStatus,
+} from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject } from '../../api/types';
 
 interface Props {
@@ -17,7 +19,7 @@ interface Props {
   childId: string;
 }
 
-// 本轮会话缓存中的词条状态
+// 词条判题状态
 type WordStatus = 'correct' | 'incorrect';
 
 export function DictationQuickReviewPage({ task, subject, childId }: Props) {
@@ -25,33 +27,43 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const toast = useToastStore();
 
+  // 全部词条（第1轮）
   const [allWords, setAllWords] = useState<DictationTaskWord[]>([]);
-  // 当前轮次的词条（Round 1 = 全部，Round 2+ = 上一轮错题）
+  // 当前轮次的词条
   const [roundWords, setRoundWords] = useState<DictationTaskWord[]>([]);
   const [loading, setLoading] = useState(true);
   const [round, setRound] = useState(1);
 
   // 当前展开答案的卡片 ID
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // 本轮会话缓存：记录每条词条判题状态
+  // 本轮判题缓存（task_word_id -> status）
   const [judgedWords, setJudgedWords] = useState<Map<string, WordStatus>>(new Map());
   const [judging, setJudging] = useState(false);
 
-  // 完成弹窗
+  // 完成弹窗（按轮次控制，避免无限弹出）
   const [showComplete, setShowComplete] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    listTaskWords(task.id)
-      .then(words => {
-        setAllWords(words);
-        setRoundWords(words);
-      })
-      .catch(e => toast.error('加载失败：' + e.message))
-      .finally(() => setLoading(false));
-  }, [task.id]);
+  const [completedRounds, setCompletedRounds] = useState<Set<number>>(new Set());
 
   const subjectLabel = subject === 'english' ? '英语' : '语文';
+
+  // 加载词条 + 恢复已持久化的判题记录
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      listTaskWords(task.id),
+      listQuickReviewRecords(task.id, childId).catch(() => []),
+    ]).then(([words, records]) => {
+      setAllWords(words);
+      setRoundWords(words);
+      // 恢复判题状态
+      const restored = new Map<string, WordStatus>();
+      records.forEach(r => {
+        restored.set(r.task_word_id, r.is_correct ? 'correct' : 'incorrect');
+      });
+      setJudgedWords(restored);
+    }).catch(e => toast.error('加载失败：' + e.message))
+      .finally(() => setLoading(false));
+  }, [task.id, childId]);
 
   // 本轮错题列表
   const errorWordIds = useMemo(() => {
@@ -62,7 +74,6 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     return ids;
   }, [judgedWords]);
 
-  // 本轮已判题数
   const judgedCount = judgedWords.size;
   const totalWords = roundWords.length;
   const correctCount = useMemo(() => {
@@ -72,10 +83,12 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   }, [judgedWords]);
   const errorCount = errorWordIds.length;
 
-  // 是否全部判完
+  // 本轮是否全部判完
   const allJudged = totalWords > 0 && judgedCount === totalWords;
+  // 本轮错题是否清零
+  const noErrors = errorCount === 0;
 
-  // ✅❌ 按钮是否激活
+  // ✅❌ 按钮激活条件：已展开答案 && 该卡未判 && 非判题中
   const buttonsActive = expandedId !== null && !judgedWords.has(expandedId) && !judging;
 
   // 点击卡片展开/收起
@@ -92,12 +105,13 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
 
     setJudging(true);
     try {
-      const result = await judgeQuickReviewWord(task.id, childId, word, subject, isCorrect, task.star_per_word);
+      const result = await judgeQuickReviewWord(
+        task.id, childId, word, subject, isCorrect, task.star_per_word, round,
+      );
       if (!result.success) {
         toast.error(result.message);
         return;
       }
-      // 更新会话缓存
       setJudgedWords(prev => {
         const next = new Map(prev);
         next.set(expandedId, isCorrect ? 'correct' : 'incorrect');
@@ -116,9 +130,9 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     }
   };
 
-  // 复习本轮错题
+  // 复习本轮错题（进入下一轮）
   const reviewErrors = () => {
-    if (errorWordIds.length === 0) return;
+    if (errorCount === 0) return;
     const errorWords = roundWords.filter(w => errorWordIds.includes(w.id));
     setRoundWords(errorWords);
     setJudgedWords(new Map());
@@ -127,12 +141,24 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     setShowComplete(false);
   };
 
-  // 全部判完时自动弹出完成弹窗
+  // 本轮全部判完 → 弹出完成弹窗（每轮只弹一次）
   useEffect(() => {
-    if (allJudged && !showComplete) {
+    if (allJudged && !showComplete && !completedRounds.has(round)) {
       setShowComplete(true);
+      setCompletedRounds(prev => new Set(prev).add(round));
     }
-  }, [allJudged, showComplete]);
+  }, [allJudged, showComplete, completedRounds, round]);
+
+  // 点击「复习完成」：标记任务结束，前端入口隐藏
+  const finishReview = async () => {
+    try {
+      await updateTaskStatus(task.id, 'completed');
+      toast.success('复习已完成');
+      navigate('/challenge');
+    } catch (e: any) {
+      toast.error('操作失败：' + e.message);
+    }
+  };
 
   if (loading) return <Loading />;
 
@@ -216,17 +242,28 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
             <XCircle className="w-5 h-5" />❌ 错误
           </Button>
         </div>
-        {/* 复习本轮错题按钮 */}
-        <Button
-          variant="secondary"
-          size="lg"
-          className="w-full"
-          disabled={errorCount === 0 || judging}
-          onClick={reviewErrors}
-        >
-          <RotateCcw className="w-4 h-4" />
-          复习本轮错题（{errorCount}）
-        </Button>
+        {/* 复习本轮错题 / 复习完成 按钮 */}
+        {noErrors ? (
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={finishReview}
+          >
+            <Flag className="w-4 h-4" />
+            复习完成
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="lg"
+            className="w-full"
+            disabled={judging}
+            onClick={reviewErrors}
+          >
+            <RotateCcw className="w-4 h-4" />
+            复习本轮错题（{errorCount}）
+          </Button>
+        )}
         {!buttonsActive && expandedId === null && !allJudged && (
           <p className="text-xs text-center text-slate-400">点击卡片查看答案后判题</p>
         )}
@@ -235,38 +272,29 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
       {/* 完成弹窗 */}
       <Modal
         open={showComplete}
-        onClose={() => {
-          if (errorCount > 0) {
-            setShowComplete(false);
-          } else {
-            navigate('/challenge');
-          }
-        }}
-        title={errorCount > 0 ? '本轮完成' : '全部完成'}
+        onClose={() => setShowComplete(false)}
+        title={noErrors ? '全部完成' : '本轮完成'}
       >
         <div className="text-center py-4">
-          <div className="text-5xl mb-3">{errorCount > 0 ? '📝' : '🎉'}</div>
+          <div className="text-5xl mb-3">{noErrors ? '🎉' : '📝'}</div>
           <p className="text-lg mb-1">
             正确 <span className="text-emerald-600 font-bold">{correctCount}</span> / {totalWords} 条
           </p>
           <p className="text-rose-500 mb-1">错题 <span className="font-bold">{errorCount}</span> 条</p>
           <p className="text-slate-500 text-sm">获得 <span className="text-amber-500 font-bold">{correctCount * task.star_per_word}</span> 星光值</p>
-          {errorCount > 0 && (
-            <p className="text-xs text-slate-400 mt-3">可点击「复习本轮错题」继续循环复习</p>
-          )}
         </div>
         <div className="flex gap-2 justify-end pt-2">
-          {errorCount > 0 ? (
+          {noErrors ? (
+            <Button onClick={() => { setShowComplete(false); }}>
+              <CheckCircle className="w-4 h-4" />知道了
+            </Button>
+          ) : (
             <>
-              <Button variant="secondary" onClick={() => navigate('/challenge')}>返回</Button>
-              <Button onClick={() => { setShowComplete(false); }}>
+              <Button variant="secondary" onClick={() => setShowComplete(false)}>稍后复习</Button>
+              <Button onClick={() => { setShowComplete(false); reviewErrors(); }}>
                 <RotateCcw className="w-4 h-4" />复习错题
               </Button>
             </>
-          ) : (
-            <Button onClick={() => navigate('/challenge')}>
-              <CheckCircle className="w-4 h-4" />完成
-            </Button>
           )}
         </div>
       </Modal>
