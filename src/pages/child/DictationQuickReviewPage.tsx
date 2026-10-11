@@ -87,6 +87,10 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   const allJudged = totalWords > 0 && judgedCount === totalWords;
   // 本轮错题是否清零
   const noErrors = errorCount === 0;
+  // 是否可点击复习完成（全部判完且无错题）
+  const canFinish = allJudged && noErrors;
+  // 是否可点击复习本轮错题（全部判完且有错题）
+  const canReviewErrors = allJudged && !noErrors;
 
   // ✅❌ 按钮激活条件：已展开答案 && 该卡未判 && 非判题中
   const buttonsActive = expandedId !== null && !judgedWords.has(expandedId) && !judging;
@@ -243,7 +247,7 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
           </Button>
         </div>
         {/* 复习本轮错题 / 复习完成 按钮 */}
-        {noErrors ? (
+        {canFinish ? (
           <Button
             size="lg"
             className="w-full"
@@ -257,7 +261,7 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
             variant="secondary"
             size="lg"
             className="w-full"
-            disabled={judging}
+            disabled={!canReviewErrors || judging}
             onClick={reviewErrors}
           >
             <RotateCcw className="w-4 h-4" />

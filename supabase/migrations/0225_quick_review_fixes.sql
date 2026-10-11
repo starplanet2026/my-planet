@@ -30,26 +30,10 @@ create index if not exists idx_qr_records_task_member
 -- 启用行级安全（如未启用）
 alter table public.dictation_quick_review_records enable row level security;
 
-drop policy if exists "qr_records_select_own" on public.dictation_quick_review_records;
-create policy "qr_records_select_own" on public.dictation_quick_review_records
-  for select using (
-    member_id in (select auth.uid()) 
-    or exists (select 1 from public.members m where m.id = member_id and m.family_id in (select family_id from public.members where id = auth.uid()))
-  );
-
-drop policy if exists "qr_records_insert_own" on public.dictation_quick_review_records;
-create policy "qr_records_insert_own" on public.dictation_quick_review_records
-  for insert with check (
-    member_id in (select auth.uid())
-    or exists (select 1 from public.members m where m.id = member_id and m.family_id in (select family_id from public.members where id = auth.uid()))
-  );
-
-drop policy if exists "qr_records_update_own" on public.dictation_quick_review_records;
-create policy "qr_records_update_own" on public.dictation_quick_review_records
-  for update using (
-    member_id in (select auth.uid())
-    or exists (select 1 from public.members m where m.id = member_id and m.family_id in (select family_id from public.members where id = auth.uid()))
-  );
+-- 简化策略：authenticated 可读写（数据隔离由应用层 member_id 过滤保证，与其他 dictation 表一致）
+drop policy if exists "qr_records_auth_all" on public.dictation_quick_review_records;
+create policy "qr_records_auth_all" on public.dictation_quick_review_records
+  for all to authenticated using (true) with check (true);
 
 -- ============================================================
 -- RPC: 保存快速复习单条判题记录（已存在则覆盖）
