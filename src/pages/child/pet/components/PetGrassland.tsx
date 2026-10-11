@@ -621,7 +621,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
                       <div
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
-                        className="max-w-[200px] cursor-pointer relative"
+                        className="w-[116px] cursor-pointer relative"
                       >
                         <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-normal break-words pet-bubble-breathe">
                           {petMessage(pet)}
