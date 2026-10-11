@@ -52,8 +52,9 @@ create or replace function public.save_quick_review_record(
 ) returns table(success boolean, message text, star_gained int) as $$
 declare
   v_task record;
-  v_existing record;
+  v_member_rec record;
   v_star int := 0;
+  v_new_star int := 0;
 begin
   -- 校验任务
   select * into v_task from public.dictation_tasks
@@ -77,9 +78,11 @@ begin
   if p_is_correct then
     -- 正确：增加星光值
     v_star := p_star_per_word;
+    select family_id, star_value into v_member_rec from public.members where id = p_member_id;
+    v_new_star := coalesce(v_member_rec.star_value, 0) + v_star;
     update public.members set star_value = star_value + v_star where id = p_member_id;
-    insert into public.coin_records (member_id, change_amount, type, category, ref_id, note, created_by)
-    values (p_member_id, v_star, 'star', 'task', p_task_id, '快速复习正确奖励', p_member_id);
+    insert into public.coin_records (family_id, member_id, amount, balance_after, reason, category, ref_type, ref_id, created_by, balance_type)
+    values (v_member_rec.family_id, p_member_id, v_star, v_new_star, '快速复习正确奖励', 'task', 'dictation_quick_review', p_task_id, p_member_id, 'star');
   else
     -- 错误：存入全局错词库（去重）
     insert into public.dictation_error_words
