@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Modal } from '../../components/common/Modal';
@@ -9,7 +8,7 @@ import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
 import { CheckCircle, XCircle, RotateCcw, ChevronLeft, Flag } from 'lucide-react';
 import {
-  listTaskWords, judgeQuickReviewWord, listQuickReviewRecords, updateTaskStatus,
+  listTaskWords, judgeQuickReviewWord, listQuickReviewRecords, updateTaskStatus, submitDictationReview,
 } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject } from '../../api/types';
 
@@ -24,7 +23,6 @@ type WordStatus = 'correct' | 'incorrect';
 
 export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   const navigate = useNavigate();
-  const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const toast = useToastStore();
 
   // 全部词条（第1轮）
@@ -46,6 +44,10 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
 
   // 累计实际获得的星光值（按后端递减后的实际值累加）
   const [totalGainedStar, setTotalGainedStar] = useState(0);
+  // 已获得过星光的词（同一词全程只奖励一次）
+  const [awardedWords, setAwardedWords] = useState<Set<string>>(new Set());
+  // 星光是否已提交审核
+  const [rewardSubmitted, setRewardSubmitted] = useState(false);
 
   const subjectLabel = subject === 'english' ? '英语' : '语文';
 
@@ -125,10 +127,15 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
         return next;
       });
       if (isCorrect) {
-        const gained = result.new_star;
-        setTotalGainedStar(prev => prev + gained);
-        toast.success(gained > 0 ? `✅ 正确 +${gained}星光` : '✅ 正确（已无额外星光奖励）');
-        await refreshMembers();
+        // 星光改为完成复习后统一发放（家长审核），此处仅本地累计展示
+        // 同一词全程只累计一次奖励
+        if (!awardedWords.has(expandedId)) {
+          setAwardedWords(prev => new Set(prev).add(expandedId));
+          setTotalGainedStar(prev => prev + task.star_per_word);
+          toast.success(`✅ 正确 +${task.star_per_word}星光（完成后统一发放）`);
+        } else {
+          toast.success('✅ 正确');
+        }
       } else {
         toast.success('❌ 已加入错词库');
       }
@@ -158,11 +165,21 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     }
   }, [allJudged, showComplete, completedRounds, round]);
 
-  // 点击「复习完成」：标记任务结束，前端入口隐藏
+  // 点击「复习完成」：提交星光审核（家长通过后统一发放），标记任务结束
   const finishReview = async () => {
     try {
+      if (totalGainedStar > 0 && !rewardSubmitted) {
+        const res = await submitDictationReview(task.id, childId, [], 'quick_review', totalGainedStar);
+        if (!res.success) {
+          toast.error(res.message);
+          return;
+        }
+        setRewardSubmitted(true);
+        toast.success(`已提交审核，家长通过后发放 ${totalGainedStar} 星光`);
+      } else {
+        toast.success('复习已完成');
+      }
       await updateTaskStatus(task.id, 'completed');
-      toast.success('复习已完成');
       navigate('/challenge');
     } catch (e: any) {
       toast.error('操作失败：' + e.message);
@@ -290,7 +307,7 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
             正确 <span className="text-emerald-600 font-bold">{correctCount}</span> / {totalWords} 条
           </p>
           <p className="text-rose-500 mb-1">错题 <span className="font-bold">{errorCount}</span> 条</p>
-          <p className="text-slate-500 text-sm">获得 <span className="text-amber-500 font-bold">{totalGainedStar}</span> 星光值</p>
+          <p className="text-slate-500 text-sm">预计获得 <span className="text-amber-500 font-bold">{totalGainedStar}</span> 星光值<span className="text-xs text-slate-400">（完成复习并审核通过后发放）</span></p>
         </div>
         <div className="flex gap-2 justify-end pt-2">
           {noErrors ? (

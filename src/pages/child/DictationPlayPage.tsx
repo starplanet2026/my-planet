@@ -37,6 +37,8 @@ export function DictationPlayPage() {
   // 审核状态：null=未提交 / pending=待审核 / approved=已通过 / rejected=已驳回
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const [approvedInfo, setApprovedInfo] = useState<{ correct: number; total: number; star: number } | null>(null);
+  // 查看答案授权状态：null=未申请 / pending=待批准 / approved=已授权
+  const [accessStatus, setAccessStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!childId || !subject) return;
@@ -46,13 +48,20 @@ export function DictationPlayPage() {
     loadTask.then(t => {
       setTask(t);
       if (t) {
-        // 查询审核状态
-        getDictationSubmissionStatus(t.id, childId).then(s => {
+        // 查询批改结果审核状态
+        getDictationSubmissionStatus(t.id, childId, 'grading_result').then(s => {
           if (s) {
             setReviewStatus(s.status);
             if (s.status === 'approved') {
               setApprovedInfo({ correct: s.correct_count ?? 0, total: 0, star: s.total_star ?? 0 });
             }
+          }
+        }).catch(() => {});
+        // 查询查看答案授权状态
+        getDictationSubmissionStatus(t.id, childId, 'grading_access').then(s => {
+          if (s) {
+            setAccessStatus(s.status);
+            if (s.status === 'approved') setGrading(true);
           }
         }).catch(() => {});
         return listTaskWords(t.id).then(setWords);
@@ -88,6 +97,45 @@ export function DictationPlayPage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  // 轮询授权状态（pending 时每 5 秒检查一次，家长批准后立即进入批改界面）
+  useEffect(() => {
+    if (accessStatus !== 'pending' || !task || !childId) return;
+    const timer = setInterval(async () => {
+      try {
+        const s = await getDictationSubmissionStatus(task.id, childId, 'grading_access');
+        if (s?.status === 'approved') {
+          setAccessStatus('approved');
+          setGrading(true);
+          toast.success('家长已批准，开始批改吧！');
+        } else if (s?.status === 'rejected') {
+          setAccessStatus('rejected');
+        }
+      } catch { /* 静默 */ }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [accessStatus, task?.id, childId]);
+
+  // 点击「去批改」：需先申请家长授权查看答案
+  const requestGradingAccess = async () => {
+    if (!task) return;
+    setSubmitting(true);
+    try {
+      const res = await submitDictationReview(task.id, childId, [], 'grading_access');
+      if (!res.success) { toast.error(res.message); return; }
+      if (res.message === 'already_approved') {
+        setAccessStatus('approved');
+        setGrading(true);
+      } else {
+        setAccessStatus('pending');
+        toast.success('已申请，等待家长批准查看答案');
+      }
+    } catch (e: any) {
+      toast.error('申请失败：' + e.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const submit = async () => {
@@ -168,9 +216,13 @@ export function DictationPlayPage() {
               重新批改
             </Button>
           </div>
+        ) : accessStatus === 'pending' ? (
+          <div className="w-full text-center py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
+            ⏳ 已申请批改，等待家长批准查看答案…
+          </div>
         ) : !grading ? (
-          <Button className="w-full" size="lg" onClick={() => setGrading(true)}>
-            <CheckCircle className="w-5 h-5" />去批改
+          <Button className="w-full" size="lg" onClick={requestGradingAccess} disabled={submitting}>
+            <CheckCircle className="w-5 h-5" />{submitting ? '申请中...' : '去批改'}
           </Button>
         ) : (
           <>

@@ -93,6 +93,8 @@ export const ROUTES = {
   PARENT_STUDY_TASKS: '/parent/study-tasks',
   // 陪伴学习审核（家长审核学生提交的学习记录）
   PARENT_STUDY_REVIEW: '/parent/study-review',
+  // 家默审核（默写批改授权/批改结果/快速复习积分）
+  PARENT_DICTATION_REVIEW: '/parent/dictation-review',
   PET: '/pet',
 } as const;
 

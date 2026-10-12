@@ -20,6 +20,7 @@ import { DictationManagePage } from '../pages/parent/DictationManagePage';
 import { RecitationManagePage } from '../pages/parent/RecitationManagePage';
 import { StudyTaskManagePage } from '../pages/parent/StudyTaskManagePage';
 import { StudyReviewPage } from '../pages/parent/StudyReviewPage';
+import { DictationReviewPage } from '../pages/parent/DictationReviewPage';
 import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
 import { Loading } from '../components/common/Loading';
 import { KeepAlive } from '../components/common/KeepAlive';
@@ -87,6 +88,7 @@ function ParentKeepAliveRoutes() {
       <KeepAlive when={prefix(ROUTES.PARENT_RECITATION)}><RecitationManagePage /></KeepAlive>
       <KeepAlive when={exact(ROUTES.PARENT_STUDY_TASKS)}><StudyTaskManagePage /></KeepAlive>
       <KeepAlive when={exact(ROUTES.PARENT_STUDY_REVIEW)}><StudyReviewPage /></KeepAlive>
+      <KeepAlive when={exact(ROUTES.PARENT_DICTATION_REVIEW)}><DictationReviewPage /></KeepAlive>
     </RequireParentMode>
   );
 }

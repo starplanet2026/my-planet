@@ -17,6 +17,7 @@ import { changePassword, resetAllData, setParentPin } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
 import { fetchPendingStudyReviews } from '../../api/pets';
 import { fetchQuestionReports } from '../../api/challenges';
+import { listPendingDictationSubmissions } from '../../api/dictation';
 import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint } from 'lucide-react';
 
 export function ParentDashboardPage() {
@@ -37,13 +38,16 @@ export function ParentDashboardPage() {
   const [pendingTaskCount, setPendingTaskCount] = useState(0);
   const [pendingStudyCount, setPendingStudyCount] = useState(0);
   const [pendingReportCount, setPendingReportCount] = useState(0);
+  const [pendingDictationCount, setPendingDictationCount] = useState(0);
 
   const loadBadgeCounts = () => {
     // 任务达成：待审核任务数
     setPendingTaskCount(tasks.filter(t => t.status === 'pending_approval').length);
-    // 学习完成：待审核学习记录
     if (family?.id) {
+      // 学习完成：待审核学习记录
       fetchPendingStudyReviews(family.id).then(r => setPendingStudyCount(r.length)).catch(() => {});
+      // 家默审核：待审核默写请求
+      listPendingDictationSubmissions(family.id).then(r => setPendingDictationCount(r.length)).catch(() => {});
     }
     // 题目报错：待处理报错
     fetchQuestionReports().then(r => setPendingReportCount(r.filter(x => x.status === 'pending').length)).catch(() => {});
@@ -205,6 +209,7 @@ export function ParentDashboardPage() {
     { label: '成就达成', onClick: () => go(ROUTES.PARENT_VERIFICATION), badge: pendingTaskCount },
     { label: '陪伴任务', onClick: () => go(ROUTES.PARENT_STUDY_TASKS), badge: 0 },
     { label: '学习完成', onClick: () => go(ROUTES.PARENT_STUDY_REVIEW), badge: pendingStudyCount },
+    { label: '家默审核', onClick: () => go(ROUTES.PARENT_DICTATION_REVIEW), badge: pendingDictationCount },
   ];
 
   // 领取成就按钮

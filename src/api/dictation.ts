@@ -413,16 +413,22 @@ export async function submitDictationResult(
 
 // ==================== 批改审核 ====================
 
-// 孩子提交批改（待家长审核，不立即判分）
+export type DictationSubmissionType = 'grading_access' | 'grading_result' | 'quick_review';
+
+// 孩子提交审核（查看答案授权/批改结果/快速复习积分）
 export async function submitDictationReview(
   taskId: string,
   memberId: string,
-  results: DictationResultItem[],
+  results: DictationResultItem[] = [],
+  type: DictationSubmissionType = 'grading_result',
+  totalStar: number | null = null,
 ): Promise<{ success: boolean; message: string; submission_id: string | null }> {
   const { data, error } = await supabase.rpc('submit_dictation_review', {
     p_task_id: taskId,
     p_member_id: memberId,
     p_results: results,
+    p_type: type,
+    p_total_star: totalStar,
   });
   if (error) throw error;
   const row = (data as any[])?.[0];
@@ -440,10 +446,12 @@ export interface DictationSubmissionStatus {
 export async function getDictationSubmissionStatus(
   taskId: string,
   memberId: string,
+  type: DictationSubmissionType = 'grading_result',
 ): Promise<DictationSubmissionStatus | null> {
   const { data, error } = await supabase.rpc('get_dictation_submission_status', {
     p_task_id: taskId,
     p_member_id: memberId,
+    p_type: type,
   });
   if (error) throw error;
   return ((data as any[])?.[0] ?? null) as DictationSubmissionStatus | null;
@@ -457,7 +465,9 @@ export interface PendingDictationSubmission {
   member_name: string;
   task_title: string;
   subject: string;
+  type: DictationSubmissionType;
   results: DictationResultItem[];
+  total_star: number | null;
   created_at: string;
 }
 export async function listPendingDictationSubmissions(familyId: string): Promise<PendingDictationSubmission[]> {
