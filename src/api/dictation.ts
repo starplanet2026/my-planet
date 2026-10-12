@@ -411,6 +411,92 @@ export async function submitDictationResult(
   };
 }
 
+// ==================== 批改审核 ====================
+
+// 孩子提交批改（待家长审核，不立即判分）
+export async function submitDictationReview(
+  taskId: string,
+  memberId: string,
+  results: DictationResultItem[],
+): Promise<{ success: boolean; message: string; submission_id: string | null }> {
+  const { data, error } = await supabase.rpc('submit_dictation_review', {
+    p_task_id: taskId,
+    p_member_id: memberId,
+    p_results: results,
+  });
+  if (error) throw error;
+  const row = (data as any[])?.[0];
+  return { success: row?.success ?? false, message: row?.message ?? '', submission_id: row?.submission_id ?? null };
+}
+
+// 孩子查询提交状态
+export interface DictationSubmissionStatus {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  correct_count: number | null;
+  error_count: number | null;
+  total_star: number | null;
+}
+export async function getDictationSubmissionStatus(
+  taskId: string,
+  memberId: string,
+): Promise<DictationSubmissionStatus | null> {
+  const { data, error } = await supabase.rpc('get_dictation_submission_status', {
+    p_task_id: taskId,
+    p_member_id: memberId,
+  });
+  if (error) throw error;
+  return ((data as any[])?.[0] ?? null) as DictationSubmissionStatus | null;
+}
+
+// 家长：待审核列表
+export interface PendingDictationSubmission {
+  id: string;
+  task_id: string;
+  member_id: string;
+  member_name: string;
+  task_title: string;
+  subject: string;
+  results: DictationResultItem[];
+  created_at: string;
+}
+export async function listPendingDictationSubmissions(familyId: string): Promise<PendingDictationSubmission[]> {
+  const { data, error } = await supabase.rpc('list_pending_dictation_submissions', { p_family_id: familyId });
+  if (error) throw error;
+  return (data ?? []) as PendingDictationSubmission[];
+}
+
+// 家长：审核通过
+export async function approveDictationSubmission(
+  submissionId: string,
+  reviewerId: string,
+): Promise<{ success: boolean; message: string; correct_count: number; error_count: number; total_star: number }> {
+  const { data, error } = await supabase.rpc('approve_dictation_submission', {
+    p_submission_id: submissionId,
+    p_reviewer_id: reviewerId,
+  });
+  if (error) throw error;
+  const row = (data as any[])?.[0];
+  return {
+    success: row?.success ?? false, message: row?.message ?? '',
+    correct_count: row?.correct_count ?? 0, error_count: row?.error_count ?? 0, total_star: row?.total_star ?? 0,
+  };
+}
+
+// 家长：驳回
+export async function rejectDictationSubmission(
+  submissionId: string,
+  reviewerId: string,
+): Promise<{ success: boolean; message: string }> {
+  const { data, error } = await supabase.rpc('reject_dictation_submission', {
+    p_submission_id: submissionId,
+    p_reviewer_id: reviewerId,
+  });
+  if (error) throw error;
+  const row = (data as any[])?.[0];
+  return { success: row?.success ?? false, message: row?.message ?? '' };
+}
+
 // ==================== 快速复习模式 ====================
 
 export interface QuickReviewResult {

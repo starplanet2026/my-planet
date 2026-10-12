@@ -11,7 +11,9 @@ import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles, Che
 import {
   listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus, deleteTask,
   updateTaskStarPerWord, updateTaskTitle, updateTaskMode, createTask,
+  listPendingDictationSubmissions, approveDictationSubmission, rejectDictationSubmission,
 } from '../../api/dictation';
+import type { PendingDictationSubmission } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject, DictationTaskStatus } from '../../api/types';
 
 const STATUS_LABEL: Record<DictationTaskStatus, string> = {
@@ -75,6 +77,59 @@ export function DictationTaskManagePage() {
   const [repushTarget, setRepushTarget] = useState<DictationTask | null>(null);
   const [repushChildId, setRepushChildId] = useState('');
   const [repushing, setRepushing] = useState(false);
+
+  // 批改审核
+  const [pendingSubmissions, setPendingSubmissions] = useState<PendingDictationSubmission[]>([]);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<PendingDictationSubmission | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+
+  const loadPendingSubmissions = useCallback(async () => {
+    if (!family?.id) return;
+    try {
+      const list = await listPendingDictationSubmissions(family.id);
+      setPendingSubmissions(list);
+    } catch {
+      // 静默失败，不阻塞主流程
+    }
+  }, [family?.id]);
+
+  useEffect(() => { loadPendingSubmissions(); }, [loadPendingSubmissions]);
+
+  const parentId = useMemo(() => members.find(m => m.role === 'parent')?.id ?? '', [members]);
+
+  const handleApprove = async () => {
+    if (!reviewTarget || !parentId) return;
+    setReviewing(true);
+    try {
+      const res = await approveDictationSubmission(reviewTarget.id, parentId);
+      if (!res.success) { toast.error(res.message); return; }
+      toast.success(`已通过：答对 ${res.correct_count} 条，发放 ${res.total_star} 星光`);
+      setReviewTarget(null);
+      await loadPendingSubmissions();
+      await loadTasks();
+    } catch (e: any) {
+      toast.error('操作失败：' + e.message);
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reviewTarget || !parentId) return;
+    setReviewing(true);
+    try {
+      const res = await rejectDictationSubmission(reviewTarget.id, parentId);
+      if (!res.success) { toast.error(res.message); return; }
+      toast.success('已驳回');
+      setReviewTarget(null);
+      await loadPendingSubmissions();
+    } catch (e: any) {
+      toast.error('操作失败：' + e.message);
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -351,6 +406,22 @@ export function DictationTaskManagePage() {
 
   return (
     <div className="space-y-3">
+      {/* 待审核横幅 */}
+      {pendingSubmissions.length > 0 && (
+        <div
+          onClick={() => setShowReview(true)}
+          className="flex items-center justify-between px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📝</span>
+            <span className="text-sm font-medium text-amber-800">
+              有 {pendingSubmissions.length} 条默写批改待审核
+            </span>
+          </div>
+          <span className="text-xs text-amber-600">点击审核 →</span>
+        </div>
+      )}
+
       {/* 筛选栏 */}
       <div className="flex flex-wrap items-center gap-2">
         <Select
@@ -608,6 +679,71 @@ export function DictationTaskManagePage() {
           <Button variant="secondary" onClick={() => setShowBatchDelete(false)}>取消</Button>
           <Button variant="danger" onClick={confirmBatchDelete}>确认删除</Button>
         </div>
+      </Modal>
+
+      {/* 批改审核列表弹窗 */}
+      <Modal open={showReview && reviewTarget === null} onClose={() => setShowReview(false)} title="默写批改审核" size="md">
+        {pendingSubmissions.length === 0 ? (
+          <p className="text-sm text-slate-500 text-center py-6">暂无待审核的批改</p>
+        ) : (
+          <div className="space-y-2">
+            {pendingSubmissions.map(s => {
+              const correctCnt = (s.results ?? []).filter(r => r.is_correct).length;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setReviewTarget(s)}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{s.task_title}</p>
+                    <p className="text-xs text-slate-500">
+                      {s.member_name} · {s.subject === 'english' ? '英语' : '语文'} · 勾选正确 {correctCnt}/{s.results?.length ?? 0}
+                    </p>
+                  </div>
+                  <span className="text-xs text-amber-600">审核 →</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
+
+      {/* 批改审核详情弹窗 */}
+      <Modal open={reviewTarget !== null} onClose={() => setReviewTarget(null)} title="审核批改内容" size="md">
+        {reviewTarget && (
+          <div className="space-y-4">
+            <div className="text-sm text-slate-600">
+              <p>任务：<span className="font-medium text-slate-800">{reviewTarget.task_title}</span></p>
+              <p>孩子：<span className="font-medium text-slate-800">{reviewTarget.member_name}</span></p>
+            </div>
+            <div className="max-h-72 overflow-y-auto space-y-1.5">
+              {(reviewTarget.results ?? []).map((r, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex items-center justify-between px-3 py-2 rounded-lg text-sm',
+                    r.is_correct ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'
+                  )}
+                >
+                  <div>
+                    <span className="text-slate-500 mr-2">{i + 1}.</span>
+                    <span className="text-slate-700">{r.word_text}</span>
+                    <span className="mx-2 text-slate-300">|</span>
+                    <span className="font-medium text-slate-800">{r.answer}</span>
+                  </div>
+                  <span className={r.is_correct ? 'text-emerald-600' : 'text-red-500'}>
+                    {r.is_correct ? '✓ 正确' : '✗ 错误'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="danger" loading={reviewing} onClick={handleReject}>驳回</Button>
+              <Button variant="success" loading={reviewing} onClick={handleApprove}>审核通过</Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* 任务详情编辑弹窗 */}

@@ -10,7 +10,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
 import { CheckCircle } from 'lucide-react';
-import { getActiveTask, getTaskById, listTaskWords, submitDictationResult } from '../../api/dictation';
+import { getActiveTask, getTaskById, listTaskWords, submitDictationReview, getDictationSubmissionStatus } from '../../api/dictation';
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
 import { DictationQuickReviewPage } from './DictationQuickReviewPage';
 
@@ -34,6 +34,9 @@ export function DictationPlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [resultInfo, setResultInfo] = useState({ correct: 0, total: 0, star: 0 });
+  // 审核状态：null=未提交 / pending=待审核 / approved=已通过 / rejected=已驳回
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [approvedInfo, setApprovedInfo] = useState<{ correct: number; total: number; star: number } | null>(null);
 
   useEffect(() => {
     if (!childId || !subject) return;
@@ -42,7 +45,18 @@ export function DictationPlayPage() {
     const loadTask = taskId ? getTaskById(taskId) : getActiveTask(childId, subject);
     loadTask.then(t => {
       setTask(t);
-      if (t) return listTaskWords(t.id).then(setWords);
+      if (t) {
+        // 查询审核状态
+        getDictationSubmissionStatus(t.id, childId).then(s => {
+          if (s) {
+            setReviewStatus(s.status);
+            if (s.status === 'approved') {
+              setApprovedInfo({ correct: s.correct_count ?? 0, total: 0, star: s.total_star ?? 0 });
+            }
+          }
+        }).catch(() => {});
+        return listTaskWords(t.id).then(setWords);
+      }
       setWords([]);
     }).catch(e => toast.error('加载失败：' + e.message))
       .finally(() => setLoading(false));
@@ -87,14 +101,14 @@ export function DictationPlayPage() {
         answer: w.answer,
         is_correct: correct.has(w.id),
       }));
-      const submitRes = await submitDictationResult(task.id, childId, results);
+      const submitRes = await submitDictationReview(task.id, childId, results);
       if (!submitRes.success) {
         toast.error(submitRes.message);
         return;
       }
-      setResultInfo({ correct: submitRes.correct_count, total: words.length, star: submitRes.total_star });
-      setShowResult(true);
-      await refreshMembers();
+      setReviewStatus('pending');
+      setGrading(false);
+      toast.success('已提交，等待家长审核');
     } catch (e: any) {
       toast.error('提交失败：' + e.message);
     } finally {
@@ -124,7 +138,7 @@ export function DictationPlayPage() {
                 <div className="font-bold text-slate-800 leading-tight text-[21px] break-all whitespace-normal">
                   {prompt}
                 </div>
-                {grading && (
+                {(grading || reviewStatus === 'approved') && (
                   <div className="text-emerald-500 font-extrabold leading-tight mt-1 text-[18px] break-all whitespace-normal">
                     {w.answer}
                   </div>
@@ -137,7 +151,24 @@ export function DictationPlayPage() {
 
       {/* 底部操作栏 */}
       <div className="flex-shrink-0 pt-2 flex items-center gap-3">
-        {!grading ? (
+        {reviewStatus === 'pending' ? (
+          <div className="w-full text-center py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
+            ⏳ 已提交批改，等待家长审核…
+          </div>
+        ) : reviewStatus === 'approved' ? (
+          <div className="w-full text-center py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
+            ✅ 审核通过：答对 {approvedInfo?.correct ?? 0} 条，获得 {approvedInfo?.star ?? 0} 星光值
+          </div>
+        ) : reviewStatus === 'rejected' ? (
+          <div className="w-full flex items-center gap-2">
+            <div className="flex-1 text-center py-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">
+              批改已被家长驳回，请重新批改
+            </div>
+            <Button size="lg" onClick={() => { setReviewStatus(null); setCorrect(new Set()); setGrading(true); }}>
+              重新批改
+            </Button>
+          </div>
+        ) : !grading ? (
           <Button className="w-full" size="lg" onClick={() => setGrading(true)}>
             <CheckCircle className="w-5 h-5" />去批改
           </Button>
