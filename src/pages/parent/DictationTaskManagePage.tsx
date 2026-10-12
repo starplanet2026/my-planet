@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles, CheckSquare, Square } from 'lucide-react';
 import {
   listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus, deleteTask,
-  updateTaskStarPerWord, createTask,
+  updateTaskStarPerWord, updateTaskTitle, createTask,
 } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject, DictationTaskStatus } from '../../api/types';
 
@@ -64,7 +64,9 @@ export function DictationTaskManagePage() {
   // 任务详情编辑
   const [detailTask, setDetailTask] = useState<DictationTask | null>(null);
   const [editStarPerWord, setEditStarPerWord] = useState(1);
+  const [editTitle, setEditTitle] = useState('');
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
 
   // 重新推送
   const [showRepush, setShowRepush] = useState(false);
@@ -233,9 +235,29 @@ export function DictationTaskManagePage() {
   const openDetail = (task: DictationTask) => {
     setDetailTask(task);
     setEditStarPerWord(task.star_per_word);
+    setEditTitle(task.title);
     if (expandedId !== task.id) {
       setExpandedId(task.id);
       loadTaskWords(task.id);
+    }
+  };
+
+  // 保存标题修改
+  const confirmSaveTitle = async () => {
+    if (!detailTask) return;
+    const newTitle = editTitle.trim();
+    if (!newTitle) { toast.error('标题不能为空'); return; }
+    if (newTitle === detailTask.title) return;
+    setSavingTitle(true);
+    try {
+      await updateTaskTitle(detailTask.id, newTitle);
+      setTasks(prev => prev.map(t => t.id === detailTask.id ? { ...t, title: newTitle } : t));
+      setDetailTask({ ...detailTask, title: newTitle });
+      toast.success('标题已更新');
+    } catch (e: any) {
+      toast.error('保存失败：' + e.message);
+    } finally {
+      setSavingTitle(false);
     }
   };
 
@@ -573,7 +595,6 @@ export function DictationTaskManagePage() {
         {detailTask && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-sm">{detailTask.title}</span>
               <span className="text-xs text-slate-400">{detailTask.subject === 'english' ? '英语' : '语文'}</span>
               {detailTask.mode === 'quick_review' && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">⚡复习</span>
@@ -581,6 +602,20 @@ export function DictationTaskManagePage() {
               <span className={cn('text-xs px-1.5 py-0.5 rounded-full', STATUS_COLOR[detailTask.status])}>
                 {STATUS_LABEL[detailTask.status]}
               </span>
+            </div>
+            {/* 标题编辑 */}
+            <div className="bg-slate-50 rounded-lg p-3">
+              <label className="text-xs text-slate-500 mb-1 block">任务标题</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  placeholder="请输入任务标题"
+                />
+                <Button size="sm" onClick={confirmSaveTitle} loading={savingTitle} disabled={!editTitle.trim() || editTitle.trim() === detailTask.title}>
+                  保存
+                </Button>
+              </div>
             </div>
             {/* 星光值编辑 */}
             <div className="bg-slate-50 rounded-lg p-3">

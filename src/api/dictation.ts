@@ -323,6 +323,15 @@ export async function updateTaskStarPerWord(taskId: string, starPerWord: number)
   if (error) throw error;
 }
 
+// 修改任务标题
+export async function updateTaskTitle(taskId: string, title: string): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_tasks')
+    .update({ title })
+    .eq('id', taskId);
+  if (error) throw error;
+}
+
 export async function addTaskWords(taskId: string, words: TaskWordInput[]): Promise<void> {
   if (words.length === 0) return;
   const rows = words.map(w => ({ task_id: taskId, ...w }));
