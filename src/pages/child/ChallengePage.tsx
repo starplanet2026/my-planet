@@ -14,6 +14,8 @@ import { playClick, playCorrect, playWrong } from '../../lib/audio';
 import { cn } from '../../lib/utils';
 import { Volume2, ArrowLeft, Check, X, Star, Lightbulb, Lock, Trophy, ChevronRight, AlertCircle, Layers, Eye, Flag } from 'lucide-react';
 import { QuestionRenderer } from './challenge/questions/QuestionRenderer';
+import { ChoiceQuestion } from './challenge/questions/ChoiceQuestion';
+import { QuestionExplanation } from './challenge/questions/QuestionExplanation';
 import { MathQuestion } from './challenge/questions/MathQuestion';
 import { FillBlankQuestion } from './challenge/questions/FillBlankQuestion';
 import {
@@ -860,6 +862,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
   const [results, setResults] = useState<boolean[]>([]);
   const [totalReward, setTotalReward] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
+  const [learned, setLearned] = useState(false);
   const toast = useToastStore();
   const patchMember = useFamilyStore(s => s.patchMember);
   useChallengeSession(childId, setId, undefined, setTitle);
@@ -889,6 +892,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
       const result = await answerQuestion(childId, q.id, answer, setTitle);
       setIsCorrect(result.is_correct);
       setShowResult(true);
+      setLearned(false);
       setResults(prev => [...prev, result.is_correct]);
       setTotalReward(r => r + (result.reward ?? 0));
       if (result.is_correct) playCorrect(); else playWrong();
@@ -918,12 +922,14 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
       } else {
         setAnswer('');
         setShowResult(false);
+        setLearned(false);
       }
       return;
     }
     if (idx < questions.length - 1) {
       setAnswer('');
       setShowResult(false);
+      setLearned(false);
       setIdx(i => i + 1);
     } else {
       setShowFinal(true);
@@ -1012,78 +1018,61 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
-            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+            <ReportQuestionButton questionId={(q as any).id ?? (q as any).question_id} questionText={q.question_text} />
           </div>
         </div>
-        {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
-          <div className="space-y-3">
-            {q.options.map((opt, i) => {
-              const letter = String.fromCharCode(65 + i);
-              const isMulti = q.type === 'multi_choice';
-              const isSelected = isMulti ? answer.includes(letter) : answer === letter;
-              const isRightAnswer = showResult && q.correct_answer.includes(letter);
-              const isWrongPick = showResult && isSelected && !q.correct_answer.includes(letter);
-              const toggle = () => {
-                if (showResult) return;
-                if (isMulti) {
-                  setAnswer(prev => prev.includes(letter) ? prev.replace(letter, '') : prev + letter);
-                } else {
-                  setAnswer(letter);
-                }
-              };
-              return (
-                <button key={i} onClick={toggle}
-                  className={cn('w-full p-4 rounded-xl border-2 text-left transition-colors flex items-center',
-                    isRightAnswer ? 'border-emerald-400 bg-emerald-50' :
-                    isWrongPick ? 'border-red-400 bg-red-50' :
-                    isSelected ? 'border-star-400 bg-star-50' : 'border-slate-200 hover:border-star-200')}>
-                  <span className={cn('w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
-                    isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
-                    {isMulti && isSelected ? '✓' : letter}
-                  </span>
-                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
-                </button>
-              );
-            })}
+        <div className="flex gap-4">
+          <div className="flex-1 min-w-0">
+            {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+              <ChoiceQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+              />
+            ) : q.type === 'math' ? (
+              <MathQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : q.type === 'fill_blank' ? (
+              <FillBlankQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : (
+              <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
+                placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
+            )}
+            <div className="mt-6 flex gap-3">
+              {!showResult ? (
+                <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
+              ) : (
+                <Button onClick={handleNext} fullWidth disabled={!isCorrect && !learned}>
+                  {idx < questions.length - 1 ? '下一题' : '查看再战结果'}
+                </Button>
+              )}
+            </div>
           </div>
-        ) : q.type === 'math' ? (
-          <MathQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : q.type === 'fill_blank' ? (
-          <FillBlankQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : (
-          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
-            placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
-        )}
-        {showResult && q.explanation && (
-          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
-            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
-              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
-            </p>
-            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+          <div className="w-2/5 flex-shrink-0">
+            <QuestionExplanation
+              show={showResult}
+              isCorrect={isCorrect}
+              explanation={q.explanation}
+              correctAnswer={q.correct_answer}
+              learned={learned}
+              onLearned={() => setLearned(true)}
+            />
           </div>
-        )}
-        <div className="mt-6 flex gap-3">
-          {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
-          ) : (
-            <Button onClick={handleNext} fullWidth>
-              {idx < questions.length - 1 ? '下一题' : '查看再战结果'}
-            </Button>
-          )}
         </div>
       </Card>
     </div>
@@ -1108,6 +1097,7 @@ function WrongBattlePlayer({ childId, onBack }: {
   const [totalReward, setTotalReward] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
   const [resultQuestion, setResultQuestion] = useState<WrongBattlePoolItem | null>(null);
+  const [learned, setLearned] = useState(false);
   const toast = useToastStore();
   const patchMember = useFamilyStore(s => s.patchMember);
   useChallengeSession(childId, undefined, undefined, '错题大混战');
@@ -1137,6 +1127,7 @@ function WrongBattlePlayer({ childId, onBack }: {
       setResultQuestion(q);  // 锁定当前题目，避免消题后显示下一题答案
       setIsCorrect(result.is_correct);
       setShowResult(true);
+      setLearned(false);
       setResults(prev => [...prev, result.is_correct]);
       setTotalReward(r => r + (result.reward ?? 0));
       if (result.is_correct) playCorrect(); else playWrong();
@@ -1165,6 +1156,7 @@ function WrongBattlePlayer({ childId, onBack }: {
     // 清除锁定，避免下一题渲染时残留
     setResultQuestion(null);
     setShowResult(false);
+    setLearned(false);
     // 若当前题已被下线（pool 长度变化），直接进入下一题或结算
     if (idx >= pool.length) {
       if (pool.length === 0) {
@@ -1273,78 +1265,61 @@ function WrongBattlePlayer({ childId, onBack }: {
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
-            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+            <ReportQuestionButton questionId={(q as any).id ?? (q as any).question_id} questionText={q.question_text} />
           </div>
         </div>
-        {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
-          <div className="space-y-3">
-            {q.options.map((opt, i) => {
-              const letter = String.fromCharCode(65 + i);
-              const isMulti = q.type === 'multi_choice';
-              const isSelected = isMulti ? answer.includes(letter) : answer === letter;
-              const isRightAnswer = showResult && q.correct_answer.includes(letter);
-              const isWrongPick = showResult && isSelected && !q.correct_answer.includes(letter);
-              const toggle = () => {
-                if (showResult) return;
-                if (isMulti) {
-                  setAnswer(prev => prev.includes(letter) ? prev.replace(letter, '') : prev + letter);
-                } else {
-                  setAnswer(letter);
-                }
-              };
-              return (
-                <button key={i} onClick={toggle}
-                  className={cn('w-full p-4 rounded-xl border-2 text-left transition-colors flex items-center',
-                    isRightAnswer ? 'border-emerald-400 bg-emerald-50' :
-                    isWrongPick ? 'border-red-400 bg-red-50' :
-                    isSelected ? 'border-star-400 bg-star-50' : 'border-slate-200 hover:border-star-200')}>
-                  <span className={cn('w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
-                    isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
-                    {isMulti && isSelected ? '✓' : letter}
-                  </span>
-                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
-                </button>
-              );
-            })}
+        <div className="flex gap-4">
+          <div className="flex-1 min-w-0">
+            {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+              <ChoiceQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+              />
+            ) : q.type === 'math' ? (
+              <MathQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : q.type === 'fill_blank' ? (
+              <FillBlankQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : (
+              <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
+                placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
+            )}
+            <div className="mt-6 flex gap-3">
+              {!showResult ? (
+                <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
+              ) : (
+                <Button onClick={handleNext} fullWidth disabled={!isCorrect && !learned}>
+                  {idx < pool.length - 1 ? '下一题' : '查看混战结果'}
+                </Button>
+              )}
+            </div>
           </div>
-        ) : q.type === 'math' ? (
-          <MathQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : q.type === 'fill_blank' ? (
-          <FillBlankQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : (
-          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
-            placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
-        )}
-        {showResult && q.explanation && (
-          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
-            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
-              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
-            </p>
-            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+          <div className="w-2/5 flex-shrink-0">
+            <QuestionExplanation
+              show={showResult}
+              isCorrect={isCorrect}
+              explanation={q.explanation}
+              correctAnswer={q.correct_answer}
+              learned={learned}
+              onLearned={() => setLearned(true)}
+            />
           </div>
-        )}
-        <div className="mt-6 flex gap-3">
-          {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
-          ) : (
-            <Button onClick={handleNext} fullWidth>
-              {idx < pool.length - 1 ? '下一题' : '查看混战结果'}
-            </Button>
-          )}
         </div>
       </Card>
     </div>
@@ -1507,6 +1482,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   const [resultQuestion, setResultQuestion] = useState<Question | null>(null);
   const [levelCleared, setLevelCleared] = useState(false);
   const [levelBonus, setLevelBonus] = useState(0);
+  const [learned, setLearned] = useState(false);
 
   const restoredRef = useRef(!!restoreSnapshot);
   const snapshotInitRef = useRef(false);
@@ -1581,6 +1557,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
       const result = await answerQuestion(childId, q.id, answer, set.title);
       setIsCorrect(result.is_correct);
       setShowResult(true);
+      setLearned(false);
       onDone();
       setResults(prev => [...prev, result.is_correct]);
       setTotalReward(r => r + (result.reward ?? 0));
@@ -1604,6 +1581,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   const handleNext = () => {
     setAnswer('');
     setShowResult(false);
+    setLearned(false);
     setResultQuestion(null);
     if (currentIdx < roundQuestions.length - 1) {
       setCurrentIdx(i => i + 1);
@@ -1629,6 +1607,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
     setCurrentIdx(0);
     setAnswer('');
     setShowResult(false);
+    setLearned(false);
     setResults([]);
     setTotalReward(0);
     setShowRoundResult(false);
@@ -1849,39 +1828,54 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
-            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+            <ReportQuestionButton questionId={(q as any).id ?? (q as any).question_id} questionText={q.question_text} />
           </div>
         </div>
 
-        <QuestionRenderer
-          question={q}
-          answer={answer}
-          setAnswer={setAnswer}
-          showResult={showResult}
-          isCorrect={isCorrect}
-          disabled={showResult}
-        />
+        <div className="flex gap-4">
+          <div className="flex-1 min-w-0">
+            {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+              <ChoiceQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                shuffleOptions={set.shuffle_options ?? true}
+              />
+            ) : (
+              <QuestionRenderer
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            )}
 
-        {/* 通用解析显示（correct 题型内部已展示解析，跳过） */}
-        {showResult && q.explanation && q.type !== 'correct' && (
-          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
-            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
-              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
-            </p>
-            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+            <div className="mt-6 flex gap-3">
+              {!showResult ? (
+                <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>
+                  提交答案
+                </Button>
+              ) : (
+                <Button onClick={handleNext} fullWidth disabled={!isCorrect && !learned}>
+                  {currentIdx < roundQuestions.length - 1 ? '下一题' : '查看本轮结果'}
+                </Button>
+              )}
+            </div>
           </div>
-        )}
-
-        <div className="mt-6 flex gap-3">
-          {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>
-              提交答案
-            </Button>
-          ) : (
-            <Button onClick={handleNext} fullWidth>
-              {currentIdx < roundQuestions.length - 1 ? '下一题' : '查看本轮结果'}
-            </Button>
-          )}
+          <div className="w-2/5 flex-shrink-0">
+            <QuestionExplanation
+              show={showResult}
+              isCorrect={isCorrect}
+              explanation={q.type !== 'correct' ? q.explanation : null}
+              correctAnswer={q.correct_answer}
+              learned={learned}
+              onLearned={() => setLearned(true)}
+            />
+          </div>
         </div>
       </Card>
     </div>
@@ -2162,6 +2156,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
   const [totalReward, setTotalReward] = useState(restoreSnapshot?.totalReward ?? 0);
   const [totalBonus, setTotalBonus] = useState(restoreSnapshot?.totalBonus ?? 0);
   const [showChallengeResult, setShowChallengeResult] = useState(restoreSnapshot?.showChallengeResult ?? false);
+  const [learned, setLearned] = useState(false);
   const toast = useToastStore();
   const patchMember = useFamilyStore(s => s.patchMember);
   const q = questions[idx];
@@ -2178,6 +2173,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
       const result = await answerQuestion(childId, q.id, answer, set.title);
       setIsCorrect(result.is_correct);
       setShowResult(true);
+      setLearned(false);
       onDone();
       setResults(prev => [...prev, result.is_correct]);
       setTotalReward(r => r + (result.reward ?? 0));
@@ -2200,6 +2196,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
     if (idx < questions.length - 1) {
       setAnswer('');
       setShowResult(false);
+      setLearned(false);
       setIdx(i => i + 1);
     } else {
       setShowChallengeResult(true);
@@ -2251,78 +2248,64 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
             {q.type === 'multi_choice' && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">多选</span>
             )}
-            <ReportQuestionButton questionId={q.id} questionText={q.question_text} />
+            <ReportQuestionButton questionId={(q as any).id ?? (q as any).question_id} questionText={q.question_text} />
           </div>
         </div>
-        {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
-          <div className="space-y-3">
-            {q.options.map((opt, i) => {
-              const letter = String.fromCharCode(65 + i);
-              const isMulti = q.type === 'multi_choice';
-              const isSelected = isMulti ? answer.includes(letter) : answer === letter;
-              const isRightAnswer = showResult && q.correct_answer.includes(letter);
-              const isWrongPick = showResult && isSelected && !q.correct_answer.includes(letter);
-              const toggle = () => {
-                if (showResult) return;
-                if (isMulti) {
-                  setAnswer(prev => prev.includes(letter) ? prev.replace(letter, '') : prev + letter);
-                } else {
-                  setAnswer(letter);
-                }
-              };
-              return (
-                <button key={i} onClick={toggle}
-                  className={cn('w-full p-4 rounded-xl border-2 text-left transition-colors flex items-center',
-                    isRightAnswer ? 'border-emerald-400 bg-emerald-50' :
-                    isWrongPick ? 'border-red-400 bg-red-50' :
-                    isSelected ? 'border-star-400 bg-star-50' : 'border-slate-200 hover:border-star-200')}>
-                  <span className={cn('w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold mr-3 flex-shrink-0',
-                    isSelected ? 'bg-star-500 text-white border-star-500' : 'border-slate-300 text-slate-400')}>
-                    {isMulti && isSelected ? '✓' : letter}
-                  </span>
-                  <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
-                </button>
-              );
-            })}
+        <div className="flex gap-4">
+          {/* 左侧：题目 + 选项 */}
+          <div className="flex-1 min-w-0">
+            {(q.type === 'choice' || q.type === 'multi_choice') && q.options ? (
+              <ChoiceQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                shuffleOptions={set.shuffle_options ?? true}
+              />
+            ) : q.type === 'math' ? (
+              <MathQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : q.type === 'fill_blank' ? (
+              <FillBlankQuestion
+                question={q}
+                answer={answer}
+                setAnswer={setAnswer}
+                showResult={showResult}
+                isCorrect={isCorrect}
+                disabled={showResult}
+              />
+            ) : (
+              <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
+                placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
+            )}
+            <div className="mt-6 flex gap-3">
+              {!showResult ? (
+                <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
+              ) : (
+                <Button onClick={handleNext} fullWidth disabled={!isCorrect && !learned}>
+                  {idx < questions.length - 1 ? '下一题' : '查看挑战结果'}
+                </Button>
+              )}
+            </div>
           </div>
-        ) : q.type === 'math' ? (
-          <MathQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : q.type === 'fill_blank' ? (
-          <FillBlankQuestion
-            question={q}
-            answer={answer}
-            setAnswer={setAnswer}
-            showResult={showResult}
-            isCorrect={isCorrect}
-            disabled={showResult}
-          />
-        ) : (
-          <Input type="text" value={answer} onChange={e => setAnswer(e.target.value)}
-            placeholder="输入答案" className="text-2xl text-center py-4" disabled={showResult} />
-        )}
-        {showResult && q.explanation && (
-          <div className={cn('mt-4 p-3 rounded-xl', isCorrect ? 'bg-emerald-50' : 'bg-red-50')}>
-            <p className={cn('text-sm font-medium', isCorrect ? 'text-emerald-600' : 'text-red-600')}>
-              {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${q.correct_answer}`}
-            </p>
-            <p className="text-sm text-slate-600 mt-1">{q.explanation}</p>
+          {/* 右侧：答案解析 */}
+          <div className="w-2/5 flex-shrink-0">
+            <QuestionExplanation
+              show={showResult}
+              isCorrect={isCorrect}
+              explanation={q.explanation}
+              correctAnswer={q.correct_answer}
+              learned={learned}
+              onLearned={() => setLearned(true)}
+            />
           </div>
-        )}
-        <div className="mt-6 flex gap-3">
-          {!showResult ? (
-            <Button onClick={handleSubmit} loading={submitting} fullWidth disabled={!answer.trim()}>提交答案</Button>
-          ) : (
-            <Button onClick={handleNext} fullWidth>
-              {idx < questions.length - 1 ? '下一题' : '查看挑战结果'}
-            </Button>
-          )}
         </div>
       </Card>
     </div>

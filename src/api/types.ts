@@ -213,6 +213,7 @@ export interface ChallengeSet {
   // 知识点：答题前/答题中可查看
   knowledge_points: string | null;
   knowledge_points_images: string[] | null;
+  shuffle_options?: boolean;
   status: ChallengeSetStatus;
   created_at: string;
   updated_at: string;
