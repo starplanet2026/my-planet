@@ -42,14 +42,14 @@ export function QuestionExplanation({ show, isCorrect, explanation, correctAnswe
       isCorrect ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'
     )}>
       <p className={cn(
-        'text-base font-bold mb-2',
+        'text-lg font-bold mb-2',
         isCorrect ? 'text-emerald-600' : 'text-red-600'
       )}>
         {isCorrect ? '✅ 回答正确！' : `❌ 正确答案：${correctAnswer}`}
       </p>
       {explanation && (
         <div className={cn(
-          'flex-1 overflow-y-auto text-base leading-relaxed',
+          'flex-1 overflow-y-auto text-lg leading-relaxed',
           isCorrect ? 'text-emerald-700' : 'text-red-700'
         )}>
           {isCorrect ? (

@@ -16,7 +16,20 @@ interface ChoiceQuestionProps extends Omit<QuestionComponentProps, 'question'> {
 export function ChoiceQuestion({ question: q, answer, setAnswer, showResult, shuffleOptions = true }: ChoiceQuestionProps) {
   if (!q.options) return null;
   const isMulti = q.type === 'multi_choice';
-  const correctLetters = (q.correct_answer || '').toUpperCase().split('');
+
+  // 兼容 correct_answer 可能存的是字母（A/C）或选项文本（root）
+  const correctLetters = useMemo(() => {
+    const ca = (q.correct_answer || '').trim();
+    const upper = ca.toUpperCase();
+    if (/^[A-H]+$/.test(upper)) return upper.split('');
+    // 按选项文本匹配对应字母
+    return (q.options || [])
+      .map((opt, i) => {
+        const optText = opt.replace(/^[A-Ha-h][.、\s]*/, '').trim().toLowerCase();
+        return optText === ca.toLowerCase() ? String.fromCharCode(65 + i) : null;
+      })
+      .filter(Boolean) as string[];
+  }, [q.correct_answer, q.options]);
 
   // 选项乱序：按题目 id 生成稳定的随机顺序
   const shuffledIndices = useMemo(() => {
@@ -74,7 +87,7 @@ export function ChoiceQuestion({ question: q, answer, setAnswer, showResult, shu
             )}>
               {isMulti && isSelected ? '✓' : letter}
             </span>
-            <span className="flex-1">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
+            <span className="flex-1 text-lg">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
           </button>
         );
       })}

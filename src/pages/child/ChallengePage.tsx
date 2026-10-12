@@ -949,7 +949,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
 
   if (questions.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -966,7 +966,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
     const correctCount = results.filter(Boolean).length;
     const wrongCount = results.length - correctCount;
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -998,7 +998,7 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
   if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -1006,9 +1006,9 @@ function WrongQuestionPlayer({ setId, setTitle, childId, questionIds, onBack }: 
         <h2 className="text-xl font-bold text-slate-800">{setTitle} - 错题再战</h2>
         <span className="ml-auto text-sm text-slate-400">{idx + 1}/{questions.length}</span>
       </div>
-      <Card className="p-6">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          <p className="text-xl font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             {q.difficulty && (
               <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
@@ -1196,7 +1196,7 @@ function WrongBattlePlayer({ childId, onBack }: {
 
   if (pool.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -1213,7 +1213,7 @@ function WrongBattlePlayer({ childId, onBack }: {
     const correctCount = results.filter(Boolean).length;
     const wrongCount = results.length - correctCount;
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -1245,7 +1245,7 @@ function WrongBattlePlayer({ childId, onBack }: {
   if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -1253,9 +1253,9 @@ function WrongBattlePlayer({ childId, onBack }: {
         <h2 className="text-xl font-bold text-slate-800">⚔️ 错题混战</h2>
         <span className="ml-auto text-sm text-slate-400">{idx + 1}/{pool.length}</span>
       </div>
-      <Card className="p-6">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          <p className="text-xl font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             {q.difficulty && (
               <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
@@ -1346,7 +1346,7 @@ function SetDetailPage({ set, levels, childId, onBack, onEnterLevel }: {
   };
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -1664,7 +1664,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
     const isLastLevel = !nextLevel;
 
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => onLevelCleared()} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -1705,7 +1705,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
     const isTodayReview = board === 'today_review';
 
     return (
-      <div className="max-w-2xl mx-auto -mt-6">
+      <div className="max-w-4xl mx-auto -mt-6">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => setShowRoundResult(false)} className="p-2 hover:bg-slate-100 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -1769,7 +1769,7 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
   }
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -1816,9 +1816,9 @@ function LevelPlayer({ set, levelId, levelInfo, allLevels, childId, board, resto
         <span className="text-xs text-slate-500 flex-shrink-0">{Math.min(clearedIds.length, originalTotal)}/{originalTotal}</span>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          <p className="text-xl font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             {q.difficulty && (
               <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
@@ -2104,7 +2104,7 @@ function KnowledgePreview({ set, onStart, onBack }: {
   set: ChallengeSet; onStart: () => void; onBack: () => void;
 }) {
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2225,7 +2225,7 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
   if (!q) return <EmptyState icon="❓" title="暂无题目" description="" />;
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2236,9 +2236,9 @@ function QuestionPlayer({ set, questions, childId, onBack, onDone, onChallengeEn
           <span className="text-sm text-slate-400">{idx + 1}/{questions.length}</span>
         </div>
       </div>
-      <Card className="p-6">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-lg font-medium text-slate-800">{q.question_text}</p>
+          <p className="text-xl font-medium text-slate-800">{q.question_text}</p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             {q.difficulty && (
               <span className={cn('text-xs px-2 py-0.5 rounded-full', DIFFICULTY_BADGE[q.difficulty] ?? 'bg-slate-100 text-slate-600')}>
@@ -2352,7 +2352,7 @@ function ChallengeResult({ set, childId, correctCount, totalCount, totalReward, 
   }, [allCorrect, bonusAwarded, childId, set.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2428,7 +2428,7 @@ function ClearedEmptyState({ title, onBack, onChallengeWrong, onViewQuestions }:
   onViewQuestions: () => void;
 }) {
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2459,7 +2459,7 @@ function ReadOnlyQuestionsView({ questions, title, onBack }: {
   onBack: () => void;
 }) {
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2522,7 +2522,7 @@ function ChallengeAllMastered({ set, childId, onBack, onRedo }: {
   set: ChallengeSet; childId: string; onBack: () => void; onRedo: () => void;
 }) {
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
@@ -2631,7 +2631,7 @@ function WordPlayer({ set, words, childId, onBack, onDone, restoreSnapshot = nul
   if (!word) return <EmptyState icon="📝" title="暂无单词" description="" />;
 
   return (
-    <div className="max-w-2xl mx-auto -mt-6">
+    <div className="max-w-4xl mx-auto -mt-6">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg">
           <ArrowLeft className="w-5 h-5" />
