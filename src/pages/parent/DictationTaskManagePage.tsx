@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 import { Plus, Trash2, ChevronDown, ChevronRight, Power, PowerOff, Sparkles, CheckSquare, Square } from 'lucide-react';
 import {
   listTasks, listTaskWords, addTaskWords, removeTaskWord, updateTaskStatus, deleteTask,
-  updateTaskStarPerWord, updateTaskTitle, createTask,
+  updateTaskStarPerWord, updateTaskTitle, updateTaskMode, createTask,
 } from '../../api/dictation';
 import type { DictationTask, DictationTaskWord, DictationSubject, DictationTaskStatus } from '../../api/types';
 
@@ -65,8 +65,10 @@ export function DictationTaskManagePage() {
   const [detailTask, setDetailTask] = useState<DictationTask | null>(null);
   const [editStarPerWord, setEditStarPerWord] = useState(1);
   const [editTitle, setEditTitle] = useState('');
+  const [editMode, setEditMode] = useState<'dictation' | 'quick_review'>('dictation');
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [savingTitle, setSavingTitle] = useState(false);
+  const [savingMode, setSavingMode] = useState(false);
 
   // 重新推送
   const [showRepush, setShowRepush] = useState(false);
@@ -236,9 +238,27 @@ export function DictationTaskManagePage() {
     setDetailTask(task);
     setEditStarPerWord(task.star_per_word);
     setEditTitle(task.title);
+    setEditMode(task.mode);
     if (expandedId !== task.id) {
       setExpandedId(task.id);
       loadTaskWords(task.id);
+    }
+  };
+
+  // 保存模式修改
+  const confirmSaveMode = async () => {
+    if (!detailTask) return;
+    if (editMode === detailTask.mode) return;
+    setSavingMode(true);
+    try {
+      await updateTaskMode(detailTask.id, editMode);
+      setTasks(prev => prev.map(t => t.id === detailTask.id ? { ...t, mode: editMode } : t));
+      setDetailTask({ ...detailTask, mode: editMode });
+      toast.success('模式已更新');
+    } catch (e: any) {
+      toast.error('保存失败：' + e.message);
+    } finally {
+      setSavingMode(false);
     }
   };
 
@@ -613,6 +633,35 @@ export function DictationTaskManagePage() {
                   placeholder="请输入任务标题"
                 />
                 <Button size="sm" onClick={confirmSaveTitle} loading={savingTitle} disabled={!editTitle.trim() || editTitle.trim() === detailTask.title}>
+                  保存
+                </Button>
+              </div>
+            </div>
+            {/* 模式编辑 */}
+            <div className="bg-slate-50 rounded-lg p-3">
+              <label className="text-xs text-slate-500 mb-1 block">任务模式</label>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setEditMode('dictation')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm transition-colors',
+                      editMode === 'dictation' ? 'bg-star-500 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    📝 默写
+                  </button>
+                  <button
+                    onClick={() => setEditMode('quick_review')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm transition-colors',
+                      editMode === 'quick_review' ? 'bg-star-500 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    )}
+                  >
+                    ⚡ 快速复习
+                  </button>
+                </div>
+                <Button size="sm" onClick={confirmSaveMode} loading={savingMode} disabled={editMode === detailTask.mode}>
                   保存
                 </Button>
               </div>

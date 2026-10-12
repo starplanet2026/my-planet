@@ -332,6 +332,15 @@ export async function updateTaskTitle(taskId: string, title: string): Promise<vo
   if (error) throw error;
 }
 
+// 修改任务模式（默写 / 快速复习）
+export async function updateTaskMode(taskId: string, mode: 'dictation' | 'quick_review'): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_tasks')
+    .update({ mode })
+    .eq('id', taskId);
+  if (error) throw error;
+}
+
 export async function addTaskWords(taskId: string, words: TaskWordInput[]): Promise<void> {
   if (words.length === 0) return;
   const rows = words.map(w => ({ task_id: taskId, ...w }));
