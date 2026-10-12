@@ -44,6 +44,9 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   const [showComplete, setShowComplete] = useState(false);
   const [completedRounds, setCompletedRounds] = useState<Set<number>>(new Set());
 
+  // 累计实际获得的星光值（按后端递减后的实际值累加）
+  const [totalGainedStar, setTotalGainedStar] = useState(0);
+
   const subjectLabel = subject === 'english' ? '英语' : '语文';
 
   // 加载词条 + 恢复已持久化的判题记录
@@ -122,7 +125,9 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
         return next;
       });
       if (isCorrect) {
-        toast.success(`✅ 正确 +${task.star_per_word}星光`);
+        const gained = result.new_star;
+        setTotalGainedStar(prev => prev + gained);
+        toast.success(gained > 0 ? `✅ 正确 +${gained}星光` : '✅ 正确（已无额外星光奖励）');
         await refreshMembers();
       } else {
         toast.success('❌ 已加入错词库');
@@ -285,7 +290,7 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
             正确 <span className="text-emerald-600 font-bold">{correctCount}</span> / {totalWords} 条
           </p>
           <p className="text-rose-500 mb-1">错题 <span className="font-bold">{errorCount}</span> 条</p>
-          <p className="text-slate-500 text-sm">获得 <span className="text-amber-500 font-bold">{correctCount * task.star_per_word}</span> 星光值</p>
+          <p className="text-slate-500 text-sm">获得 <span className="text-amber-500 font-bold">{totalGainedStar}</span> 星光值</p>
         </div>
         <div className="flex gap-2 justify-end pt-2">
           {noErrors ? (
