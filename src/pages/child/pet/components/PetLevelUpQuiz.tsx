@@ -5,7 +5,8 @@ import { Loading } from '../../../../components/common/Loading';
 import { useToastStore } from '../../../../store/toastStore';
 import { cn } from '../../../../lib/utils';
 import { fetchWrongBattlePool } from '../../../../api/challenges';
-import { completePetLevelup, recordLevelupQuizAnswer } from '../../../../api/pets';
+import { completePetLevelup, recordLevelupQuizAnswer, getPetLevelupQuizQueue, assignPetLevelupQuiz, removePetLevelupQuizQuestion, clearPetLevelupQuizQueue } from '../../../../api/pets';
+import type { QuizQueueItem } from '../../../../api/pets';
 import type { Pet } from '../../../../api/types';
 import { NumberKeypad } from '../../challenge/questions/NumberKeypad';
 
@@ -98,7 +99,27 @@ export function PetLevelUpQuiz({
     setLoading(true);
     setPoolEmpty(false);
     try {
-      // 从错题混战池获取题目
+      // 1. 先检查是否有持久化的题目队列（防止关闭重开刷新题目）
+      const queue = await getPetLevelupQuizQueue(memberId, pet.id);
+      if (queue.length > 0) {
+        const queueQuestions: QuizItem[] = queue.map(r => ({
+          id: r.question_id,
+          type: r.type,
+          question_text: r.question_text,
+          options: r.options,
+          correct_answer: r.correct_answer,
+          answer2: r.answer2 ?? null,
+          explanation: r.explanation,
+        }));
+        setQuestions(queueQuestions);
+        setCurrentIndex(0);
+        setAnswers({});
+        setRevealed({});
+        setResult(null);
+        return;
+      }
+
+      // 2. 没有持久化队列，从错题混战池获取并分配新题目
       const pool = await fetchWrongBattlePool(memberId);
       const poolQuestions: QuizItem[] = (pool ?? [])
         .filter(r => r && r.question_text)
@@ -120,6 +141,8 @@ export function PetLevelUpQuiz({
 
       // 题目数 = 目标级别数，池中不足则全部使用
       const picked = shuffle(poolQuestions).slice(0, quizCount);
+      // 持久化分配的题目
+      await assignPetLevelupQuiz(memberId, pet.id, picked.map(q => q.id));
       setQuestions(picked);
       setCurrentIndex(0);
       setAnswers({});
@@ -130,7 +153,7 @@ export function PetLevelUpQuiz({
     } finally {
       setLoading(false);
     }
-  }, [memberId, quizCount, toast]);
+  }, [memberId, pet.id, quizCount, toast]);
 
   useEffect(() => {
     loadQuestions();
@@ -180,8 +203,13 @@ export function PetLevelUpQuiz({
   const handleConfirm = () => {
     if (!current) return;
     setRevealed(prev => ({ ...prev, [current.id]: true }));
+    const correct = computeCorrect(current);
     // 记录宠物升级挑战答题（计入今日答题数，不发星光）
-    recordLevelupQuizAnswer(memberId, current.id, computeCorrect(current)).catch(() => {});
+    recordLevelupQuizAnswer(memberId, current.id, correct).catch(() => {});
+    // 答对的题目从持久化队列中移除，答错的保留
+    if (correct) {
+      removePetLevelupQuizQuestion(memberId, pet.id, current.id).catch(() => {});
+    }
   };
 
   const handleNext = () => {
@@ -210,6 +238,7 @@ export function PetLevelUpQuiz({
   };
 
   const handleRetry = async () => {
+    // 重新从持久化队列加载（答对的已移除，答错/未答的保留）
     await loadQuestions();
   };
 
@@ -217,6 +246,8 @@ export function PetLevelUpQuiz({
     setSubmitting(true);
     try {
       const updated = await completePetLevelup(memberId, pet.id);
+      // 通过后清空队列
+      await clearPetLevelupQuizQueue(memberId, pet.id);
       const reward = (updated.level ?? 1) * 1.25;
       toast.success(`升级成功！Lv.${pet.level} → Lv.${updated.level}，升级奖励 ${reward} 金币`);
       onLevelUp(updated);

@@ -11,6 +11,19 @@ import type {
   PetMessage, GachaConfig,
 } from './types';
 
+export interface QuizQueueItem {
+  queue_id: string;
+  question_id: string;
+  sort_order: number;
+  type: string;
+  question_text: string;
+  options: string[] | null;
+  correct_answer: string;
+  answer2: string | null;
+  explanation: string | null;
+  difficulty: string;
+}
+
 // ====== 商店商品 ======
 
 export async function fetchPetShopItems(type?: PetShopItemType, subcategory?: PetSubcategory, includeInactive = false): Promise<PetShopItem[]> {
@@ -809,6 +822,42 @@ export async function recordLevelupQuizAnswer(
     p_member_id: memberId,
     p_question_id: questionId,
     p_is_correct: isCorrect,
+  });
+  if (error) throw error;
+}
+
+// 宠物升级挑战题目队列
+export async function getPetLevelupQuizQueue(memberId: string, petId: string): Promise<QuizQueueItem[]> {
+  const { data, error } = await supabase.rpc('get_pet_levelup_quiz_queue', {
+    p_member_id: memberId,
+    p_pet_id: petId,
+  });
+  if (error) throw error;
+  return (data ?? []) as QuizQueueItem[];
+}
+
+export async function assignPetLevelupQuiz(memberId: string, petId: string, questionIds: string[]): Promise<void> {
+  const { error } = await supabase.rpc('assign_pet_levelup_quiz', {
+    p_member_id: memberId,
+    p_pet_id: petId,
+    p_question_ids: questionIds,
+  });
+  if (error) throw error;
+}
+
+export async function removePetLevelupQuizQuestion(memberId: string, petId: string, questionId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_pet_levelup_quiz_question', {
+    p_member_id: memberId,
+    p_pet_id: petId,
+    p_question_id: questionId,
+  });
+  if (error) throw error;
+}
+
+export async function clearPetLevelupQuizQueue(memberId: string, petId: string): Promise<void> {
+  const { error } = await supabase.rpc('clear_pet_levelup_quiz_queue', {
+    p_member_id: memberId,
+    p_pet_id: petId,
   });
   if (error) throw error;
 }
