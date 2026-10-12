@@ -95,7 +95,7 @@ begin
       v_norm_correct := '';
       if v_q.options is not null then
         v_opt_idx := 0;
-        foreach v_opt in array v_q.options loop
+        for v_opt in select jsonb_array_elements_text(v_q.options) loop
           if lower(btrim(regexp_replace(v_opt, '^[A-Ha-h][.、\s]*', ''))) = lower(btrim(coalesce(v_q.correct_answer, ''))) then
             v_norm_correct := v_norm_correct || chr(65 + v_opt_idx);
           end if;
