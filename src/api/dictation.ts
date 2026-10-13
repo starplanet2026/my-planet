@@ -209,12 +209,21 @@ export async function updateErrorWord(
 
 // 更新错词节点（手动覆盖，同步重算基准目标日期 = last_review_date + 节点值）
 export async function updateErrorWordNode(id: string, node: number, lastReviewDate?: string | null): Promise<void> {
+  if (node === 0) {
+    // 已完成：status=completed, next_review_date=null, current_node=15
+    const { error } = await supabase
+      .from('dictation_error_words')
+      .update({ current_node: 15, status: 'completed', next_review_date: null })
+      .eq('id', id);
+    if (error) throw error;
+    return;
+  }
   // 基准目标日期 = 上次复习日 + 节点天数(1/2/4/7/15)，无上次复习日则用今天
   const base = lastReviewDate ? new Date(lastReviewDate) : new Date();
   const next = new Date(base.getTime() + node * 86400000).toISOString().slice(0, 10);
   const { error } = await supabase
     .from('dictation_error_words')
-    .update({ current_node: node, next_review_date: next })
+    .update({ current_node: node, status: 'in_progress', next_review_date: next })
     .eq('id', id);
   if (error) throw error;
   return void 0;

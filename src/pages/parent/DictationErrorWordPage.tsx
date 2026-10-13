@@ -15,7 +15,8 @@ import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Sq
 import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWord, updateErrorWordNode, updateErrorWordUnit } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
-const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
+const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天', 0: '已完成' };
+const NODE_VALUES = [1, 2, 4, 7, 15, 0];
 
 const SUBJECT_OPTIONS: { key: DictationSubject; label: string }[] = [
   { key: 'english', label: '英语' },
@@ -145,12 +146,20 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
   // 手动修改节点
   const handleNodeChange = async (id: string, node: number) => {
     const word = words.find(w => w.id === id);
+    if (node === word?.current_node && word?.status === 'in_progress') return;
     try {
-      const base = word?.last_review_date ? new Date(word.last_review_date) : new Date();
-      const nextDate = new Date(base.getTime() + node * 86400000).toISOString().slice(0, 10);
-      await updateErrorWordNode(id, node, word?.last_review_date ?? null);
-      setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node, next_review_date: nextDate } : w));
-      toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}，下次复习日 ${nextDate}`);
+      if (node === 0) {
+        // 已完成
+        await updateErrorWordNode(id, 0, word?.last_review_date ?? null);
+        setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: 15, status: 'completed', next_review_date: null } : w));
+        toast.success('已标记为已完成');
+      } else {
+        const base = word?.last_review_date ? new Date(word.last_review_date) : new Date();
+        const nextDate = new Date(base.getTime() + node * 86400000).toISOString().slice(0, 10);
+        await updateErrorWordNode(id, node, word?.last_review_date ?? null);
+        setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node, status: 'in_progress', next_review_date: nextDate } : w));
+        toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}，下次复习日 ${nextDate}`);
+      }
     } catch (e: any) {
       toast.error('修改失败：' + e.message);
     }
@@ -362,22 +371,23 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                     </td>
                     <td className="p-2">
                       <select
-                        value={w.current_node}
+                        value={w.status === 'completed' ? 0 : w.current_node}
                         onChange={(e) => handleNodeChange(w.id, Number(e.target.value))}
                         className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:border-teal-400 cursor-pointer"
                       >
-                        {Object.entries(NODE_LABEL).map(([v, label]) => (
-                          <option key={v} value={v}>{label}</option>
+                        {NODE_VALUES.map(v => (
+                          <option key={v} value={v}>{NODE_LABEL[v]}</option>
                         ))}
                       </select>
                     </td>
                     <td className="p-2 text-xs whitespace-nowrap">
-                      {(() => {
-                        const today = new Date().toISOString().slice(0, 10);
-                        const base = w.next_review_date;
-                        // 基准日期 >= 今日：展示基准日期；基准日期 < 今日：展示今日
-                        return base < today ? today : base;
-                      })()}
+                      {w.status === 'completed' || w.next_review_date == null
+                        ? <span className="text-slate-400">-</span>
+                        : (() => {
+                            const today = new Date().toISOString().slice(0, 10);
+                            const base = w.next_review_date;
+                            return base < today ? today : base;
+                          })()}
                     </td>
                     <td className="p-2 text-xs">
                       <span className="text-emerald-600 font-medium">{w.review_count ?? 0}</span>
