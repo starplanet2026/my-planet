@@ -186,6 +186,9 @@ export function DictationPlayPage() {
                 <div className="font-bold text-slate-800 leading-tight text-[21px] break-all whitespace-normal">
                   {prompt}
                 </div>
+                {subject === 'english' && w.part_of_speech && (
+                  <div className="text-xs text-slate-400 mt-0.5">{w.part_of_speech}</div>
+                )}
                 {(grading || reviewStatus === 'approved') && (
                   <div className="text-emerald-500 font-extrabold leading-tight mt-1 text-[18px] break-all whitespace-normal">
                     {w.answer}
