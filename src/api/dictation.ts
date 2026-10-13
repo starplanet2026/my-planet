@@ -195,7 +195,19 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
   return data as DictationErrorWord;
 }
 
-// 批量删除错词（仅删除个人错词记录，不影响基础词条库）
+// 更新错词节点（手动覆盖，同步重算 next_review_date）
+export async function updateErrorWordNode(id: string, node: number): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  // 根据节点计算间隔天数
+  const interval = node === 1 ? 1 : node === 2 ? 2 : node === 4 ? 3 : node === 7 ? 8 : 1;
+  const next = new Date(Date.now() + interval * 86400000).toISOString().slice(0, 10);
+  const { error } = await supabase
+    .from('dictation_error_words')
+    .update({ current_node: node, next_review_date: next, last_review_date: today })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteErrorWords(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const { error } = await supabase.from('dictation_error_words').delete().in('id', ids);

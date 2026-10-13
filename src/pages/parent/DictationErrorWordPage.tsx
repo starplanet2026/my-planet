@@ -12,7 +12,7 @@ import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Square } from 'lucide-react';
-import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords } from '../../api/dictation';
+import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWordNode } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
 const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
@@ -135,6 +135,17 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
   // 单条删除
   const onSingleDelete = (id: string) => setPendingDeleteId(id);
 
+  // 手动修改节点
+  const handleNodeChange = async (id: string, node: number) => {
+    try {
+      await updateErrorWordNode(id, node);
+      setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node } : w));
+      toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}`);
+    } catch (e: any) {
+      toast.error('修改失败：' + e.message);
+    }
+  };
+
   const confirmSingleDelete = async () => {
     if (!pendingDeleteId) return;
     try {
@@ -233,7 +244,7 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                   {subject !== 'english' && <th className="p-2 text-left">拼音</th>}
                   <th className="p-2 text-left">当前节点</th>
                   <th className="p-2 text-left">下次家默日</th>
-                  <th className="p-2 text-left">状态</th>
+                  <th className="p-2 text-left">复习/错误</th>
                   <th className="p-2 text-left">操作</th>
                 </tr>
               </thead>
@@ -249,17 +260,26 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                     <td className="p-2 font-medium">{w.answer}</td>
                     {subject !== 'chinese' && <td className="p-2">{w.chinese_meaning ?? '-'}</td>}
                     {subject !== 'english' && <td className="p-2">{w.pinyin ?? '-'}</td>}
-                    <td className="p-2">{NODE_LABEL[w.current_node] ?? `第${w.current_node}天`}</td>
+                    <td className="p-2">
+                      <select
+                        value={w.current_node}
+                        onChange={(e) => handleNodeChange(w.id, Number(e.target.value))}
+                        className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white focus:outline-none focus:border-teal-400 cursor-pointer"
+                      >
+                        {Object.entries(NODE_LABEL).map(([v, label]) => (
+                          <option key={v} value={v}>{label}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="p-2">
                       {w.status === 'in_progress' && w.next_review_date <= new Date().toISOString().slice(0, 10)
                         ? <span className="text-rose-500 font-medium">待复习</span>
                         : w.next_review_date}
                     </td>
-                    <td className="p-2">
-                      <span className={cn('px-2 py-0.5 rounded-full text-xs',
-                        w.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
-                        {w.status === 'in_progress' ? '进行中' : '已完成'}
-                      </span>
+                    <td className="p-2 text-xs">
+                      <span className="text-emerald-600 font-medium">{w.review_history?.filter(r => r.correct).length ?? 0}</span>
+                      <span className="text-slate-300 mx-0.5">/</span>
+                      <span className="text-red-500 font-medium">{w.review_history?.filter(r => !r.correct).length ?? 0}</span>
                     </td>
                     <td className="p-2">
                       <button
