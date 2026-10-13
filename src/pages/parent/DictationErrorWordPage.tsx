@@ -250,7 +250,11 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                     {subject !== 'chinese' && <td className="p-2">{w.chinese_meaning ?? '-'}</td>}
                     {subject !== 'english' && <td className="p-2">{w.pinyin ?? '-'}</td>}
                     <td className="p-2">{NODE_LABEL[w.current_node] ?? `第${w.current_node}天`}</td>
-                    <td className="p-2">{w.next_review_date}</td>
+                    <td className="p-2">
+                      {w.status === 'in_progress' && w.next_review_date <= new Date().toISOString().slice(0, 10)
+                        ? <span className="text-rose-500 font-medium">待复习</span>
+                        : w.next_review_date}
+                    </td>
                     <td className="p-2">
                       <span className={cn('px-2 py-0.5 rounded-full text-xs',
                         w.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')}>
