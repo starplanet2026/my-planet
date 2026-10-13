@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { cn } from '../../../../lib/utils';
 import type { QuestionComponentProps } from './QuestionRenderer';
 
@@ -13,11 +13,12 @@ interface ChoiceQuestionProps extends Omit<QuestionComponentProps, 'question'> {
   shuffleOptions?: boolean;
 }
 
-export function ChoiceQuestion({ question: q, answer, setAnswer, showResult, shuffleOptions = true }: ChoiceQuestionProps) {
+export function ChoiceQuestion({ question: q, answer, setAnswer, show_result, shuffleOptions = true }: ChoiceQuestionProps) {
   if (!q.options) return null;
   const isMulti = q.type === 'multi_choice';
 
   // 兼容 correct_answer 可能存的是字母（A/C）或选项文本（root）
+  // 正则要求字母后有分隔符(. 或 、)才剥离前缀，避免 "buys" 被误删首字母
   const correctLetters = useMemo(() => {
     const ca = (q.correct_answer || '').trim();
     const upper = ca.toUpperCase();
@@ -25,31 +26,24 @@ export function ChoiceQuestion({ question: q, answer, setAnswer, showResult, shu
     // 按选项文本匹配对应字母
     return (q.options || [])
       .map((opt, i) => {
-        const optText = opt.replace(/^[A-Ha-h][.、\s]*/, '').trim().toLowerCase();
+        const optText = opt.replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
         return optText === ca.toLowerCase() ? String.fromCharCode(65 + i) : null;
       })
       .filter(Boolean) as string[];
   }, [q.correct_answer, q.options]);
 
-  // 选项乱序：按题目 id 生成稳定的随机顺序
-  const shuffledIndices = useMemo(() => {
-    if (!shuffleOptions) return q.options!.map((_, i) => i);
-    // 兼容 Question(id) 和 WrongBattlePoolItem(question_id)
-    const qid = (q as any).id ?? (q as any).question_id ?? '';
-    const seed = qid.split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
-    const indices = q.options!.map((_, i) => i);
-    // Fisher-Yates shuffle with seeded random
-    let s = seed;
-    const rand = () => {
-      s = (s * 1103515245 + 12345) & 0x7fffffff;
-      return s / 0x7fffffff;
-    };
+  // 选项乱序：每次题目变化时用 Math.random 生成随机顺序
+  const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
+  useEffect(() => {
+    if (!q.options) { setShuffledIndices([]); return; }
+    if (!shuffleOptions) { setShuffledIndices(q.options.map((_, i) => i)); return; }
+    const indices = q.options.map((_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
+      const j = Math.floor(Math.random() * (i + 1));
       [indices[i], indices[j]] = [indices[j], indices[i]];
     }
-    return indices;
-  }, [q.options, shuffleOptions, q.id, (q as any).question_id]);
+    setShuffledIndices(indices);
+  }, [q.id, (q as any).question_id, shuffleOptions, q.options]);
 
   return (
     <div className="space-y-3">

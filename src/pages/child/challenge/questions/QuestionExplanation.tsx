@@ -12,27 +12,28 @@ interface QuestionExplanationProps {
 
 // 答案解析区域：固定在题目右侧
 // 答对：绿色，文字一次性全部出现
-// 答错：红色，逐行出现 + "我已学会"按钮（点击后才能下一题）
+// 答错：红色，逐字出现 + "我已学会"按钮（点击后才能下一题）
 export function QuestionExplanation({ show, isCorrect, explanation, correctAnswer, learned, onLearned }: QuestionExplanationProps) {
-  const [revealedLines, setRevealedLines] = useState(0);
-  const lines = explanation ? explanation.split('\n').filter(l => l.trim()) : [];
+  const [revealedChars, setRevealedChars] = useState(0);
 
-  // 答错时逐行展示解析
+  const fullText = explanation ?? '';
+
+  // 答错时逐字展示解析
   useEffect(() => {
     if (!show || isCorrect) {
-      setRevealedLines(lines.length);
+      setRevealedChars(fullText.length);
       return;
     }
-    setRevealedLines(0);
-    if (lines.length === 0) return;
+    setRevealedChars(0);
+    if (fullText.length === 0) return;
     let i = 0;
     const timer = setInterval(() => {
       i++;
-      setRevealedLines(i);
-      if (i >= lines.length) clearInterval(timer);
-    }, 400);
+      setRevealedChars(i);
+      if (i >= fullText.length) clearInterval(timer);
+    }, 30);
     return () => clearInterval(timer);
-  }, [show, isCorrect, lines.length]);
+  }, [show, isCorrect, fullText]);
 
   if (!show) return null;
 
@@ -55,19 +56,22 @@ export function QuestionExplanation({ show, isCorrect, explanation, correctAnswe
           {isCorrect ? (
             <p>{explanation}</p>
           ) : (
-            lines.slice(0, revealedLines).map((line, i) => (
-              <p key={i} className="mb-1">{line}</p>
-            ))
+            <p className="whitespace-pre-wrap">
+              {fullText.slice(0, revealedChars)}
+              {revealedChars < fullText.length && (
+                <span className="animate-pulse">▌</span>
+              )}
+            </p>
           )}
         </div>
       )}
       {!isCorrect && (
         <button
           onClick={onLearned}
-          disabled={learned}
+          disabled={learned || revealedChars < fullText.length}
           className={cn(
             'mt-3 px-4 py-2 rounded-lg font-medium text-sm transition-colors',
-            learned
+            learned || revealedChars < fullText.length
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : 'bg-red-500 text-white hover:bg-red-600'
           )}
