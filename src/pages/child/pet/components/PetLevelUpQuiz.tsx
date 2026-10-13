@@ -340,7 +340,7 @@ export function PetLevelUpQuiz({
   }, [currentIndex]);
 
   return (
-    <Modal open onClose={onClose} title="升级挑战" size="md">
+    <Modal open onClose={onClose} title="升级挑战" size="xl">
       {loading ? (
         <Loading text="加载题目中..." />
       ) : questions.length === 0 || poolEmpty ? (
