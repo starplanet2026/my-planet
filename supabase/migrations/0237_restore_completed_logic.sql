@@ -1,5 +1,8 @@
 -- 0237: 恢复节点15+答对=completed逻辑，next_review_date设为null
 
+-- 先去掉 next_review_date 的 NOT NULL 约束
+alter table public.dictation_error_words alter column next_review_date drop not null;
+
 -- ============================================================
 -- 一、修正存量数据：
 --    review_history 中最后一条 correct=true 且 current_node=15 → status=completed, next_review_date=null
