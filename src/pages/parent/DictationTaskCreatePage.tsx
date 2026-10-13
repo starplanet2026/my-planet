@@ -16,6 +16,7 @@ import {
   listWords, listWordTextbooks, listWordUnits, createWord,
   listDueErrorWords, createTask, addTaskWords, deleteTask,
 } from '../../api/dictation';
+import { supabase } from '../../api/client';
 import type { DictationSubject, DictationWord, DictationErrorWord, DictationTaskMode } from '../../api/types';
 
 interface AddedWord {
@@ -199,48 +200,61 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
     }
   };
 
-  // 批量加入本次任务
-  const batchMoveTempToTask = () => {
-    if (tempSelected.size === 0) return;
+  // 批量加入本次任务 + 同时存入词条库（去重）
+  const batchMoveTempToTaskAndLibrary = async () => {
+    if (tempSelected.size === 0 || !family) return;
     const selected = tempWords.filter(w => tempSelected.has(w.key));
     const moved: AddedWord[] = [];
-    let skip = 0;
-    selected.forEach(w => {
-      if (added.some(a => a.answer === w.answer)) { skip++; return; }
-      moved.push(w);
-    });
+    let skipTask = 0;
+    let libSuccess = 0, libSkip = 0, libFailed = 0;
+    for (const w of selected) {
+      // 加入本次任务（去重）
+      if (added.some(a => a.answer === w.answer)) {
+        skipTask++;
+      } else {
+        moved.push(w);
+      }
+      // 同时存入词条库（去重）
+      try {
+        const { data: existing } = await supabase
+          .from('dictation_words')
+          .select('id')
+          .eq('family_id', family.id)
+          .eq('subject', subject)
+          .eq('textbook_name', w.textbook_name)
+          .eq('unit_no', w.unit_no)
+          .eq('answer', w.answer)
+          .limit(1);
+        if (existing && existing.length > 0) {
+          libSkip++;
+        } else {
+          await createWord(family.id, {
+            subject, textbook_name: w.textbook_name, unit_no: w.unit_no,
+            unit_name: w.unit_name, page_no: w.page_no ?? null,
+            chinese_meaning: w.chinese_meaning ?? null, part_of_speech: w.part_of_speech ?? null,
+            pinyin: w.pinyin ?? null, answer: w.answer,
+          });
+          libSuccess++;
+        }
+      } catch {
+        libFailed++;
+      }
+    }
     if (moved.length > 0) {
       setAdded(prev => [...prev, ...moved]);
       const movedKeys = new Set(moved.map(w => w.key));
       setTempWords(prev => prev.filter(w => !movedKeys.has(w.key)));
     }
-    setTempSelected(new Set());
-    toast.success(`已加入 ${moved.length} 条到本次任务${skip > 0 ? `，${skip} 条已在任务中跳过` : ''}`);
-  };
-
-  // 批量存入词条库
-  const batchSaveTempToLibrary = async () => {
-    if (tempSelected.size === 0 || !family) return;
-    const selected = tempWords.filter(w => tempSelected.has(w.key));
-    let success = 0, failed = 0;
-    for (const w of selected) {
-      try {
-        await createWord(family.id, {
-          subject, textbook_name: w.textbook_name, unit_no: w.unit_no,
-          unit_name: w.unit_name, page_no: w.page_no ?? null,
-          chinese_meaning: w.chinese_meaning ?? null, part_of_speech: w.part_of_speech ?? null,
-          pinyin: w.pinyin ?? null, answer: w.answer,
-        });
-        success++;
-      } catch {
-        failed++;
-      }
-    }
     // 从临时列表移除已处理的词条
     const processedKeys = new Set(selected.map(w => w.key));
     setTempWords(prev => prev.filter(w => !processedKeys.has(w.key)));
     setTempSelected(new Set());
-    toast.success(`已保存 ${success} 条到词条库${failed > 0 ? `，${failed} 条失败` : ''}`);
+    const parts = [`加入任务 ${moved.length} 条`];
+    if (skipTask > 0) parts.push(`任务重复 ${skipTask}`);
+    parts.push(`词条库新增 ${libSuccess}`);
+    if (libSkip > 0) parts.push(`词条库已存在 ${libSkip}`);
+    if (libFailed > 0) parts.push(`失败 ${libFailed}`);
+    toast.success(parts.join('，'));
   };
 
   // 下载临时词条导入模板（同家默词条库模板）
@@ -510,7 +524,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               <Button size="sm" onClick={() => setShowTemp(true)}><Plus className="w-3 h-3" />新增</Button>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。勾选后可批量加入任务或存入词条库。</p>
+          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。勾选后可批量加入任务与词条库。</p>
           <input ref={tempFileRef} type="file" accept=".xlsx,.xls" onChange={onTempFileChange} className="hidden" />
           {tempWords.length > 0 && (
             <>
@@ -548,20 +562,11 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
                 <Button
                   size="sm"
                   variant="success"
-                  onClick={batchMoveTempToTask}
+                  onClick={batchMoveTempToTaskAndLibrary}
                   disabled={tempSelected.size === 0}
                   className="flex-1"
                 >
-                  加入本次任务（{tempSelected.size}）
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={batchSaveTempToLibrary}
-                  disabled={tempSelected.size === 0}
-                  className="flex-1"
-                >
-                  存入词条库（{tempSelected.size}）
+                  加入本次任务与词条库（{tempSelected.size}）
                 </Button>
               </div>
             </>
@@ -646,7 +651,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               </div>
             </div>
           )}
-          <p className="text-xs text-slate-400">词条添加后可选择加入本次任务或保存到词条库</p>
+          <p className="text-xs text-slate-400">词条添加后将自动加入本次任务与词条库</p>
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="secondary" onClick={() => setShowTemp(false)}>取消</Button>
             <Button onClick={addTemp}>添加</Button>
