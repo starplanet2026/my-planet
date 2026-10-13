@@ -195,6 +195,18 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
   return data as DictationErrorWord;
 }
 
+// 编辑错词词条（答案/中文释义/拼音）
+export async function updateErrorWord(
+  id: string,
+  fields: { answer?: string; chinese_meaning?: string | null; pinyin?: string | null },
+): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_error_words')
+    .update(fields)
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // 更新错词节点（手动覆盖，同步重算基准目标日期 = last_review_date + 节点值）
 export async function updateErrorWordNode(id: string, node: number, lastReviewDate?: string | null): Promise<void> {
   // 基准目标日期 = 上次复习日 + 节点天数(1/2/4/7/15)，无上次复习日则用今天

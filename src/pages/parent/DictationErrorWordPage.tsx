@@ -12,7 +12,7 @@ import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Square } from 'lucide-react';
-import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWordNode, updateErrorWordUnit } from '../../api/dictation';
+import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWord, updateErrorWordNode, updateErrorWordUnit } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
 const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
@@ -167,6 +167,45 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
     }
   };
 
+  // 在线编辑答案
+  const handleAnswerChange = async (id: string, answer: string) => {
+    const w = words.find(w => w.id === id);
+    if (w && w.answer === answer) return; // 无变化
+    try {
+      await updateErrorWord(id, { answer });
+      setWords(prev => prev.map(w => w.id === id ? { ...w, answer } : w));
+      toast.success('答案已更新');
+    } catch (e: any) {
+      toast.error('修改失败：' + e.message);
+    }
+  };
+
+  // 在线编辑中文释义
+  const handleChineseMeaningChange = async (id: string, meaning: string) => {
+    const w = words.find(w => w.id === id);
+    if (w && (w.chinese_meaning ?? '') === meaning) return;
+    try {
+      await updateErrorWord(id, { chinese_meaning: meaning || null });
+      setWords(prev => prev.map(w => w.id === id ? { ...w, chinese_meaning: meaning || null } : w));
+      toast.success('中文释义已更新');
+    } catch (e: any) {
+      toast.error('修改失败：' + e.message);
+    }
+  };
+
+  // 在线编辑拼音
+  const handlePinyinChange = async (id: string, pinyin: string) => {
+    const w = words.find(w => w.id === id);
+    if (w && (w.pinyin ?? '') === pinyin) return;
+    try {
+      await updateErrorWord(id, { pinyin: pinyin || null });
+      setWords(prev => prev.map(w => w.id === id ? { ...w, pinyin: pinyin || null } : w));
+      toast.success('拼音已更新');
+    } catch (e: any) {
+      toast.error('修改失败：' + e.message);
+    }
+  };
+
   const confirmSingleDelete = async () => {
     if (!pendingDeleteId) return;
     try {
@@ -259,15 +298,15 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                       {selected.size === words.length ? <CheckSquare className="w-4 h-4 text-rose-500" /> : <Square className="w-4 h-4 text-slate-300" />}
                     </button>
                   </th>
-                  <th className="p-2 text-left">学科</th>
-                  <th className="p-2 text-left">答案</th>
-                  {subject !== 'chinese' && <th className="p-2 text-left">中文释义</th>}
-                  {subject !== 'english' && <th className="p-2 text-left">拼音</th>}
-                  <th className="p-2 text-left">所属单元</th>
-                  <th className="p-2 text-left">当前节点</th>
-                  <th className="p-2 text-left">下次家默日</th>
-                  <th className="p-2 text-left">复习/错误</th>
-                  <th className="p-2 text-left">操作</th>
+                  <th className="p-2 text-left w-10">学科</th>
+                  <th className="p-2 text-left w-28">答案</th>
+                  {subject !== 'chinese' && <th className="p-2 text-left w-28">中文释义</th>}
+                  {subject !== 'english' && <th className="p-2 text-left w-28">拼音</th>}
+                  <th className="p-2 text-left whitespace-nowrap w-20">所属单元</th>
+                  <th className="p-2 text-left whitespace-nowrap w-20">当前节点</th>
+                  <th className="p-2 text-left whitespace-nowrap w-24">下次家默日</th>
+                  <th className="p-2 text-left whitespace-nowrap w-16">复习/错误</th>
+                  <th className="p-2 text-left w-12">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -279,9 +318,37 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                       </button>
                     </td>
                     <td className="p-2">{w.subject === 'english' ? '英语' : '语文'}</td>
-                    <td className="p-2 font-medium">{w.answer}</td>
-                    {subject !== 'chinese' && <td className="p-2">{w.chinese_meaning ?? '-'}</td>}
-                    {subject !== 'english' && <td className="p-2">{w.pinyin ?? '-'}</td>}
+                    <td className="p-2 font-medium">
+                      <input
+                        type="text"
+                        defaultValue={w.answer}
+                        onBlur={(e) => handleAnswerChange(w.id, e.target.value.trim())}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        className="w-full text-xs border border-transparent hover:border-slate-200 rounded px-1 py-1 bg-transparent focus:outline-none focus:border-teal-400 focus:bg-white break-all"
+                      />
+                    </td>
+                    {subject !== 'chinese' && (
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          defaultValue={w.chinese_meaning ?? ''}
+                          onBlur={(e) => handleChineseMeaningChange(w.id, e.target.value.trim())}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          className="w-full text-xs border border-transparent hover:border-slate-200 rounded px-1 py-1 bg-transparent focus:outline-none focus:border-teal-400 focus:bg-white break-all"
+                        />
+                      </td>
+                    )}
+                    {subject !== 'english' && (
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          defaultValue={w.pinyin ?? ''}
+                          onBlur={(e) => handlePinyinChange(w.id, e.target.value.trim())}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          className="w-full text-xs border border-transparent hover:border-slate-200 rounded px-1 py-1 bg-transparent focus:outline-none focus:border-teal-400 focus:bg-white"
+                        />
+                      </td>
+                    )}
                     <td className="p-2">
                       <input
                         type="number"
