@@ -195,15 +195,24 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
   return data as DictationErrorWord;
 }
 
-// 更新错词节点（手动覆盖，同步重算 next_review_date）
+// 更新错词节点（手动覆盖，同步重算基准目标日期 = today + 节点值）
 export async function updateErrorWordNode(id: string, node: number): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  // 根据节点计算间隔天数
-  const interval = node === 1 ? 1 : node === 2 ? 2 : node === 4 ? 3 : node === 7 ? 8 : 1;
-  const next = new Date(Date.now() + interval * 86400000).toISOString().slice(0, 10);
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  // 基准目标日期 = 当天 + 节点天数(1/2/4/7/15)
+  const next = new Date(today.getTime() + node * 86400000).toISOString().slice(0, 10);
   const { error } = await supabase
     .from('dictation_error_words')
-    .update({ current_node: node, next_review_date: next, last_review_date: today })
+    .update({ current_node: node, next_review_date: next, last_review_date: todayStr })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+// 更新错词所属单元（在线编辑）
+export async function updateErrorWordUnit(id: string, unitNo: number): Promise<void> {
+  const { error } = await supabase
+    .from('dictation_error_words')
+    .update({ unit_no: unitNo })
     .eq('id', id);
   if (error) throw error;
 }

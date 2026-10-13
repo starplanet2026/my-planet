@@ -12,7 +12,7 @@ import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Square } from 'lucide-react';
-import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWordNode } from '../../api/dictation';
+import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWordNode, updateErrorWordUnit } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
 
 const NODE_LABEL: Record<number, string> = { 1: '第1天', 2: '第2天', 4: '第4天', 7: '第7天', 15: '第15天' };
@@ -63,6 +63,7 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
     if (!childId) return;
     if (!form.answer.trim()) { toast.error('请填写答案'); return; }
     if (!subject) { toast.error('请选择学科'); return; }
+    if (!form.unit_no || form.unit_no <= 0) { toast.error('请填写单元序号（必填）'); return; }
     try {
       await createErrorWord(childId, {
         subject,
@@ -110,6 +111,12 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
         pinyin: subject === 'chinese' ? String(r['拼音'] ?? '') || null : null,
         answer: subject === 'english' ? String(r['英文答案'] ?? '') : String(r['汉字答案'] ?? ''),
       })).filter(r => r.answer);
+      // 校验：单元序号必填
+      const missingUnit = payload.filter(r => !r.unit_no || r.unit_no <= 0);
+      if (missingUnit.length > 0) {
+        toast.error(`有 ${missingUnit.length} 条词条未填写单元序号，单元序号为必填项`);
+        return;
+      }
       const result = await importErrorWords(childId, subject, payload);
       toast.success(`导入完成：成功 ${result.success}，重复 ${result.duplicate}，失败 ${result.failed}`);
       load();
@@ -141,6 +148,17 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
       await updateErrorWordNode(id, node);
       setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node } : w));
       toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}`);
+    } catch (e: any) {
+      toast.error('修改失败：' + e.message);
+    }
+  };
+
+  // 在线编辑所属单元
+  const handleUnitChange = async (id: string, unitNo: number) => {
+    try {
+      await updateErrorWordUnit(id, unitNo);
+      setWords(prev => prev.map(w => w.id === id ? { ...w, unit_no: unitNo } : w));
+      toast.success(`单元已更新为 ${unitNo}`);
     } catch (e: any) {
       toast.error('修改失败：' + e.message);
     }
@@ -242,6 +260,7 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                   <th className="p-2 text-left">答案</th>
                   {subject !== 'chinese' && <th className="p-2 text-left">中文释义</th>}
                   {subject !== 'english' && <th className="p-2 text-left">拼音</th>}
+                  <th className="p-2 text-left">所属单元</th>
                   <th className="p-2 text-left">当前节点</th>
                   <th className="p-2 text-left">下次家默日</th>
                   <th className="p-2 text-left">复习/错误</th>
@@ -261,6 +280,17 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                     {subject !== 'chinese' && <td className="p-2">{w.chinese_meaning ?? '-'}</td>}
                     {subject !== 'english' && <td className="p-2">{w.pinyin ?? '-'}</td>}
                     <td className="p-2">
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={w.unit_no || ''}
+                        onBlur={(e) => handleUnitChange(w.id, Number(e.target.value) || 0)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        className="w-12 text-xs border border-slate-200 rounded px-1 py-1 bg-white focus:outline-none focus:border-teal-400 text-center"
+                        placeholder="单元"
+                      />
+                    </td>
+                    <td className="p-2">
                       <select
                         value={w.current_node}
                         onChange={(e) => handleNodeChange(w.id, Number(e.target.value))}
@@ -271,15 +301,18 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                         ))}
                       </select>
                     </td>
-                    <td className="p-2">
-                      {w.status === 'in_progress' && w.next_review_date <= new Date().toISOString().slice(0, 10)
-                        ? <span className="text-rose-500 font-medium">待复习</span>
-                        : w.next_review_date}
+                    <td className="p-2 text-xs whitespace-nowrap">
+                      {(() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const base = w.next_review_date;
+                        // 基准日期 >= 今日：展示基准日期；基准日期 < 今日：展示今日
+                        return base < today ? today : base;
+                      })()}
                     </td>
                     <td className="p-2 text-xs">
-                      <span className="text-emerald-600 font-medium">{w.review_history?.filter(r => r.correct).length ?? 0}</span>
+                      <span className="text-emerald-600 font-medium">{w.review_count ?? 0}</span>
                       <span className="text-slate-300 mx-0.5">/</span>
-                      <span className="text-red-500 font-medium">{w.review_history?.filter(r => !r.correct).length ?? 0}</span>
+                      <span className="text-red-500 font-medium">{w.error_count ?? 0}</span>
                     </td>
                     <td className="p-2">
                       <button

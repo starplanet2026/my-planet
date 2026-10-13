@@ -942,6 +942,8 @@ export interface DictationErrorWord {
   status: DictationErrorStatus;
   last_review_date: string | null;
   review_history: Array<{ date: string; correct: boolean; action: string }>;
+  review_count: number;
+  error_count: number;
   created_at: string;
   updated_at: string;
 }
