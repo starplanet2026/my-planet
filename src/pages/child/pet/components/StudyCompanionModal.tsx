@@ -59,6 +59,8 @@ export function StudyCompanionModal({
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   // 学生本次勾选的任务 ID 集合（仅本地，不回传后端；后台 selected 仅作上线开关）
   const [studentPicks, setStudentPicks] = useState<Set<string>>(new Set());
+  // 今日已在陪伴学习中完成的任务文本集合（来自学习记录）：置灰划掉，不可再次勾选
+  const [completedTexts, setCompletedTexts] = useState<Set<string>>(new Set());
   const [remaining, setRemaining] = useState(0);
   const [studying, setStudying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -187,18 +189,32 @@ export function StudyCompanionModal({
     });
   }, [step, selectedPet, minutes, taskList, remaining, studying, paused, endsAt, pausedAccumMs, pauseStartAt, minimized, pendingStar, studyEnded, rewardClaimed, setStudyState]);
 
-  // 从数据库加载任务模板（多端同步）
+  // 从数据库加载任务模板（多端同步）+ 今日已完成任务（来自学习记录）
   useEffect(() => {
     if (!childId || templatesLoaded) return;
-    fetchStudyTaskTemplates(childId).then(list => {
+    Promise.all([
+      fetchStudyTaskTemplates(childId),
+      fetchStudyRecords(childId, 50).catch(() => []),
+    ]).then(([list, records]) => {
       const mapped = list.map(t => ({
         id: t.id, text: t.text, reward: t.reward,
         done: false, rewarded: false, selected: t.selected,
         subject: t.subject,
       }));
       setTaskTemplates(mapped);
-      // 默认全选已上线任务（后台 selected=true 视为上线，学生默认勾选）
-      setStudentPicks(new Set(mapped.filter(t => t.selected).map(t => t.id)));
+      // 默认不勾选任何任务，由学生自行勾选
+      setStudentPicks(new Set());
+      // 今日完成的任务：取今天（本地时区）学习记录中 done=true 的任务文本
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const doneTexts = new Set<string>();
+      records.forEach(r => {
+        const d = new Date(r.created_at);
+        const recDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (recDay !== todayStr) return;
+        r.tasks?.forEach(t => { if (t.done) doneTexts.add(t.text); });
+      });
+      setCompletedTexts(doneTexts);
       setTemplatesLoaded(true);
     }).catch(() => setTemplatesLoaded(true));
   }, [childId, templatesLoaded]);
@@ -244,13 +260,28 @@ export function StudyCompanionModal({
   }, [studying, paused, endsAt, minimized]);
 
   // 学生勾选/取消勾选：仅本地状态，不回传后端（后台 selected 仅作上线开关）
+  // 今日已完成的任务禁止再次勾选
   const handleToggleSelect = (taskId: string) => {
+    const tpl = taskTemplates.find(t => t.id === taskId);
+    if (tpl && completedTexts.has(tpl.text)) return;
     setStudentPicks(prev => {
       const next = new Set(prev);
       if (next.has(taskId)) next.delete(taskId);
       else next.add(taskId);
       return next;
     });
+  };
+
+  // 全选/取消全选：仅作用于「已上线且今日未完成」的可选任务
+  const onlineTasks = taskTemplates.filter(t => t.selected);
+  const selectableTasks = onlineTasks.filter(t => !completedTexts.has(t.text));
+  const allPicked = selectableTasks.length > 0 && selectableTasks.every(t => studentPicks.has(t.id));
+  const handleToggleSelectAll = () => {
+    if (allPicked) {
+      setStudentPicks(new Set());
+    } else {
+      setStudentPicks(new Set(selectableTasks.map(t => t.id)));
+    }
   };
 
   const handleStart = () => {
@@ -320,6 +351,12 @@ export function StudyCompanionModal({
         p_star_earned: pendingStar,
       });
       if (error) throw error;
+      // 即时标记今日已完成任务（重开弹窗时还会从学习记录再同步一次）
+      setCompletedTexts(prev => {
+        const next = new Set(prev);
+        tasksForRecord.forEach(t => { if (t.done) next.add(t.text); });
+        return next;
+      });
       const result = Array.isArray(data) ? data[0] : data;
       const gain = (result as any)?.happiness_gain ?? minutes2;
       setHappinessGain(gain);
@@ -349,6 +386,12 @@ export function StudyCompanionModal({
         p_star_earned: pendingStar,
       });
       if (error) throw error;
+      // 即时标记今日已完成任务（重开弹窗时还会从学习记录再同步一次）
+      setCompletedTexts(prev => {
+        const next = new Set(prev);
+        tasksForRecord.forEach(t => { if (t.done) next.add(t.text); });
+        return next;
+      });
       const result = Array.isArray(data) ? data[0] : data;
       const gain = (result as any)?.happiness_gain ?? minutes;
       setHappinessGain(gain);
@@ -486,9 +529,23 @@ export function StudyCompanionModal({
             {/* 仅展示后台已上线（selected=true）的任务；学生勾选仅本地，不回传后端 */}
             {taskTemplates.some(t => t.selected) ? (
               <div className="space-y-1.5">
-                <p className="text-[11px] text-slate-400">
-                  共 {taskTemplates.filter(t => t.selected).length} 个任务，已勾选 {taskTemplates.filter(t => t.selected && studentPicks.has(t.id)).length} 个
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-slate-400">
+                    共 {onlineTasks.length} 个任务
+                    {onlineTasks.filter(t => completedTexts.has(t.text)).length > 0 &&
+                      `，今日已完成 ${onlineTasks.filter(t => completedTexts.has(t.text)).length}`}
+                    ，已勾选 {onlineTasks.filter(t => studentPicks.has(t.id)).length} 个
+                  </p>
+                  {selectableTasks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleToggleSelectAll}
+                      className="text-[11px] font-medium text-green-600 hover:text-green-700 hover:underline flex-shrink-0 ml-2"
+                    >
+                      {allPicked ? '取消全选' : '全选'}
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
                   {SUBJECT_META.map(sub => {
                     const subTasks = taskTemplates.filter(t => t.selected && t.subject === sub.id);
@@ -499,26 +556,36 @@ export function StudyCompanionModal({
                         <ul className="space-y-1">
                           {subTasks.map(t => {
                             const picked = studentPicks.has(t.id);
+                            const doneToday = completedTexts.has(t.text);
                             return (
                               <li
                                 key={t.id}
                                 className={`flex items-center gap-1 p-1.5 rounded-lg border transition-colors ${
-                                  picked ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
+                                  doneToday
+                                    ? 'border-slate-100 bg-slate-50'
+                                    : picked ? 'border-green-300 bg-green-50' : 'border-slate-100 bg-white'
                                 }`}
                               >
                                 <button
                                   type="button"
+                                  disabled={doneToday}
                                   onClick={() => handleToggleSelect(t.id)}
                                   className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[8px] transition-colors ${
-                                    picked ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300 hover:border-green-300'
+                                    doneToday
+                                      ? 'bg-slate-300 border-slate-300 text-white cursor-not-allowed'
+                                      : picked
+                                        ? 'bg-green-400 border-green-400 text-white'
+                                        : 'border-slate-300 hover:border-green-300'
                                   }`}
                                 >
-                                  {picked ? '✓' : ''}
+                                  {doneToday || picked ? '✓' : ''}
                                 </button>
-                                <span className="flex-1 min-w-0 text-[10px] text-slate-700 truncate flex items-center gap-1">
-                                  <span className="truncate">{t.text}</span>
+                                <span className={`flex-1 min-w-0 text-[10px] truncate flex items-center gap-1 ${
+                                  doneToday ? 'cursor-not-allowed' : ''
+                                }`}>
+                                  <span className={`truncate ${doneToday ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{t.text}</span>
                                   {t.reward > 0 && (
-                                    <span className="text-amber-500 text-[9px] ml-0.5 flex-shrink-0">⭐{t.reward}</span>
+                                    <span className={`text-[9px] ml-0.5 flex-shrink-0 ${doneToday ? 'text-slate-300' : 'text-amber-500'}`}>⭐{t.reward}</span>
                                   )}
                                 </span>
                               </li>
