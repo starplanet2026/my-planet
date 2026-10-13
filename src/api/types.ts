@@ -26,6 +26,7 @@ export interface Family {
   owner_user_id: string | null;
   parent_pin_hash: string | null;
   severe_illness_cost?: number;
+  dashboard_layout?: Record<string, string[]> | null;
   created_at: string;
   updated_at: string;
 }

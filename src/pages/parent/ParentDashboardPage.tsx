@@ -18,7 +18,38 @@ import { addChild, deleteMember } from '../../api/members';
 import { fetchPendingStudyReviews } from '../../api/pets';
 import { fetchQuestionReports } from '../../api/challenges';
 import { listPendingDictationSubmissions } from '../../api/dictation';
+import { supabase } from '../../api/client';
 import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint } from 'lucide-react';
+
+// 板块 ID
+type SectionId = 'quick' | 'achievement' | 'privilege' | 'battle' | 'pet';
+
+// 默认按钮布局（新按钮加入时在此登记，会自动并入已保存的布局）
+const DEFAULT_LAYOUT: Record<SectionId, string[]> = {
+  quick: ['成就达成', '陪伴任务', '学习完成', '家默审核'],
+  achievement: ['成就库', '勋章库', '成功日记'],
+  privilege: ['特权库', '用户特权卡', '转盘权重'],
+  battle: ['家默', '背诵', '关卡库', '题集库', '错题库', '题目报错', '病句库', '连词成句库', '翻译库', '通用语法'],
+  pet: ['萌宠闯关', '萌宠商店', '用户管理', '背景管理', '新宠抽卡', '特质配置', '新宠测试', '新宠奇遇', '宠物店'],
+};
+
+// 合并已保存布局与默认布局：过滤已删除按钮，新增按钮追加到默认板块
+function mergeLayout(saved: Record<string, string[]> | null | undefined): Record<SectionId, string[]> {
+  const known = new Set(Object.values(DEFAULT_LAYOUT).flat());
+  const seen = new Set<string>();
+  const result = {} as Record<SectionId, string[]>;
+  (Object.keys(DEFAULT_LAYOUT) as SectionId[]).forEach(sec => {
+    const arr = Array.isArray(saved?.[sec]) ? saved![sec] : [];
+    result[sec] = arr.filter(l => known.has(l) && !seen.has(l));
+    result[sec].forEach(l => seen.add(l));
+  });
+  (Object.keys(DEFAULT_LAYOUT) as SectionId[]).forEach(sec => {
+    DEFAULT_LAYOUT[sec].forEach(l => {
+      if (!seen.has(l)) { result[sec].push(l); seen.add(l); }
+    });
+  });
+  return result;
+}
 
 export function ParentDashboardPage() {
   const navigate = useNavigate();
@@ -204,54 +235,128 @@ export function ParentDashboardPage() {
   const go = (route: string, query?: string) =>
     navigate(query ? `${route}?${query}` : route);
 
-  // 快速验证按钮
-  const quickVerifyButtons = [
-    { label: '成就达成', onClick: () => go(ROUTES.PARENT_VERIFICATION), badge: pendingTaskCount },
-    { label: '陪伴任务', onClick: () => go(ROUTES.PARENT_STUDY_TASKS), badge: 0 },
-    { label: '学习完成', onClick: () => go(ROUTES.PARENT_STUDY_REVIEW), badge: pendingStudyCount },
-    { label: '家默审核', onClick: () => go(ROUTES.PARENT_DICTATION_REVIEW), badge: pendingDictationCount },
-  ];
+  // 全部功能按钮定义（按 label 索引，角标随按钮移动）
+  const buttonDefs: Record<string, { onClick: () => void; badge: number }> = {
+    '成就达成': { onClick: () => go(ROUTES.PARENT_VERIFICATION), badge: pendingTaskCount },
+    '陪伴任务': { onClick: () => go(ROUTES.PARENT_STUDY_TASKS), badge: 0 },
+    '学习完成': { onClick: () => go(ROUTES.PARENT_STUDY_REVIEW), badge: pendingStudyCount },
+    '家默审核': { onClick: () => go(ROUTES.PARENT_DICTATION_REVIEW), badge: pendingDictationCount },
+    '成就库': { onClick: () => go(ROUTES.PARENT_TASKS), badge: 0 },
+    '勋章库': { onClick: () => handlePlaceholder('勋章库'), badge: 0 },
+    '成功日记': { onClick: () => handlePlaceholder('成功日记'), badge: 0 },
+    '特权库': { onClick: () => go(ROUTES.PARENT_SHOP), badge: 0 },
+    '用户特权卡': { onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users'), badge: 0 },
+    '转盘权重': { onClick: () => go(ROUTES.PARENT_SHOP, 'open=wheel'), badge: 0 },
+    '家默': { onClick: () => go(ROUTES.PARENT_DICTATION), badge: 0 },
+    '背诵': { onClick: () => go(ROUTES.PARENT_RECITATION), badge: 0 },
+    '关卡库': { onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=levels'), badge: 0 },
+    '题集库': { onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=sets'), badge: 0 },
+    '错题库': { onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=wrong_battle'), badge: 0 },
+    '题目报错': { onClick: () => go(ROUTES.PARENT_QUESTION_REPORTS), badge: pendingReportCount },
+    '病句库': { onClick: () => handlePlaceholder('病句库'), badge: 0 },
+    '连词成句库': { onClick: () => handlePlaceholder('连词成句库'), badge: 0 },
+    '翻译库': { onClick: () => handlePlaceholder('翻译库'), badge: 0 },
+    '通用语法': { onClick: () => handlePlaceholder('通用语法'), badge: 0 },
+    '萌宠闯关': { onClick: () => go(ROUTES.PARENT_WORD_CHALLENGE), badge: 0 },
+    '萌宠商店': { onClick: () => go(ROUTES.PARENT_PETS, 'tab=shop'), badge: 0 },
+    '用户管理': { onClick: () => go(ROUTES.PARENT_PETS, 'tab=user'), badge: 0 },
+    '背景管理': { onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg'), badge: 0 },
+    '新宠抽卡': { onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha'), badge: 0 },
+    '特质配置': { onClick: () => go(ROUTES.PARENT_PET_TRAITS), badge: 0 },
+    '新宠测试': { onClick: () => handlePlaceholder('新宠测试'), badge: 0 },
+    '新宠奇遇': { onClick: () => handlePlaceholder('新宠奇遇'), badge: 0 },
+    '宠物店': { onClick: () => handlePlaceholder('宠物店'), badge: 0 },
+  };
 
-  // 领取成就按钮
-  const achievementButtons = [
-    { label: '成就库', onClick: () => go(ROUTES.PARENT_TASKS), badge: 0 },
-    { label: '勋章库', onClick: () => handlePlaceholder('勋章库'), badge: 0 },
-    { label: '成功日记', onClick: () => handlePlaceholder('成功日记'), badge: 0 },
-  ];
+  // 按钮布局（板块 -> 有序 label 列表），从 family.dashboard_layout 加载
+  const [layout, setLayout] = useState<Record<SectionId, string[]>>(DEFAULT_LAYOUT);
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  // 拖拽状态：正在拖的按钮 + 当前悬停的放置目标
+  const [dragLabel, setDragLabel] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ section: SectionId; label: string | null } | null>(null);
 
-  // 特权兑换按钮
-  const privilegeButtons = [
-    { label: '特权库', onClick: () => go(ROUTES.PARENT_SHOP), badge: 0 },
-    { label: '用户特权卡', onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users'), badge: 0 },
-    { label: '转盘权重', onClick: () => go(ROUTES.PARENT_SHOP, 'open=wheel'), badge: 0 },
-  ];
+  useEffect(() => {
+    if (!family?.id || layoutLoaded) return;
+    setLayout(mergeLayout(family.dashboard_layout));
+    setLayoutLoaded(true);
+  }, [family?.id, family?.dashboard_layout, layoutLoaded]);
 
-  // 智慧星战按钮（两行）
-  const starBattleButtons = [
-    { label: '家默', onClick: () => go(ROUTES.PARENT_DICTATION), badge: 0 },
-    { label: '背诵', onClick: () => go(ROUTES.PARENT_RECITATION), badge: 0 },
-    { label: '关卡库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=levels'), badge: 0 },
-    { label: '题集库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=sets'), badge: 0 },
-    { label: '错题库', onClick: () => go(ROUTES.PARENT_CHALLENGES, 'tab=wrong_battle'), badge: 0 },
-    { label: '题目报错', onClick: () => go(ROUTES.PARENT_QUESTION_REPORTS), badge: pendingReportCount },
-    { label: '病句库', onClick: () => handlePlaceholder('病句库'), badge: 0 },
-    { label: '连词成句库', onClick: () => handlePlaceholder('连词成句库'), badge: 0 },
-    { label: '翻译库', onClick: () => handlePlaceholder('翻译库'), badge: 0 },
-    { label: '通用语法', onClick: () => handlePlaceholder('通用语法'), badge: 0 },
-  ];
+  // 持久化布局到 families.dashboard_layout
+  const saveLayout = (next: Record<SectionId, string[]>) => {
+    if (!family?.id) return;
+    supabase.from('families').update({ dashboard_layout: next }).eq('id', family.id)
+      .then(({ error }) => { if (error) toast.error('布局保存失败'); });
+  };
 
-  // 萌宠星球按钮（两行）
-  const petPlanetButtons = [
-    { label: '萌宠闯关', onClick: () => go(ROUTES.PARENT_WORD_CHALLENGE), badge: 0 },
-    { label: '萌宠商店', onClick: () => go(ROUTES.PARENT_PETS, 'tab=shop'), badge: 0 },
-    { label: '用户管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=user'), badge: 0 },
-    { label: '背景管理', onClick: () => go(ROUTES.PARENT_PETS, 'tab=bg'), badge: 0 },
-    { label: '新宠抽卡', onClick: () => go(ROUTES.PARENT_PETS, 'tab=gacha'), badge: 0 },
-    { label: '特质配置', onClick: () => go(ROUTES.PARENT_PET_TRAITS), badge: 0 },
-    { label: '新宠测试', onClick: () => handlePlaceholder('新宠测试'), badge: 0 },
-    { label: '新宠奇遇', onClick: () => handlePlaceholder('新宠奇遇'), badge: 0 },
-    { label: '宠物店', onClick: () => handlePlaceholder('宠物店'), badge: 0 },
-  ];
+  // 移动按钮到目标板块：beforeLabel 为 null 时追加到末尾，否则插入到该按钮之前
+  const moveButton = (label: string, targetSection: SectionId, beforeLabel: string | null) => {
+    if (label === beforeLabel) return;
+    const next = { ...layout };
+    let source: SectionId | null = null;
+    (Object.keys(next) as SectionId[]).forEach(sec => {
+      if (next[sec].includes(label)) source = sec;
+    });
+    if (!source) return;
+    next[source] = next[source].filter(l => l !== label);
+    const arr = [...next[targetSection]];
+    const idx = beforeLabel ? arr.indexOf(beforeLabel) : -1;
+    if (idx >= 0) arr.splice(idx, 0, label);
+    else arr.push(label);
+    next[targetSection] = arr;
+    setLayout(next);
+    saveLayout(next);
+  };
+
+  // 渲染单个可拖拽功能按钮（角标、点击行为随 label 走）
+  const renderGridButton = (section: SectionId, label: string) => {
+    const def = buttonDefs[label];
+    if (!def) return null;
+    const isDropTarget = dropHint?.section === section && dropHint?.label === label;
+    return (
+      <button
+        key={label}
+        draggable
+        onDragStart={e => { setDragLabel(label); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragEnd={() => { setDragLabel(null); setDropHint(null); }}
+        onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropHint({ section, label }); }}
+        onDragLeave={() => setDropHint(h => (h?.section === section && h?.label === label) ? null : h)}
+        onDrop={e => {
+          e.preventDefault(); e.stopPropagation();
+          if (dragLabel) moveButton(dragLabel, section, label);
+          setDragLabel(null); setDropHint(null);
+        }}
+        onClick={def.onClick}
+        title="可拖动调整位置"
+        className={cn(
+          'relative px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center cursor-grab active:cursor-grabbing',
+          dragLabel === label && 'opacity-40',
+          isDropTarget && dragLabel !== label && 'ring-2 ring-amber-400'
+        )}
+      >
+        {label}
+        {def.badge ? (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
+            {def.badge > 99 ? '99+' : def.badge}
+          </span>
+        ) : null}
+      </button>
+    );
+  };
+
+  // 板块按钮网格（容器空白处放置 = 追加到板块末尾）
+  const renderSectionGrid = (section: SectionId, gridClass: string) => (
+    <div
+      className={cn(gridClass, dropHint?.section === section && dropHint?.label === null && dragLabel && 'rounded-xl ring-2 ring-dashed ring-amber-300 p-1 -m-1')}
+      onDragOver={e => { e.preventDefault(); setDropHint({ section, label: null }); }}
+      onDrop={e => {
+        e.preventDefault();
+        if (dragLabel) moveButton(dragLabel, section, null);
+        setDragLabel(null); setDropHint(null);
+      }}
+    >
+      {layout[section].map(l => renderGridButton(section, l))}
+    </div>
+  );
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 px-2">
@@ -365,22 +470,7 @@ export function ParentDashboardPage() {
             <CheckCircle className="w-5 h-5 text-star-500" />
             <h2 className="font-bold text-star-700">快速验证</h2>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {quickVerifyButtons.map(b => (
-              <button
-                key={b.label}
-                onClick={b.onClick}
-                className="relative px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
-              >
-                {b.label}
-                {b.badge ? (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
-                    {b.badge > 99 ? '99+' : b.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          {renderSectionGrid('quick', 'grid grid-cols-3 gap-2')}
         </Card>
       </div>
 
@@ -391,34 +481,14 @@ export function ParentDashboardPage() {
             <Trophy className="w-5 h-5 text-star-500" />
             <h2 className="font-bold text-star-700">领取成就</h2>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {achievementButtons.map(b => (
-              <button
-                key={b.label}
-                onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
+          {renderSectionGrid('achievement', 'grid grid-cols-3 gap-2')}
         </Card>
         <Card className="p-4 space-y-2 border-star-200 bg-star-50/30">
           <div className="flex items-center gap-2">
             <Gift className="w-5 h-5 text-star-500" />
             <h2 className="font-bold text-star-700">特权兑换</h2>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {privilegeButtons.map(b => (
-              <button
-                key={b.label}
-                onClick={b.onClick}
-                className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
+          {renderSectionGrid('privilege', 'grid grid-cols-3 gap-2')}
         </Card>
       </div>
 
@@ -428,22 +498,7 @@ export function ParentDashboardPage() {
           <BookOpen className="w-5 h-5 text-star-500" />
           <h2 className="font-bold text-star-700">智慧星战</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-          {starBattleButtons.map(b => (
-            <button
-              key={b.label}
-              onClick={b.onClick}
-              className="relative px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
-            >
-              {b.label}
-              {b.badge ? (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full">
-                  {b.badge > 99 ? '99+' : b.badge}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        {renderSectionGrid('battle', 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2')}
       </Card>
 
       {/* 第4行：萌宠星球（通栏） */}
@@ -452,17 +507,7 @@ export function ParentDashboardPage() {
           <PawPrint className="w-5 h-5 text-star-500" />
           <h2 className="font-bold text-star-700">萌宠星球</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-          {petPlanetButtons.map(b => (
-            <button
-              key={b.label}
-              onClick={b.onClick}
-              className="px-2 py-2.5 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 text-amber-700 text-sm font-medium transition-all hover:shadow-md active:scale-95 text-center"
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
+        {renderSectionGrid('pet', 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2')}
       </Card>
 
       {/* 设置弹窗 */}
