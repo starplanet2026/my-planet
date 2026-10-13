@@ -512,7 +512,7 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
               )}
             >
               <span className={cn(
-                'absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded',
+                'absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded',
                 isQuickReview
                   ? 'bg-amber-100 text-amber-700'
                   : isEnglish ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'
@@ -520,10 +520,11 @@ function BoardSection({ boardType, label, icon, sets, standaloneLevels, onSelect
                 {isQuickReview ? '⚡快速复习' : isEnglish ? '英语家默' : '语文家默'}
               </span>
               <div className="flex-1 flex flex-col items-center justify-center mt-3">
-                <span className="text-2xl mb-1">{isQuickReview ? '⚡' : isEnglish ? '📝' : '✍️'}</span>
+                <span className="text-3xl mb-1">{isQuickReview ? '⚡' : isEnglish ? '📝' : '✍️'}</span>
                 <div className="text-center">
-                  <div className="text-xs font-bold truncate max-w-[8rem]">{t.title}</div>
-                  <div className="text-[10px] mt-0.5 opacity-90">共 {total} 星光值</div>
+                  <div className="text-sm font-bold truncate max-w-[8rem]">{t.title}</div>
+                  <div className="text-xs mt-0.5 opacity-90">{count} 个词条</div>
+                  <div className="text-xs mt-0.5 opacity-90">共 {total} 星光值</div>
                 </div>
               </div>
             </div>
