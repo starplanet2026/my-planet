@@ -39,10 +39,14 @@ export function DictationPlayPage() {
   const [approvedInfo, setApprovedInfo] = useState<{ correct: number; total: number; star: number } | null>(null);
   // 查看答案授权状态：null=未申请 / pending=待批准 / approved=已授权
   const [accessStatus, setAccessStatus] = useState<string | null>(null);
+  // 加载错误信息（可见化展示，替代仅 toast 一闪而过）
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!childId || !subject) return;
+    // childId/subject 缺失时必须结束 loading，否则页面永久卡在加载态
+    if (!childId || !subject) { setLoading(false); return; }
     setLoading(true);
+    setLoadError(null);
     // 优先加载 URL 中指定的任务（支持多个 active 任务时直达），否则取最新 active 任务
     const loadTask = taskId ? getTaskById(taskId) : getActiveTask(childId, subject);
     loadTask.then(t => {
@@ -67,13 +71,47 @@ export function DictationPlayPage() {
         return listTaskWords(t.id).then(setWords);
       }
       setWords([]);
-    }).catch(e => toast.error('加载失败：' + e.message))
+    }).catch(e => {
+      setLoadError(e?.message ?? '未知错误');
+      toast.error('加载失败：' + e.message);
+    })
       .finally(() => setLoading(false));
   }, [childId, subject, taskId]);
+
+  // 轮询授权状态（pending 时每 5 秒检查一次，家长批准后立即进入批改界面）
+  // 注意：必须声明在下方所有提前 return 之前，否则 Hooks 数量随渲染变化会导致 React 崩溃白屏
+  useEffect(() => {
+    if (accessStatus !== 'pending' || !task || !childId) return;
+    const timer = setInterval(async () => {
+      try {
+        const s = await getDictationSubmissionStatus(task.id, childId, 'grading_access');
+        if (s?.status === 'approved') {
+          setAccessStatus('approved');
+          setGrading(true);
+          toast.success('家长已批准，开始批改吧！');
+        } else if (s?.status === 'rejected') {
+          setAccessStatus('rejected');
+        }
+      } catch { /* 静默 */ }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [accessStatus, task?.id, childId]);
 
   if (loading) return <Loading />;
 
   const subjectLabel = subject === 'english' ? '英语' : '语文';
+
+  // 加载失败：展示可见错误空态（含原因与返回入口），避免用户无法区分「没任务」与「加载出错」
+  if (loadError) {
+    return (
+      <div className="max-w-3xl mx-auto py-6 px-4">
+        <EmptyState icon="⚠️" title={`${subjectLabel}家默加载失败`} description={loadError} />
+        <div className="flex justify-center mt-4">
+          <Button onClick={() => navigate('/challenge')}>返回挑战页</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!task) {
     return (
@@ -98,24 +136,6 @@ export function DictationPlayPage() {
       return next;
     });
   };
-
-  // 轮询授权状态（pending 时每 5 秒检查一次，家长批准后立即进入批改界面）
-  useEffect(() => {
-    if (accessStatus !== 'pending' || !task || !childId) return;
-    const timer = setInterval(async () => {
-      try {
-        const s = await getDictationSubmissionStatus(task.id, childId, 'grading_access');
-        if (s?.status === 'approved') {
-          setAccessStatus('approved');
-          setGrading(true);
-          toast.success('家长已批准，开始批改吧！');
-        } else if (s?.status === 'rejected') {
-          setAccessStatus('rejected');
-        }
-      } catch { /* 静默 */ }
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [accessStatus, task?.id, childId]);
 
   // 点击「去批改」：需先申请家长授权查看答案
   const requestGradingAccess = async () => {
