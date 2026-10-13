@@ -144,10 +144,13 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
 
   // 手动修改节点
   const handleNodeChange = async (id: string, node: number) => {
+    const word = words.find(w => w.id === id);
     try {
-      await updateErrorWordNode(id, node);
-      setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node } : w));
-      toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}`);
+      const base = word?.last_review_date ? new Date(word.last_review_date) : new Date();
+      const nextDate = new Date(base.getTime() + node * 86400000).toISOString().slice(0, 10);
+      await updateErrorWordNode(id, node, word?.last_review_date ?? null);
+      setWords(prev => prev.map(w => w.id === id ? { ...w, current_node: node, next_review_date: nextDate } : w));
+      toast.success(`节点已改为 ${NODE_LABEL[node] ?? node}，下次复习日 ${nextDate}`);
     } catch (e: any) {
       toast.error('修改失败：' + e.message);
     }

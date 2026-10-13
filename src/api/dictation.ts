@@ -195,17 +195,17 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
   return data as DictationErrorWord;
 }
 
-// 更新错词节点（手动覆盖，同步重算基准目标日期 = today + 节点值）
-export async function updateErrorWordNode(id: string, node: number): Promise<void> {
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  // 基准目标日期 = 当天 + 节点天数(1/2/4/7/15)
-  const next = new Date(today.getTime() + node * 86400000).toISOString().slice(0, 10);
+// 更新错词节点（手动覆盖，同步重算基准目标日期 = last_review_date + 节点值）
+export async function updateErrorWordNode(id: string, node: number, lastReviewDate?: string | null): Promise<void> {
+  // 基准目标日期 = 上次复习日 + 节点天数(1/2/4/7/15)，无上次复习日则用今天
+  const base = lastReviewDate ? new Date(lastReviewDate) : new Date();
+  const next = new Date(base.getTime() + node * 86400000).toISOString().slice(0, 10);
   const { error } = await supabase
     .from('dictation_error_words')
-    .update({ current_node: node, next_review_date: next, last_review_date: todayStr })
+    .update({ current_node: node, next_review_date: next })
     .eq('id', id);
   if (error) throw error;
+  return void 0;
 }
 
 // 更新错词所属单元（在线编辑）
