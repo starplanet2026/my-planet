@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { pinyin as pinyinPro } from 'pinyin-pro';
 import { useModeStore } from '../../store/modeStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -484,7 +485,11 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                   </div>
                   <div>
                     <label className="text-xs text-slate-500">汉字答案</label>
-                    <Input value={form.answer} onChange={e => setForm({ ...form, answer: e.target.value })} />
+                    <Input value={form.answer} onChange={e => {
+                      const val = e.target.value;
+                      const autoPinyin = val ? pinyinPro(val, { toneType: 'symbol', type: 'array' }).join(' ') : '';
+                      setForm({ ...form, answer: val, pinyin: autoPinyin || form.pinyin });
+                    }} />
                   </div>
                 </div>
               )}

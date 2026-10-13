@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { pinyin } from 'pinyin-pro';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { Card } from '../../components/common/Card';
@@ -356,7 +357,11 @@ export function DictationWordManagePage({ embedded = false }: { embedded?: boole
               </div>
               <div>
                 <label className="text-xs text-slate-500">汉字答案</label>
-                <Input value={form.answer} onChange={e => setForm({ ...form, answer: e.target.value })} placeholder="苹果" />
+                <Input value={form.answer} onChange={e => {
+                  const val = e.target.value;
+                  const autoPinyin = val ? pinyin(val, { toneType: 'symbol', type: 'array' }).join(' ') : '';
+                  setForm({ ...form, answer: val, pinyin: autoPinyin || form.pinyin });
+                }} placeholder="苹果" />
               </div>
             </div>
           )}

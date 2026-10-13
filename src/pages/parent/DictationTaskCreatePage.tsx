@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { pinyin as pinyinPro } from 'pinyin-pro';
 import { useFamilyStore } from '../../store/familyStore';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -637,7 +638,11 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               </div>
               <div>
                 <label className="text-xs text-slate-500">汉字答案</label>
-                <Input value={tempForm.answer} onChange={e => setTempForm({ ...tempForm, answer: e.target.value })} />
+                <Input value={tempForm.answer} onChange={e => {
+                  const val = e.target.value;
+                  const autoPinyin = val ? pinyinPro(val, { toneType: 'symbol', type: 'array' }).join(' ') : '';
+                  setTempForm({ ...tempForm, answer: val, pinyin: autoPinyin || tempForm.pinyin });
+                }} />
               </div>
             </div>
           )}
