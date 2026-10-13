@@ -103,7 +103,11 @@ export function PetLevelUpQuiz({
     try {
       // 1. 先检查是否有持久化的题目队列（防止关闭重开刷新题目）
       const queue = await getPetLevelupQuizQueue(memberId, pet.id);
-      if (queue.length > 0) {
+      // 队列长度超过本次挑战题目数，说明是过期残留数据（正常只减不增，应 <= quizCount），
+      // 清空后重新抽题，避免出现与当前级别不符的题目数量。
+      if (queue.length > quizCount) {
+        await clearPetLevelupQuizQueue(memberId, pet.id);
+      } else if (queue.length > 0) {
         const queueQuestions: QuizItem[] = queue.map(r => ({
           id: r.question_id,
           type: r.type,
