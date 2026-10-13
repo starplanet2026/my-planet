@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { cn } from '../../lib/utils';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, ChevronLeft } from 'lucide-react';
 import { getActiveTask, getTaskById, listTaskWords, submitDictationReview, getDictationSubmissionStatus } from '../../api/dictation';
 import type { DictationSubject, DictationTask, DictationTaskWord } from '../../api/types';
 import { DictationQuickReviewPage } from './DictationQuickReviewPage';
@@ -186,6 +186,13 @@ export function DictationPlayPage() {
 
   return (
     <div className="h-[calc(100dvh-4rem-4rem-env(safe-area-inset-bottom))] -mt-6 -mb-24 -mx-4 sm:-mx-6 lg:-mx-8 px-2 sm:px-4 flex flex-col overflow-hidden">
+      {/* 顶部信息栏：返回挑战页 */}
+      <div className="flex-shrink-0 flex items-center py-2 px-2">
+        <button onClick={() => navigate('/challenge')} className="p-1 hover:bg-slate-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <span className="text-sm font-bold text-slate-700 ml-1">{subjectLabel}家默</span>
+      </div>
       {/* 卡片固定最小高度，超出部分可滚动 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
