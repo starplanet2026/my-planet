@@ -19,8 +19,7 @@ begin
         and ew.answer = sub.answer
         and (ew.last_review_date is null or sub.latest_date > ew.last_review_date);
 
-    -- 补充 review_history：将默写记录追加到 review_history（去重）
-    -- 只追加不在 history 中的记录（按 date+correct 去重）
+    -- 补充 review_history：将默写记录追加到 review_history（按 date+correct 去重再聚合）
     update public.dictation_error_words ew
       set review_history = case
         when ew.review_history is null or jsonb_array_length(ew.review_history) = 0 then
@@ -30,16 +29,18 @@ begin
       end
       from (
         select member_id, answer,
-          jsonb_agg(
-        distinct
-        jsonb_build_object(
-          'date', date_trunc('day', created_at)::date::text,
-          'correct', is_correct,
-          'action', case when is_correct then 'advance' else 'reset' end
-        )
-        order by date_trunc('day', created_at)::date::text
-      ) as history
-        from public.dictation_records
+          jsonb_agg(dup.entry order by (dup.entry->>'date')) as history
+        from (
+          select distinct on (member_id, answer, date_trunc('day', created_at)::date::text, is_correct)
+            member_id, answer,
+            jsonb_build_object(
+              'date', date_trunc('day', created_at)::date::text,
+              'correct', is_correct,
+              'action', case when is_correct then 'advance' else 'reset' end
+            ) as entry
+          from public.dictation_records
+          order by member_id, answer, date_trunc('day', created_at)::date::text, is_correct
+        ) dup
         group by member_id, answer
       ) sub
       where ew.member_id = sub.member_id and ew.answer = sub.answer;
@@ -74,16 +75,18 @@ begin
       end
       from (
         select member_id, answer,
-          jsonb_agg(
-        distinct
-        jsonb_build_object(
-          'date', date_trunc('day', created_at)::date::text,
-          'correct', is_correct,
-          'action', case when is_correct then 'advance' else 'reset' end
-        )
-        order by date_trunc('day', created_at)::date::text
-      ) as history
-        from public.dictation_quick_review_records
+          jsonb_agg(dup.entry order by (dup.entry->>'date')) as history
+        from (
+          select distinct on (member_id, answer, date_trunc('day', created_at)::date::text, is_correct)
+            member_id, answer,
+            jsonb_build_object(
+              'date', date_trunc('day', created_at)::date::text,
+              'correct', is_correct,
+              'action', case when is_correct then 'advance' else 'reset' end
+            ) as entry
+          from public.dictation_quick_review_records
+          order by member_id, answer, date_trunc('day', created_at)::date::text, is_correct
+        ) dup
         group by member_id, answer
       ) sub
       where ew.member_id = sub.member_id and ew.answer = sub.answer;
@@ -92,7 +95,6 @@ end $$;
 
 -- ============================================================
 -- 三、重新统计 review_count / error_count
---    统计来源：review_history（已包含默写+快速复习的全部记录）
 -- ============================================================
 update public.dictation_error_words ew
   set review_count = coalesce(
@@ -107,9 +109,7 @@ update public.dictation_error_words ew
   where jsonb_typeof(ew.review_history) = 'array' and jsonb_array_length(ew.review_history) > 0;
 
 -- ============================================================
--- 四、重算 current_node 和 next_review_date（基于补全后的 review_history）
---    新规则：答错→1，答对→下一节点(1→2→4→7→15→completed)
---    next_review_date = last_review_date + current_node
+-- 四、重算 current_node 和 next_review_date
 -- ============================================================
 do $$
 declare
