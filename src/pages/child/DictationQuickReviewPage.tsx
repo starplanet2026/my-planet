@@ -36,6 +36,8 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // 本轮判题缓存（task_word_id -> status）
   const [judgedWords, setJudgedWords] = useState<Map<string, WordStatus>>(new Map());
+  // 各词条跨轮次累计答错次数（用于星光递减：奖励 = 初始星光 - 错误次数，最低 0）
+  const [wrongCounts, setWrongCounts] = useState<Map<string, number>>(new Map());
   const [judging, setJudging] = useState(false);
 
   // 完成弹窗（按轮次控制，避免无限弹出）
@@ -60,12 +62,17 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     ]).then(([words, records]) => {
       setAllWords(words);
       setRoundWords(words);
-      // 恢复判题状态
+      // 恢复判题状态 + 跨轮次错误计数
       const restored = new Map<string, WordStatus>();
+      const restoredWrongs = new Map<string, number>();
       records.forEach(r => {
         restored.set(r.task_word_id, r.is_correct ? 'correct' : 'incorrect');
+        if (!r.is_correct) {
+          restoredWrongs.set(r.task_word_id, (restoredWrongs.get(r.task_word_id) ?? 0) + 1);
+        }
       });
       setJudgedWords(restored);
+      setWrongCounts(restoredWrongs);
     }).catch(e => toast.error('加载失败：' + e.message))
       .finally(() => setLoading(false));
   }, [task.id, childId]);
@@ -128,15 +135,24 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
       });
       if (isCorrect) {
         // 星光改为完成复习后统一发放（家长审核），此处仅本地累计展示
-        // 同一词全程只累计一次奖励
+        // 奖励 = 初始星光 - 该词条跨轮次累计错误次数，最低 0；同一词全程只累计一次奖励
         if (!awardedWords.has(expandedId)) {
+          const wrongs = wrongCounts.get(expandedId) ?? 0;
+          const gained = Math.max(0, task.star_per_word - wrongs);
           setAwardedWords(prev => new Set(prev).add(expandedId));
-          setTotalGainedStar(prev => prev + task.star_per_word);
-          toast.success(`✅ 正确 +${task.star_per_word}星光（完成后统一发放）`);
+          setTotalGainedStar(prev => prev + gained);
+          toast.success(gained > 0
+            ? `✅ 正确 +${gained}星光（完成后统一发放）`
+            : '✅ 正确（错误次数过多，本题无星光）');
         } else {
           toast.success('✅ 正确');
         }
       } else {
+        setWrongCounts(prev => {
+          const next = new Map(prev);
+          next.set(expandedId, (next.get(expandedId) ?? 0) + 1);
+          return next;
+        });
         toast.success('❌ 已加入错词库');
       }
     } catch (e: any) {
