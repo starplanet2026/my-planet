@@ -9,6 +9,7 @@ import { completePetLevelup, recordLevelupQuizAnswer, getPetLevelupQuizQueue, as
 import type { QuizQueueItem } from '../../../../api/pets';
 import type { Pet } from '../../../../api/types';
 import { NumberKeypad } from '../../challenge/questions/NumberKeypad';
+import { QuestionExplanation } from '../../challenge/questions/QuestionExplanation';
 
 // 通过分数线
 const PASS_THRESHOLD = 0.8;
@@ -80,6 +81,7 @@ export function PetLevelUpQuiz({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [learned, setLearned] = useState(false);
   const [result, setResult] = useState<{ correct: number; total: number; passed: boolean } | null>(null);
   const [poolEmpty, setPoolEmpty] = useState(false);
   // 自定义键盘：activeBlank = -1 表示单空题，0/1 表示双空题的第几个空
@@ -187,12 +189,26 @@ export function PetLevelUpQuiz({
     return checkAnswer(userAnswer, q.correct_answer ?? '');
   };
 
+  // 选择题正确答案字母串（兼容 correct_answer 存字母 或 选项原文||拼接）
+  const choiceCorrectLetters = (q: QuizItem): string => {
+    const ca = (q.correct_answer ?? '').trim();
+    if (/^[A-Ha-h]+$/.test(ca)) return ca.toUpperCase().replace(/[^A-H]/g, '');
+    const correctTexts = ca.split('||').map(s => s.trim().toLowerCase());
+    return (q.options ?? [])
+      .map((opt, i) => {
+        const optText = String(opt).replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
+        return correctTexts.includes(optText) ? String.fromCharCode(65 + i) : '';
+      })
+      .join('');
+  };
+
+  const sortStr = (s: string) => s.split('').sort().join('');
+
   const computeCorrect = (q: QuizItem): boolean => {
     const userAns = (answers[q.id] ?? '').trim();
     if (!userAns) return false;
     if (q.type === 'choice' || q.type === 'multi_choice') {
-      const sortStr = (s: string) => s.split('').sort().join('');
-      return sortStr(userAns) === sortStr(q.correct_answer);
+      return sortStr(userAns.toUpperCase()) === sortStr(choiceCorrectLetters(q));
     }
     if (q.type === 'fill_blank') {
       return checkFillBlank(q, userAns);
@@ -203,12 +219,17 @@ export function PetLevelUpQuiz({
   const handleConfirm = () => {
     if (!current) return;
     setRevealed(prev => ({ ...prev, [current.id]: true }));
+    setLearned(false);
     const correct = computeCorrect(current);
     // 记录宠物升级挑战答题（计入今日答题数，不发星光）
     recordLevelupQuizAnswer(memberId, current.id, correct).catch(() => {});
     // 答对的题目从持久化队列中移除，答错的保留
     if (correct) {
       removePetLevelupQuizQuestion(memberId, pet.id, current.id).catch(() => {});
+      // 答对直接进入下一题（短暂展示反馈后自动跳转）
+      setTimeout(() => {
+        handleNext();
+      }, 700);
     }
   };
 
@@ -222,8 +243,7 @@ export function PetLevelUpQuiz({
         if (!userAns) return acc;
         // 选择题/多选题：比较选项字母（排序后比较）
         if (q.type === 'choice' || q.type === 'multi_choice') {
-          const sortStr = (s: string) => s.split('').sort().join('');
-          return acc + (sortStr(userAns) === sortStr(q.correct_answer) ? 1 : 0);
+          return acc + (sortStr(userAns.toUpperCase()) === sortStr(choiceCorrectLetters(q)) ? 1 : 0);
         }
         // 填空题：单空/双空均走 checkFillBlank
         if (q.type === 'fill_blank') {
@@ -264,8 +284,7 @@ export function PetLevelUpQuiz({
     const userAns = (answers[q.id] ?? '').trim();
     if (!userAns) return false;
     if (q.type === 'choice' || q.type === 'multi_choice') {
-      const sortStr = (s: string) => s.split('').sort().join('');
-      return sortStr(userAns) === sortStr(q.correct_answer);
+      return sortStr(userAns.toUpperCase()) === sortStr(choiceCorrectLetters(q));
     }
     if (q.type === 'fill_blank') {
       return checkFillBlank(q, userAns);
@@ -313,10 +332,11 @@ export function PetLevelUpQuiz({
     }
   };
 
-  // 切换题目时重置键盘状态
+  // 切换题目时重置键盘状态和"我知道了"标记
   useEffect(() => {
     setShowKeypad(false);
     setActiveBlank(-1);
+    setLearned(false);
   }, [currentIndex]);
 
   return (
@@ -389,146 +409,165 @@ export function PetLevelUpQuiz({
             />
           </div>
 
-          {/* 题面 */}
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-sm font-medium text-slate-700 leading-relaxed">
-              {current.question_text}
-            </p>
-          </div>
+          {/* 题面 + 选项（左侧） / 解析（右侧） */}
+          <div className="flex gap-4">
+            <div className="flex-1 min-w-0 space-y-4">
+              {/* 题面 */}
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                  {current.question_text}
+                </p>
+              </div>
 
-          {/* 选项 / 输入 */}
-          {isChoiceLike(current) ? (
-            <div className="space-y-2">
-              {(current.options ?? []).map((opt, idx) => {
-                const letter = String.fromCharCode(65 + idx);
-                const isMulti = current.type === 'multi_choice';
-                const userAns = answers[current.id] ?? '';
-                const selected = isMulti ? userAns.includes(letter) : userAns === letter;
-                const showCorrect = revealed[current.id] && current.correct_answer.includes(letter);
-                const showWrong = revealed[current.id] && selected && !current.correct_answer.includes(letter);
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleAnswer(current.id, letter, isMulti)}
-                    disabled={revealed[current.id]}
+              {/* 选项 / 输入 */}
+              {isChoiceLike(current) ? (
+                <div className="space-y-2">
+                  {(() => {
+                    const ca = (current.correct_answer || '').trim();
+                    const isLetterForm = /^[A-Ha-h]+$/.test(ca);
+                    const correctSet = isLetterForm
+                      ? ca.toUpperCase().split('')
+                      : ca.split('||').map(s => s.trim().toLowerCase());
+                    return (current.options ?? []).map((opt, idx) => {
+                      const letter = String.fromCharCode(65 + idx);
+                      const isMulti = current.type === 'multi_choice';
+                      const userAns = answers[current.id] ?? '';
+                      const selected = isMulti ? userAns.includes(letter) : userAns === letter;
+                      const optText = opt.replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
+                      const isRightOpt = isLetterForm ? correctSet.includes(letter) : correctSet.includes(optText);
+                      const showCorrect = revealed[current.id] && isRightOpt;
+                      const showWrong = revealed[current.id] && selected && !isRightOpt;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => handleAnswer(current.id, letter, isMulti)}
+                          disabled={revealed[current.id]}
+                          className={cn(
+                            'w-full text-left px-3 py-2.5 rounded-xl border-2 text-sm transition-colors',
+                            !revealed[current.id] && selected && 'border-blue-400 bg-blue-50',
+                            !revealed[current.id] && !selected && 'border-slate-200 hover:border-slate-300',
+                            showCorrect && 'border-emerald-400 bg-emerald-50',
+                            showWrong && 'border-red-400 bg-red-50',
+                          )}
+                        >
+                          <span className="font-mono text-xs text-slate-500 mr-2">
+                            {letter}.
+                          </span>
+                          <span className="text-slate-700">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
+                          {showCorrect && <span className="ml-2 text-emerald-600 text-xs">✓ 正确答案</span>}
+                          {showWrong && <span className="ml-2 text-red-600 text-xs">✗ 你的选择</span>}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              ) : isDoubleBlank(current) ? (
+                // 双空填空题：渲染两个独立输入框（列式 + 最终答案）
+                <div className="space-y-2">
+                  {[
+                    { label: '列式', answer: current.correct_answer, idx: 0 },
+                    { label: '最终答案', answer: current.answer2 ?? '', idx: 1 },
+                  ].map(blank => {
+                    const parts = splitBlanks(answers[current.id] ?? '');
+                    const val = parts[blank.idx] ?? '';
+                    const results = blankResults(current);
+                    const ok = results[blank.idx];
+                    const isActive = showKeypad && activeBlank === blank.idx;
+                    return (
+                      <div key={blank.idx} className="space-y-1">
+                        <label className="text-xs font-medium text-slate-500">
+                          {blank.label}
+                        </label>
+                        <div
+                          onClick={() => { if (!revealed[current.id]) { setActiveBlank(blank.idx); setShowKeypad(true); } }}
+                          className={cn(
+                            'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
+                            revealed[current.id]
+                              ? (ok
+                                  ? 'border-emerald-400 bg-emerald-50'
+                                  : 'border-red-400 bg-red-50')
+                              : isActive
+                                ? 'border-blue-400 bg-blue-50'
+                                : 'border-slate-200 hover:border-slate-300'
+                          )}
+                        >
+                          {val || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入{blank.label}</span>)}
+                        </div>
+                        {revealed[current.id] && !ok && (
+                          <p className="text-xs text-red-600">
+                            ✗ 正确答案：{blank.answer}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {revealed[current.id] && (
+                    <p className={cn('text-xs', isCorrect(current) ? 'text-emerald-600' : 'text-red-600')}>
+                      {isCorrect(current) ? '✓ 回答正确' : '✗ 两空均需答对'}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                // 单空填空题
+                <div className="space-y-2">
+                  <div
+                    onClick={() => { if (!revealed[current.id]) { setActiveBlank(-1); setShowKeypad(true); } }}
                     className={cn(
-                      'w-full text-left px-3 py-2.5 rounded-xl border-2 text-sm transition-colors',
-                      !revealed[current.id] && selected && 'border-blue-400 bg-blue-50',
-                      !revealed[current.id] && !selected && 'border-slate-200 hover:border-slate-300',
-                      showCorrect && 'border-emerald-400 bg-emerald-50',
-                      showWrong && 'border-red-400 bg-red-50',
+                      'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
+                      revealed[current.id]
+                        ? (isCorrect(current)
+                            ? 'border-emerald-400 bg-emerald-50'
+                            : 'border-red-400 bg-red-50')
+                        : showKeypad
+                          ? 'border-blue-400 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
                     )}
                   >
-                    <span className="font-mono text-xs text-slate-500 mr-2">
-                      {letter}.
-                    </span>
-                    <span className="text-slate-700">{opt.replace(/^[A-H][.、]\s*/, '')}</span>
-                    {showCorrect && <span className="ml-2 text-emerald-600 text-xs">✓ 正确答案</span>}
-                    {showWrong && <span className="ml-2 text-red-600 text-xs">✗ 你的选择</span>}
-                  </button>
-                );
-              })}
-            </div>
-          ) : isDoubleBlank(current) ? (
-            // 双空填空题：渲染两个独立输入框（列式 + 最终答案）
-            <div className="space-y-2">
-              {[
-                { label: '列式', answer: current.correct_answer, idx: 0 },
-                { label: '最终答案', answer: current.answer2 ?? '', idx: 1 },
-              ].map(blank => {
-                const parts = splitBlanks(answers[current.id] ?? '');
-                const val = parts[blank.idx] ?? '';
-                const results = blankResults(current);
-                const ok = results[blank.idx];
-                const isActive = showKeypad && activeBlank === blank.idx;
-                return (
-                  <div key={blank.idx} className="space-y-1">
-                    <label className="text-xs font-medium text-slate-500">
-                      {blank.label}
-                    </label>
-                    <div
-                      onClick={() => { if (!revealed[current.id]) { setActiveBlank(blank.idx); setShowKeypad(true); } }}
-                      className={cn(
-                        'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
-                        revealed[current.id]
-                          ? (ok
-                              ? 'border-emerald-400 bg-emerald-50'
-                              : 'border-red-400 bg-red-50')
-                          : isActive
-                            ? 'border-blue-400 bg-blue-50'
-                            : 'border-slate-200 hover:border-slate-300'
-                      )}
-                    >
-                      {val || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入{blank.label}</span>)}
-                    </div>
-                    {revealed[current.id] && !ok && (
-                      <p className="text-xs text-red-600">
-                        ✗ 正确答案：{blank.answer}
-                      </p>
-                    )}
+                    {answers[current.id] || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入答案</span>)}
                   </div>
-                );
-              })}
-              {revealed[current.id] && (
-                <p className={cn('text-xs', isCorrect(current) ? 'text-emerald-600' : 'text-red-600')}>
-                  {isCorrect(current) ? '✓ 回答正确' : '✗ 两空均需答对'}
-                </p>
+                </div>
               )}
-            </div>
-          ) : (
-            // 单空填空题
-            <div className="space-y-2">
-              <div
-                onClick={() => { if (!revealed[current.id]) { setActiveBlank(-1); setShowKeypad(true); } }}
-                className={cn(
-                  'w-full px-3 py-2.5 rounded-xl border-2 text-sm min-h-[44px] flex items-center cursor-pointer transition-colors',
-                  revealed[current.id]
-                    ? (isCorrect(current)
-                        ? 'border-emerald-400 bg-emerald-50'
-                        : 'border-red-400 bg-red-50')
-                    : showKeypad
-                      ? 'border-blue-400 bg-blue-50'
-                      : 'border-slate-200 hover:border-slate-300'
+
+              {/* 自定义数字键盘 */}
+              {showKeypad && !revealed[current.id] && (
+                <NumberKeypad onKey={handleKey} onClose={() => setShowKeypad(false)} />
+              )}
+
+              {/* 操作按钮 */}
+              <div className="flex gap-2">
+                {!revealed[current.id] ? (
+                  <Button
+                    variant="primary"
+                    fullWidth
+                    disabled={!answers[current.id]}
+                    onClick={handleConfirm}
+                  >
+                    确认答案
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    fullWidth
+                    onClick={handleNext}
+                    disabled={!isCorrect(current) && !learned}
+                  >
+                    {currentIndex < questions.length - 1 ? '下一题' : '查看结果'}
+                  </Button>
                 )}
-              >
-                {answers[current.id] || (revealed[current.id] ? '' : <span className="text-slate-400">点击输入答案</span>)}
               </div>
-              {revealed[current.id] && (
-                <p className={cn('text-xs', isCorrect(current) ? 'text-emerald-600' : 'text-red-600')}>
-                  {isCorrect(current) ? '✓ 回答正确' : `✗ 正确答案：${current.correct_answer}`}
-                </p>
-              )}
             </div>
-          )}
 
-          {/* 自定义数字键盘 */}
-          {showKeypad && !revealed[current.id] && (
-            <NumberKeypad onKey={handleKey} onClose={() => setShowKeypad(false)} />
-          )}
-
-          {/* 解释 */}
-          {revealed[current.id] && current.explanation && (
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 leading-relaxed">
-              💡 {current.explanation}
+            {/* 解析：固定在题目右侧 */}
+            <div className="w-2/5 flex-shrink-0">
+              <QuestionExplanation
+                show={!!revealed[current.id]}
+                isCorrect={isCorrect(current)}
+                explanation={current.explanation}
+                correctAnswer={current.correct_answer}
+                learned={learned}
+                onLearned={() => setLearned(true)}
+              />
             </div>
-          )}
-
-          {/* 操作按钮 */}
-          <div className="flex gap-2">
-            {!revealed[current.id] ? (
-              <Button
-                variant="primary"
-                fullWidth
-                disabled={!answers[current.id]}
-                onClick={handleConfirm}
-              >
-                确认答案
-              </Button>
-            ) : (
-              <Button variant="primary" fullWidth onClick={handleNext}>
-                {currentIndex < questions.length - 1 ? '下一题' : '查看结果'}
-              </Button>
-            )}
           </div>
         </div>
       ) : null}

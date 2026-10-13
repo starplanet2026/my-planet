@@ -17,17 +17,18 @@ export function ChoiceQuestion({ question: q, answer, setAnswer, show_result, sh
   if (!q.options) return null;
   const isMulti = q.type === 'multi_choice';
 
-  // 兼容 correct_answer 可能存的是字母（A/C）或选项文本（root）
+  // 兼容 correct_answer 可能存的是字母（A/C）或选项文本（多选以 || 拼接）
   // 正则要求字母后有分隔符(. 或 、)才剥离前缀，避免 "buys" 被误删首字母
   const correctLetters = useMemo(() => {
     const ca = (q.correct_answer || '').trim();
     const upper = ca.toUpperCase();
     if (/^[A-H]+$/.test(upper)) return upper.split('');
-    // 按选项文本匹配对应字母
+    // 按选项文本匹配对应字母（多选 correct_answer 以 || 拼接多个正确选项原文）
+    const correctTexts = ca.split('||').map(s => s.trim().toLowerCase());
     return (q.options || [])
       .map((opt, i) => {
         const optText = opt.replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
-        return optText === ca.toLowerCase() ? String.fromCharCode(65 + i) : null;
+        return correctTexts.includes(optText) ? String.fromCharCode(65 + i) : null;
       })
       .filter(Boolean) as string[];
   }, [q.correct_answer, q.options]);

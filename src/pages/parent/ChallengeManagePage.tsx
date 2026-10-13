@@ -833,7 +833,12 @@ function LevelDetail({ level, onBack }: { level: ChallengeLevel; onBack: () => v
                       <div className="mt-1 text-sm text-slate-500">
                         {q.options.map((opt, j) => {
                           const letter = String.fromCharCode(65 + j);
-                          const isRight = q.correct_answer.includes(letter);
+                          // correct_answer 可能是字母（旧题）或选项原文（新题，多选 || 拼接）
+                          const ca = (q.correct_answer ?? '').trim();
+                          const optText = String(opt).replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
+                          const isRight = /^[A-Ha-h]+$/.test(ca)
+                            ? ca.toUpperCase().includes(letter)
+                            : ca.split('||').map(s => s.trim().toLowerCase()).includes(optText);
                           return (
                             <span key={j} className={cn('mr-3', isRight && 'text-emerald-600 font-medium')}>
                               {letter}. {opt}{isRight ? ' ✓' : ''}
@@ -971,9 +976,20 @@ function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
   const [questionType, setQuestionType] = useState<QuestionType>(q.type);
   const [questionText, setQuestionText] = useState(q.question_text);
   const [options, setOptions] = useState<string[]>(q.options ?? ['', '']);
-  const [correctLetters, setCorrectLetters] = useState<string>(
-    (q.correct_answer ?? '').toUpperCase().replace(/[^A-Z]/g, '').split('').join('')
-  );
+  // 兼容 correct_answer 存字母（旧题）或选项原文（新题，多选以 || 拼接）
+  const [correctLetters, setCorrectLetters] = useState<string>(() => {
+    const ca = (q.correct_answer ?? '').trim();
+    if (/^[A-Ha-h]+$/.test(ca)) return ca.toUpperCase().replace(/[^A-H]/g, '');
+    const opts = q.options ?? [];
+    const correctTexts = ca.split('||').map(s => s.trim().toLowerCase());
+    return opts
+      .map((opt, i) => {
+        const optText = String(opt).replace(/^[A-Ha-h][.、]\s*/, '').trim().toLowerCase();
+        return correctTexts.includes(optText) ? String.fromCharCode(65 + i) : null;
+      })
+      .filter(Boolean)
+      .join('');
+  });
   const [correctAnswer, setCorrectAnswer] = useState(q.correct_answer ?? ''); // 数学题
   const [explanation, setExplanation] = useState(q.explanation ?? '');
   const [difficulty, setDifficulty] = useState<Difficulty>(q.difficulty ?? 'medium');
@@ -1013,13 +1029,18 @@ function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
       const opts = options.map(o => o.trim()).filter(Boolean);
       if (opts.length < 2) { toast.error('至少 2 个选项'); return; }
       if (!correctLetters) { toast.error('请标记正确选项'); return; }
+      // 存储正确选项原文（多选以 || 拼接），不受选项顺序变动影响
+      const correctTexts = correctLetters.split('').sort()
+        .map(l => opts[l.charCodeAt(0) - 65])
+        .filter(Boolean);
+      const correctAnswerText = correctTexts.join('||');
       setSaving(true);
       try {
         await updateQuestion(q.id, {
           type: questionType,
           question_text: questionText.trim(),
           options: opts,
-          correct_answer: correctLetters.split('').sort().join(''),
+          correct_answer: correctAnswerText,
           explanation: explanation.trim() || null,
           difficulty,
         });
@@ -1028,7 +1049,7 @@ function EditQuestionModal({ question: q, isChoiceSet, onClose, onSaved }: {
           type: questionType,
           question_text: questionText.trim(),
           options: opts,
-          correct_answer: correctLetters.split('').sort().join(''),
+          correct_answer: correctAnswerText,
           explanation: explanation.trim() || null,
           difficulty,
         });
@@ -1702,6 +1723,10 @@ function AddQuestionModal({ setId, levelId, type, onClose, onAdded }: {
       const opts = options.map(o => o.trim()).filter(Boolean);
       if (opts.length < 2) { toast.error('至少 2 个选项'); return; }
       if (correctLetters.length === 0) { toast.error('请标记正确选项'); return; }
+      // 存储正确选项原文（按字母顺序取对应选项文本，多选以 || 拼接），不受选项顺序变动影响
+      const correctTexts = correctLetters.slice().sort()
+        .map(l => opts[l.charCodeAt(0) - 65])
+        .filter(Boolean);
       setSaving(true);
       try {
         await createQuestion({
@@ -1709,7 +1734,7 @@ function AddQuestionModal({ setId, levelId, type, onClose, onAdded }: {
           type: questionType,
           question_text: questionText.trim(),
           options: opts,
-          correct_answer: correctLetters.slice().sort().join(''),
+          correct_answer: correctTexts.join('||'),
           explanation: explanation.trim() || undefined,
           difficulty,
           display_order: displayOrder,
