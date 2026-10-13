@@ -59,6 +59,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   // 错词候选
   const [dueErrors, setDueErrors] = useState<DictationErrorWord[]>([]);
   const [errSelected, setErrSelected] = useState<Set<string>>(new Set());
+  const [dueFilterUnit, setDueFilterUnit] = useState<number | ''>('');
 
   // 已加入
   const [added, setAdded] = useState<AddedWord[]>([]);
@@ -76,6 +77,14 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
 
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // 错词按单元筛选
+  const dueUnitOptions = useMemo(() =>
+    [...new Set(dueErrors.map(w => w.unit_no).filter(n => n > 0))].sort((a, b) => a - b),
+    [dueErrors]);
+  const filteredDueErrors = useMemo(() =>
+    dueFilterUnit === '' ? dueErrors : dueErrors.filter(w => w.unit_no === dueFilterUnit),
+    [dueErrors, dueFilterUnit]);
 
   useEffect(() => {
     if (!family) return;
@@ -445,23 +454,38 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
             <h3 className="font-medium text-sm">到期错词复习</h3>
             <div className="flex gap-1">
               <Button size="sm" variant="secondary" onClick={() => {
-                // 全选当前页 / 取消全选
-                if (errSelected.size === dueErrors.length) {
+                if (errSelected.size === filteredDueErrors.length) {
                   setErrSelected(new Set());
                 } else {
-                  setErrSelected(new Set(dueErrors.map(w => w.id)));
+                  setErrSelected(new Set(filteredDueErrors.map(w => w.id)));
                 }
               }}>
-                {errSelected.size === dueErrors.length && dueErrors.length > 0 ? '取消全选' : '全选'}
+                {errSelected.size === filteredDueErrors.length && filteredDueErrors.length > 0 ? '取消全选' : '全选'}
               </Button>
               {errSelected.size > 0 && (
                 <Button size="sm" onClick={addFromErrors}>加入({errSelected.size})</Button>
               )}
             </div>
           </div>
+          {/* 单元筛选 */}
+          {dueUnitOptions.length > 0 && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-slate-400">筛选单元</span>
+              <select
+                value={dueFilterUnit}
+                onChange={(e) => setDueFilterUnit(e.target.value === '' ? '' : Number(e.target.value))}
+                className="text-xs border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
+                <option value="">全部单元</option>
+                {dueUnitOptions.map(u => (
+                  <option key={u} value={u}>第{u}单元</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="max-h-72 overflow-y-auto space-y-1">
-            {dueErrors.length === 0 && <p className="text-xs text-slate-400 py-4 text-center">暂无到期错词</p>}
-            {dueErrors.map(w => (
+            {filteredDueErrors.length === 0 && <p className="text-xs text-slate-400 py-4 text-center">暂无到期错词</p>}
+            {filteredDueErrors.map(w => (
               <label key={w.id} className="flex items-start gap-2 p-1.5 rounded hover:bg-slate-50 cursor-pointer">
                 <button onClick={() => setErrSelected(p => { const n = new Set(p); n.has(w.id) ? n.delete(w.id) : n.add(w.id); return n; })}>
                   {errSelected.has(w.id) ? <CheckSquare className="w-4 h-4 text-emerald-500" /> : <Square className="w-4 h-4" />}
