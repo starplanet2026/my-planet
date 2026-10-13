@@ -153,7 +153,7 @@ declare
   v_is_correct boolean;
   v_subject text;
   v_correct int := 0;
-  v_error := 0;
+  v_error int := 0;
   v_ew record;
   v_next_node int;
   v_today date := current_date;
