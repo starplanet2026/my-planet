@@ -109,6 +109,25 @@ export function PetPage() {
     });
   };
 
+  // 一键回家：所有非进修宠物隐藏
+  const hideAllPets = () => {
+    setHiddenPetIds(prev => {
+      const next = new Set(prev);
+      pets.filter(p => !p.is_studying).forEach(p => next.add(p.id));
+      localStorage.setItem(hiddenIdsKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  // 一键出来玩：清空所有隐藏（进修宠物本就不在草地，无需处理）
+  const showAllPets = () => {
+    setHiddenPetIds(() => {
+      const next = new Set<string>();
+      localStorage.setItem(hiddenIdsKey, JSON.stringify([]));
+      return next;
+    });
+  };
+
   // 进化宠物
   const handleEvolve = async (petId: string, target: 'rare' | 'epic') => {
     if (evolvingPetId) return;
@@ -691,9 +710,25 @@ export function PetPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-slate-400 text-center mb-2">
-                共 {pets.length} 只宠物，"出来玩"的展示在草地上，可拖动改变位置
-              </p>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-xs text-slate-400 flex-1 min-w-0">
+                  共 {pets.length} 只宠物，"出来玩"的展示在草地上，可拖动改变位置
+                </p>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={showAllPets}
+                    className="px-2.5 py-1 rounded-lg bg-green-500 text-white text-[11px] font-medium hover:bg-green-600 active:scale-95 transition whitespace-nowrap"
+                  >
+                    🏡 一键出来玩
+                  </button>
+                  <button
+                    onClick={hideAllPets}
+                    className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-600 text-[11px] font-medium hover:bg-amber-200 active:scale-95 transition whitespace-nowrap"
+                  >
+                    🏠 一键回家
+                  </button>
+                </div>
+              </div>
               {sortedPets.map(pet => {
                 const hidden = hiddenPetIds.has(pet.id);
                 const rarity: PetRarity = pet.rarity ?? inferRarity(pet.max_level);
