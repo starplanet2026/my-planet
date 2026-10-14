@@ -571,10 +571,10 @@ export function PetPage() {
                 <p className="text-xs text-slate-300 mt-1">满级宠物可送去进修，被动产出星光值</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-0.5">
+              <div className="grid grid-cols-4 gap-2.5 max-h-[60vh] overflow-y-auto p-0.5">
                 {studyPets.map(sp => {
                   const pending = Math.floor(sp.pending_star);
-                  const genderLabel = sp.gender === 'male' ? '♂ 男生' : sp.gender === 'female' ? '♀ 女生' : '性别未知';
+                  const genderLabel = sp.gender === 'male' ? '♂ 男生' : sp.gender === 'female' ? '♀ 女生' : '未知';
                   return (
                     <div
                       key={sp.pet_id}
@@ -589,54 +589,50 @@ export function PetPage() {
                         draggable={false}
                       />
 
-                      {/* 顶部椭圆名牌 */}
-                      <div className="absolute top-[3.5%] left-1/2 -translate-x-1/2 w-[68%]">
-                        <div className="rounded-full border-2 border-amber-300/90 bg-white/85 backdrop-blur-sm px-3 py-1 shadow-sm">
-                          <p className="text-center font-bold text-amber-600 text-sm leading-tight truncate">
-                            {sp.name || '进修宠物'}
-                          </p>
-                        </div>
-                      </div>
+                      {/* 顶部宠物名：纯文字，背景已自带椭圆框 */}
+                      <p className="absolute top-[4.5%] inset-x-0 text-center font-bold text-amber-600 text-[11px] leading-tight truncate px-2">
+                        {sp.name || '进修宠物'}
+                      </p>
 
                       {/* 中间宠物形象（透明 PNG 居中，不带白底） */}
-                      <div className="absolute left-1/2 top-[16%] bottom-[38%] w-full -translate-x-1/2 flex items-center justify-center pointer-events-none">
+                      <div className="absolute left-1/2 top-[16%] bottom-[40%] w-full -translate-x-1/2 flex items-center justify-center pointer-events-none">
                         {sp.image_url ? (
                           <img
                             src={sp.image_url}
                             alt={sp.name || ''}
-                            className="max-h-full max-w-[70%] object-contain drop-shadow-md"
+                            className="max-h-full max-w-[78%] object-contain drop-shadow-md"
                             draggable={false}
                           />
                         ) : (
-                          <span className="text-5xl drop-shadow">{sp.emoji || '🐾'}</span>
+                          <span className="text-4xl drop-shadow">{sp.emoji || '🐾'}</span>
                         )}
                       </div>
 
-                      {/* 底部纯色信息区 */}
-                      <div className="absolute bottom-0 inset-x-0 h-[38%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-3 pt-2 pb-2.5 flex flex-col items-center justify-between text-center">
-                        <div className="w-full space-y-0.5">
-                          <p className="text-[11px] font-medium text-slate-600 leading-tight">
+                      {/* 底部纯色信息区：三行文字 + 按钮均匀分布 */}
+                      <div className="absolute bottom-0 inset-x-0 h-[40%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-1.5 py-1.5 flex flex-col justify-between text-center">
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-medium text-slate-600 leading-tight">
                             {genderLabel}
-                            <span className="mx-1 text-slate-300">|</span>
-                            <span className={cn('px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[sp.rarity].cls)}>
+                            <span className="mx-0.5 text-slate-300">|</span>
+                            <span className={cn('px-0.5 py-0 rounded-full font-medium', RARITY_BADGE[sp.rarity].cls)}>
                               {RARITY_BADGE[sp.rarity].label}
                             </span>
-                            <span className="mx-1 text-slate-300">|</span>
+                            <span className="mx-0.5 text-slate-300">|</span>
                             {sp.trait_name || '无特质'}
                           </p>
-                          <p className="text-[12px] font-bold text-slate-700 leading-tight">已进修 {sp.study_days} 天</p>
-                          <p className="text-[11px] text-slate-500 leading-tight">
+                          <p className="text-[11px] font-bold text-slate-700 leading-tight">已进修 {sp.study_days} 天</p>
+                          <p className="text-[10px] text-slate-500 leading-tight">
                             日产 <span className="text-amber-500 font-bold">{sp.daily_star}⭐</span>
-                            <span className="mx-1.5 text-slate-300">|</span>
+                            <span className="mx-0.5 text-slate-300">|</span>
                             总赚取 <span className="text-emerald-600 font-bold">{Math.floor(sp.total_star)}⭐</span>
                           </p>
                         </div>
                         <button
                           onClick={() => handleClaimStudy(sp.pet_id)}
                           disabled={pending <= 0}
-                          className="w-full py-1.5 rounded-full bg-amber-400 text-white text-xs font-bold shadow hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                          className="w-full py-1 rounded-full bg-amber-400 text-white text-[11px] font-bold shadow hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
                         >
-                          领取我的工资&nbsp;&nbsp;{pending}⭐
+                          领取我的工资&nbsp;{pending}⭐
                         </button>
                       </div>
                     </div>
