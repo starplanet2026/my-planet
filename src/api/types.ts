@@ -870,6 +870,8 @@ export interface StudyPet {
   daily_star: number;
   pending_star: number;
   total_star: number;
+  gender: 'male' | 'female' | null;
+  trait_name: string | null;
 }
 
 export interface BuyBoardingCardResult {

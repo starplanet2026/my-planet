@@ -574,54 +574,71 @@ export function PetPage() {
               <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-0.5">
                 {studyPets.map(sp => {
                   const pending = Math.floor(sp.pending_star);
+                  const genderLabel = sp.gender === 'male' ? '♂ 男生' : sp.gender === 'female' ? '♀ 女生' : '性别未知';
                   return (
-                    <div key={sp.pet_id} className="rounded-2xl border-2 border-emerald-100 bg-white p-2.5 flex flex-col shadow-sm">
-                      {/* 工位场景：宠物在办公室上班 */}
-                      <div className="relative h-28 rounded-xl overflow-hidden bg-gradient-to-b from-sky-50 via-indigo-50 to-emerald-50 border border-sky-100">
-                        <span className="absolute top-1.5 left-2 text-sm opacity-80">🗓️</span>
-                        <span className="absolute top-1.5 right-2 text-sm opacity-80">💡</span>
-                        <span className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] opacity-60">📈</span>
-                        {/* 桌面 */}
-                        <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-b from-amber-200 to-amber-300" />
-                        {/* 桌面陈设 */}
-                        <span className="absolute bottom-[18px] left-1.5 text-base">📚</span>
-                        <span className="absolute bottom-[18px] right-1.5 text-base">📄</span>
-                        <span className="absolute bottom-[19px] left-1/2 -translate-x-1/2 text-lg">💻</span>
-                        <span className="absolute bottom-[18px] left-1/2 translate-x-7 text-sm">☕</span>
-                        {/* 宠物坐在电脑后 */}
-                        <div className="absolute bottom-[26px] left-1/2 -translate-x-1/2 w-16 h-16 rounded-2xl bg-white/80 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
-                          {sp.image_url ? (
-                            <img src={sp.image_url} alt={sp.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-2xl">{sp.emoji || '🐾'}</span>
-                          )}
+                    <div
+                      key={sp.pet_id}
+                      className="relative rounded-2xl overflow-hidden shadow-md"
+                      style={{ aspectRatio: '3 / 4' }}
+                    >
+                      {/* 背景：教室工位图（3:4 竖版） */}
+                      <img
+                        src="/assets/study-card-bg.webp"
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover"
+                        draggable={false}
+                      />
+
+                      {/* 顶部椭圆名牌 */}
+                      <div className="absolute top-[3.5%] left-1/2 -translate-x-1/2 w-[68%]">
+                        <div className="rounded-full border-2 border-amber-300/90 bg-white/85 backdrop-blur-sm px-3 py-1 shadow-sm">
+                          <p className="text-center font-bold text-amber-600 text-sm leading-tight truncate">
+                            {sp.name || '进修宠物'}
+                          </p>
                         </div>
                       </div>
 
-                      {/* 信息（竖排） */}
-                      <div className="mt-2 flex flex-col items-center gap-1 text-center">
-                        <div className="flex items-center gap-1.5 max-w-full">
-                          <span className="font-bold text-sm text-slate-700 truncate">{sp.name}</span>
-                          <span className={cn('text-[9px] px-1 py-0.5 rounded-full font-medium shrink-0', RARITY_BADGE[sp.rarity].cls)}>
-                            {RARITY_BADGE[sp.rarity].label}
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-slate-500">进修 {sp.study_days} 天</span>
-                        <span className="text-[11px] text-slate-400">
-                          日产 <span className="text-amber-500 font-medium">{sp.daily_star}⭐</span>
-                          <span className="mx-1 text-slate-300">|</span>
-                          总赚取 <span className="text-emerald-600 font-medium">{Math.floor(sp.total_star)}⭐</span>
-                        </span>
+                      {/* 中间宠物形象（透明 PNG 居中，不带白底） */}
+                      <div className="absolute left-1/2 top-[16%] bottom-[38%] w-full -translate-x-1/2 flex items-center justify-center pointer-events-none">
+                        {sp.image_url ? (
+                          <img
+                            src={sp.image_url}
+                            alt={sp.name || ''}
+                            className="max-h-full max-w-[70%] object-contain drop-shadow-md"
+                            draggable={false}
+                          />
+                        ) : (
+                          <span className="text-5xl drop-shadow">{sp.emoji || '🐾'}</span>
+                        )}
                       </div>
 
-                      {/* 领取我的工资 */}
-                      <button
-                        onClick={() => handleClaimStudy(sp.pet_id)}
-                        disabled={pending <= 0}
-                        className="mt-2 w-full py-1.5 rounded-xl bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
-                      >
-                        领取我的工资（{pending}星光）
-                      </button>
+                      {/* 底部纯色信息区 */}
+                      <div className="absolute bottom-0 inset-x-0 h-[38%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-3 pt-2 pb-2.5 flex flex-col items-center justify-between text-center">
+                        <div className="w-full space-y-0.5">
+                          <p className="text-[11px] font-medium text-slate-600 leading-tight">
+                            {genderLabel}
+                            <span className="mx-1 text-slate-300">|</span>
+                            <span className={cn('px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[sp.rarity].cls)}>
+                              {RARITY_BADGE[sp.rarity].label}
+                            </span>
+                            <span className="mx-1 text-slate-300">|</span>
+                            {sp.trait_name || '无特质'}
+                          </p>
+                          <p className="text-[12px] font-bold text-slate-700 leading-tight">已进修 {sp.study_days} 天</p>
+                          <p className="text-[11px] text-slate-500 leading-tight">
+                            日产 <span className="text-amber-500 font-bold">{sp.daily_star}⭐</span>
+                            <span className="mx-1.5 text-slate-300">|</span>
+                            总赚取 <span className="text-emerald-600 font-bold">{Math.floor(sp.total_star)}⭐</span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleClaimStudy(sp.pet_id)}
+                          disabled={pending <= 0}
+                          className="w-full py-1.5 rounded-full bg-amber-400 text-white text-xs font-bold shadow hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                        >
+                          领取我的工资&nbsp;&nbsp;{pending}⭐
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
