@@ -733,8 +733,7 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
               <p className="text-xs text-slate-600 leading-relaxed">
                 你的宠物重病啦，需要花费{' '}
                 <span className="text-amber-600 font-bold">{severeCost}</span>{' '}
-                星光值前往医院看病。是否确认消耗{' '}
-                <span className="text-amber-600 font-bold">{severeCost}</span> 星光值？
+                星光值前往医院看病。
               </p>
             </div>
             <div className="flex gap-2">
