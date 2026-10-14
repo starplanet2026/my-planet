@@ -748,24 +748,20 @@ export function PetPage() {
                               {(pet.trait_id && traitMap[pet.trait_id]?.name) || '无特质'}
                             </span>
                           </div>
-                          {/* 经验条 */}
-                          <div className="flex items-center gap-1.5 mt-1">
-                            {isMaxLevel ? (
-                              <span className="text-[10px] font-bold text-amber-500">已满级 Lv.{pet.max_level}</span>
-                            ) : (
-                              <>
-                                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
-                                    style={{ width: `${Math.min(100, (pet.exp / need) * 100)}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-medium text-slate-500">
-                                  {pet.exp}/{need}
-                                </span>
-                              </>
-                            )}
-                          </div>
+                          {/* 经验条：满级时隐藏（Lv.x/x 已表达满级） */}
+                          {!isMaxLevel && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-blue-400 to-emerald-400 rounded-full transition-all"
+                                  style={{ width: `${Math.min(100, (pet.exp / need) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-medium text-slate-500">
+                                {pet.exp}/{need}
+                              </span>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
