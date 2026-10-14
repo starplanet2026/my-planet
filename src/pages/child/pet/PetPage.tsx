@@ -593,25 +593,25 @@ export function PetPage() {
                         {sp.name || '进修宠物'}
                       </p>
 
-                      {/* 中间宠物形象（透明 PNG 居中，不带白底） */}
+                      {/* 中间宠物形象（放大1.3倍，透明 PNG 居中，不带白底） */}
                       <div className="absolute left-1/2 top-[16%] bottom-[42%] w-full -translate-x-1/2 flex items-center justify-center pointer-events-none">
                         {sp.image_url ? (
                           <img
                             src={sp.image_url}
                             alt={sp.name || ''}
-                            className="max-h-full max-w-[78%] object-contain drop-shadow-md"
+                            className="max-h-full max-w-[78%] object-contain drop-shadow-md scale-[1.3]"
                             draggable={false}
                           />
                         ) : (
-                          <span className="text-4xl drop-shadow">{sp.emoji || '🐾'}</span>
+                          <span className="text-4xl drop-shadow scale-[1.3]">{sp.emoji || '🐾'}</span>
                         )}
                       </div>
 
                       {/* 底部信息区：无底块，仅文字 + 按钮 */}
                       <div className="absolute bottom-0 inset-x-0 h-[42%] px-2 pt-0.5 pb-3 flex flex-col justify-between text-center">
-                        <div className="flex-1 flex flex-col justify-evenly">
-                          {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色 */}
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <div className="flex-1 flex flex-col justify-center">
+                          {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色；三行以1.3倍行距向「已进修X天」靠拢 */}
+                          <div className="flex items-center justify-center gap-1 flex-wrap leading-[1.3]">
                             <span className={cn(
                               'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
                               sp.gender === 'male' ? 'bg-blue-100 text-blue-600' : sp.gender === 'female' ? 'bg-pink-100 text-pink-600' : 'bg-slate-100 text-slate-400'
@@ -625,8 +625,8 @@ export function PetPage() {
                               {sp.trait_name || '无特质'}
                             </span>
                           </div>
-                          <p className="text-[10px] text-slate-500 leading-tight">已进修 {sp.study_days} 天</p>
-                          <p className="text-[10px] text-slate-500 leading-tight">
+                          <p className="text-[10px] text-slate-500 leading-[1.3]">已进修 {sp.study_days} 天</p>
+                          <p className="text-[10px] text-slate-500 leading-[1.3]">
                             日产 <span className="text-amber-500 font-bold">{sp.daily_star}⭐</span>
                             <span className="mx-1 text-slate-300">|</span>
                             总赚取 <span className="text-emerald-600 font-bold">{Math.floor(sp.total_star)}⭐</span>
