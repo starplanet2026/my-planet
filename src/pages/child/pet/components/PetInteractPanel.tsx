@@ -53,7 +53,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
   const [currentPet, setCurrentPet] = useState(pet);
   const [inventory, setInventory] = useState<PetInventory[]>([]);
   const [acting, setActing] = useState<string | null>(null);
-  const [severeCost, setSevereCost] = useState(20);
+  const [severeCost, setSevereCost] = useState(200);
   const { traitMap } = usePetTraits();
   const [showSevereConfirm, setShowSevereConfirm] = useState(false);
 
@@ -219,15 +219,8 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
               </div>
             )}
             {currentPet.has_severe_illness && (
-              <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg flex items-center justify-between">
-                <span>🏥 主人，我生重病了，快带我去医院吧</span>
-                <button
-                  onClick={() => setShowSevereConfirm(true)}
-                  disabled={acting === 'heal_severe'}
-                  className="px-2 py-0.5 rounded bg-red-500 text-white text-[10px] font-bold disabled:opacity-50 active:scale-95"
-                >
-                  就医 ({severeCost}⭐)
-                </button>
+              <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg">
+                🏥 主人，我生重病了，快带我去医院吧
               </div>
             )}
           </div>
@@ -287,6 +280,18 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
             );
           })}
         </div>
+
+        {/* 重病就医入口：健康度下方，带十字图标；仅重病时展示（非重病隐藏） */}
+        {currentPet.has_severe_illness && (
+          <button
+            onClick={() => setShowSevereConfirm(true)}
+            disabled={acting === 'heal_severe'}
+            className="w-full py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-600 active:scale-95 transition disabled:opacity-50"
+          >
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-white text-red-500 text-sm font-black leading-none">✚</span>
+            就医（{severeCost}⭐）
+          </button>
+        )}
 
         {/* 心情提示 */}
         <p className="text-[10px] text-slate-400 text-center">
@@ -350,7 +355,8 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
               <div className="text-3xl">🏥</div>
               <h3 className="font-bold text-slate-800 text-base">宠物重病就医</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                宠物生重病了，吃药没用，是否花费 <span className="text-amber-600 font-bold">{severeCost}</span> 星光值送宠物去医院？
+                你的宠物重病啦，需要花费 <span className="text-amber-600 font-bold">{severeCost}</span> 星光值前往医院看病。
+                是否确认消耗 <span className="text-amber-600 font-bold">{severeCost}</span> 星光值？
               </p>
             </div>
             <div className="flex gap-2">
@@ -365,7 +371,7 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
                 disabled={acting === 'heal_severe'}
                 className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-50 active:scale-95"
               >
-                {acting === 'heal_severe' ? '治疗中...' : `确认就医 (${severeCost}⭐)`}
+                {acting === 'heal_severe' ? '治疗中...' : '去医院'}
               </button>
             </div>
           </div>

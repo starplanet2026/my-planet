@@ -1092,7 +1092,7 @@ export async function getSevereIllnessCost(familyId: string): Promise<number> {
     .eq('id', familyId)
     .single();
   if (error) throw error;
-  return (data as { severe_illness_cost?: number })?.severe_illness_cost ?? 20;
+  return (data as { severe_illness_cost?: number })?.severe_illness_cost ?? 200;
 }
 
 export async function updateSevereIllnessCost(familyId: string, cost: number): Promise<void> {
