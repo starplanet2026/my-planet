@@ -24,6 +24,7 @@ import { DictationReviewPage } from '../pages/parent/DictationReviewPage';
 import { RecitationTaskPage } from '../pages/child/RecitationTaskPage';
 import { Loading } from '../components/common/Loading';
 import { KeepAlive } from '../components/common/KeepAlive';
+import { PageBoundary } from '../components/common/PageBoundary';
 import { ROUTES } from '../lib/constants';
 
 // 按需加载：智慧星战、萌宠星球两大管理页面分包，首页不加载其代码
@@ -126,9 +127,9 @@ function AppShellContent() {
       <ChildKeepAliveRoutes />
       <ParentKeepAliveRoutes />
       {/* 动态参数页面：不缓存，每次进入重新挂载 */}
-      {isDictationPlay && <DictationPlayPage />}
-      {isDictationGrade && <DictationGradePage />}
-      {isRecitation && <RecitationTaskPage />}
+      {isDictationPlay && <PageBoundary><DictationPlayPage /></PageBoundary>}
+      {isDictationGrade && <PageBoundary><DictationGradePage /></PageBoundary>}
+      {isRecitation && <PageBoundary><RecitationTaskPage /></PageBoundary>}
     </>
   );
 }

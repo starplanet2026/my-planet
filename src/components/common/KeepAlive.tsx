@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import { PageBoundary } from './PageBoundary';
 
 interface KeepAliveProps {
   /**
@@ -59,7 +60,8 @@ export function KeepAlive({ when, children, className }: KeepAliveProps) {
       style={{ display: active ? 'block' : 'none' }}
       aria-hidden={!active}
     >
-      {children}
+      {/* 页面级错误隔离：单页崩溃不影响其它页面；分包加载失败自动刷新 */}
+      <PageBoundary>{children}</PageBoundary>
     </div>
   );
 }
