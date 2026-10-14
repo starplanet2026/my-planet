@@ -589,7 +589,7 @@ export function PetPage() {
                       />
 
                       {/* 顶部宠物名：纯文字，背景已自带椭圆框 */}
-                      <p className="absolute top-[3.2%] inset-x-0 text-center font-bold text-amber-600 text-xs leading-tight truncate px-2">
+                      <p className="absolute top-[3.9%] inset-x-0 text-center font-bold text-amber-600 text-xs leading-tight truncate px-2">
                         {sp.name || '进修宠物'}
                       </p>
 
