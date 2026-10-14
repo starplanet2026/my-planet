@@ -736,7 +736,11 @@ export function PetPage() {
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
                             <span>{pet.is_studying ? '📚 进修中' : pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
-                            <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
+                            {pet.is_studying ? (
+                              <span className="text-indigo-500">⭐ {rarity === 'common' ? 5 : rarity === 'rare' ? 20 : 50}/天（进修）</span>
+                            ) : (
+                              <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
+                            )}
                             <span
                               className={cn(
                                 (pet.trait_id && traitMap[pet.trait_id]?.name)
