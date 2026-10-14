@@ -609,7 +609,7 @@ export function PetPage() {
 
                       {/* 底部纯色信息区：标签行 + 两行数据 + 按钮均匀分布 */}
                       <div className="absolute bottom-0 inset-x-0 h-[42%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-2 py-2 flex flex-col justify-between text-center">
-                        <div className="space-y-1">
+                        <div className="flex-1 flex flex-col justify-evenly">
                           {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色 */}
                           <div className="flex items-center justify-center gap-1 flex-wrap">
                             <span className={cn(
@@ -635,7 +635,7 @@ export function PetPage() {
                         <button
                           onClick={() => handleClaimStudy(sp.pet_id)}
                           disabled={pending <= 0}
-                          className="w-full py-1 rounded-full bg-amber-400 text-white text-[11px] font-bold shadow hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                          className="w-full py-1 rounded-full bg-purple-500 text-white text-[11px] font-bold shadow hover:bg-purple-600 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
                         >
                           领取我的工资&nbsp;{pending}⭐
                         </button>
