@@ -31,6 +31,15 @@ function cleanMembers(list: Member[]): Member[] {
 import { loadFamily } from '../api/family';
 import { supabase } from '../api/client';
 
+// members 表实时订阅单例。
+// load() 可能被多次调用（App 挂载 + 登录态变化），若每次都新建同名 topic 的频道，
+// supabase-js 会复用已 subscribe 的实例并在第二次 .on() 抛出
+// "cannot add postgres_changes callbacks ... after subscribe()"，导致整页崩溃。
+// 因此同一 family 只订阅一次，并在 family 变化时先移除旧频道。
+type RealtimeChannelRef = ReturnType<typeof supabase.channel>;
+let membersChannel: RealtimeChannelRef | null = null;
+let membersChannelKey: string | null = null;
+
 interface FamilyState {
   family: Family | null;
   members: Member[];
@@ -63,24 +72,31 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       }
       set({ family: result.family, members: cleanMembers(result.members), loading: false });
 
-      // 订阅 members 表实时更新
-      supabase
-        .channel('rt:members')
-        .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'members', filter: `family_id=eq.${result.family.id}` },
-          (payload) => {
-            const members = get().members;
-            if (payload.eventType === 'DELETE') {
-              set({ members: members.filter(m => m.id !== payload.old?.id) });
-            } else if (payload.eventType === 'INSERT') {
-              set({ members: [...members, cleanMember(payload.new as Member)] });
-            } else if (payload.eventType === 'UPDATE') {
-              const updated = cleanMember(payload.new as Member);
-              set({ members: members.map(m => m.id === updated.id ? updated : m) });
+      // 订阅 members 表实时更新（同一 family 只订阅一次，避免重复 topic 触发崩溃）
+      if (membersChannelKey !== result.family.id) {
+        if (membersChannel) {
+          supabase.removeChannel(membersChannel);
+          membersChannel = null;
+        }
+        membersChannelKey = result.family.id;
+        membersChannel = supabase
+          .channel(`rt:members:${result.family.id}:${Date.now()}`)
+          .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'members', filter: `family_id=eq.${result.family.id}` },
+            (payload) => {
+              const members = get().members;
+              if (payload.eventType === 'DELETE') {
+                set({ members: members.filter(m => m.id !== payload.old?.id) });
+              } else if (payload.eventType === 'INSERT') {
+                set({ members: [...members, cleanMember(payload.new as Member)] });
+              } else if (payload.eventType === 'UPDATE') {
+                const updated = cleanMember(payload.new as Member);
+                set({ members: members.map(m => m.id === updated.id ? updated : m) });
+              }
             }
-          }
-        )
-        .subscribe();
+          )
+          .subscribe();
+      }
     } catch (e: any) {
       set({ loading: false, error: e?.message ?? '加载失败' });
     }

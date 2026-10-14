@@ -16,6 +16,12 @@ export function useRealtimeTable<T extends { id: string }>(
   const [loading, setLoading] = useState(true);
   const fetchRef = useRef(fetchFn);
   fetchRef.current = fetchFn;
+  // 频道名唯一化：supabase-js 对同 topic 的 channel 会复用已 subscribe 的实例，
+  // 多个页面（如仪表盘+成就库同时挂载）用同名 topic 时，第二次 .on() 会抛
+  // "cannot add postgres_changes callbacks ... after subscribe()" 并导致整页白屏。
+  // instanceId 区分不同 hook 实例；seq 区分同实例的多次订阅（StrictMode 双跑/重订阅）。
+  const instanceIdRef = useRef(Math.random().toString(36).slice(2, 8));
+  const seqRef = useRef(0);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -39,7 +45,7 @@ export function useRealtimeTable<T extends { id: string }>(
   useEffect(() => {
     if (!enabled) return;
 
-    const channelName = `rt:${table}:${filter ?? 'all'}`;
+    const channelName = `rt:${table}:${filter ?? 'all'}:${instanceIdRef.current}-${++seqRef.current}`;
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes',
