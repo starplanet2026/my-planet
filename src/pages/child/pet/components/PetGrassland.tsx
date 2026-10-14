@@ -107,13 +107,14 @@ function getHealSubcategory(pet: Pet): PetSubcategory | null {
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
+export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelPetClick }: {
   pets: Pet[];
   dogHouse: DogHouse | null;
   onPetClick?: (pet: Pet) => void;
   onDogHouseUpgraded?: () => void;
   bgImage?: string;
   onPetUpdate?: (updated: Pet) => void;
+  onMaxLevelPetClick?: (pet: Pet) => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -443,6 +444,11 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate }: {
     } else {
       // 点击：切换互动面板 + 互动音效
       playPetClick();
+      const pet = petStates[petId];
+      // 满级且未进修、未生病：弹出「去进化 / 去进修」选择弹框
+      if (pet && pet.level >= pet.max_level && !pet.is_studying && !pet.is_sick) {
+        onMaxLevelPetClick?.(pet);
+      }
       setInteractingPetId(prev => prev === petId ? null : petId);
     }
     dragRef.current = null;

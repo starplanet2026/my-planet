@@ -57,6 +57,7 @@ export function PetPage() {
   const showStudy = usePetUiStore(s => s.showStudy);
   const setShowStudy = usePetUiStore(s => s.setShowStudy);
   const [activePet, setActivePet] = useState<Pet | null>(null);
+  const [maxLevelPet, setMaxLevelPet] = useState<Pet | null>(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [showDex, setShowDex] = useState(false);
   const [showAdopt, setShowAdopt] = useState(false);
@@ -333,10 +334,16 @@ export function PetPage() {
   // 注意：useMemo 必须在 early return 之前调用，否则违反 Hooks 规则导致白屏
   const grasslandPets = useMemo(() => pets.filter(p => !hiddenPetIds.has(p.id)).slice(0, 10), [pets, hiddenPetIds]);
 
+  // 「我的宠物」列表排序：进修中的宠物统一排到列表最下方
+  const sortedPets = useMemo(
+    () => [...pets].sort((a, b) => Number(!!a.is_studying) - Number(!!b.is_studying)),
+    [pets],
+  );
+
   if (loading) return <Loading />;
 
   // 弹窗打开时隐藏所有外层 icon
-  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding || showPetMessages;
+  const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding || showPetMessages || !!maxLevelPet;
 
   const base = import.meta.env.BASE_URL;
   // 菜单图标：使用圆角矩形裁剪 + object-cover 去除 jpg 白边
@@ -356,6 +363,7 @@ export function PetPage() {
         pets={grasslandPets}
         dogHouse={dogHouse}
         onPetClick={(pet) => setActivePet(pet)}
+        onMaxLevelPetClick={(pet) => setMaxLevelPet(pet)}
         bgImage={bgImage}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
       />
@@ -656,7 +664,7 @@ export function PetPage() {
               <p className="text-xs text-slate-400 text-center mb-2">
                 共 {pets.length} 只宠物，"出来玩"的展示在草地上，可拖动改变位置
               </p>
-              {pets.map(pet => {
+              {sortedPets.map(pet => {
                 const hidden = hiddenPetIds.has(pet.id);
                 const rarity: PetRarity = pet.rarity ?? inferRarity(pet.max_level);
                 const isMaxLevel = pet.level >= pet.max_level;
@@ -723,7 +731,7 @@ export function PetPage() {
                             <span className="text-[10px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">Lv.{pet.level}/{pet.max_level}</span>
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
-                            <span>{pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
+                            <span>{pet.is_studying ? '📚 进修中' : pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
                             <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
                             <span
                               className={cn(
@@ -759,38 +767,37 @@ export function PetPage() {
                     </div>
                     {renamingPetId !== pet.id && (
                       <div className="flex flex-col gap-1">
-                        <button
-                          onClick={() => togglePetVisible(pet.id)}
-                          className={cn(
-                            'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                            hidden
-                              ? 'bg-green-500 text-white hover:bg-green-600 active:scale-95'
-                              : 'bg-amber-100 text-amber-600 hover:bg-amber-200 active:scale-95'
-                          )}
-                        >
-                          {hidden ? '出来玩' : '回家'}
-                        </button>
-                        {canEvolve && (
-                          <button
-                            onClick={() => handleEvolve(pet.id, evolveTarget)}
-                            disabled={evolvingPetId === pet.id}
-                            className="px-3 py-1.5 rounded-lg bg-purple-500 text-white text-xs font-medium hover:bg-purple-600 active:scale-95 disabled:opacity-50 whitespace-nowrap"
-                          >
-                            {evolvingPetId === pet.id ? '进化中...' : `✨ ${evolveLabel} (${evolveCost}⭐)`}
-                          </button>
-                        )}
-                        {isMaxLevel && !pet.is_studying && (
-                          <button
-                            onClick={() => handleSendStudy(pet.id)}
-                            className="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-medium hover:bg-indigo-600 active:scale-95 whitespace-nowrap"
-                          >
-                            📚 送去进修
-                          </button>
-                        )}
-                        {pet.is_studying && (
-                          <span className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-500 text-xs font-medium whitespace-nowrap">
-                            📚 进修中
-                          </span>
+                        {!pet.is_studying && (
+                          <>
+                            <button
+                              onClick={() => togglePetVisible(pet.id)}
+                              className={cn(
+                                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                                hidden
+                                  ? 'bg-green-500 text-white hover:bg-green-600 active:scale-95'
+                                  : 'bg-amber-100 text-amber-600 hover:bg-amber-200 active:scale-95'
+                              )}
+                            >
+                              {hidden ? '出来玩' : '回家'}
+                            </button>
+                            {canEvolve && (
+                              <button
+                                onClick={() => handleEvolve(pet.id, evolveTarget)}
+                                disabled={evolvingPetId === pet.id}
+                                className="px-3 py-1.5 rounded-lg bg-purple-500 text-white text-xs font-medium hover:bg-purple-600 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {evolvingPetId === pet.id ? '进化中...' : `✨ ${evolveLabel} (${evolveCost}⭐)`}
+                              </button>
+                            )}
+                            {isMaxLevel && (
+                              <button
+                                onClick={() => handleSendStudy(pet.id)}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-medium hover:bg-indigo-600 active:scale-95 whitespace-nowrap"
+                              >
+                                📚 送去进修
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           onClick={() => { setRenamingPetId(pet.id); setNewName(pet.name || ''); }}
@@ -807,6 +814,41 @@ export function PetPage() {
           )}
         </Modal>
       )}
+
+      {/* 满级宠物点击弹框：去进化 / 去进修 */}
+      {maxLevelPet && (() => {
+        const rarity: PetRarity = maxLevelPet.rarity ?? inferRarity(maxLevelPet.max_level);
+        const canEvolve = rarity === 'common' || rarity === 'rare';
+        const evolveCost = rarity === 'common' ? 150 : 400;
+        const evolveTarget: 'rare' | 'epic' = rarity === 'common' ? 'rare' : 'epic';
+        const dailyStar = rarity === 'common' ? 5 : rarity === 'rare' ? 20 : 50;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setMaxLevelPet(null)}>
+            <div className="bg-white rounded-2xl p-5 w-80 text-center" onClick={e => e.stopPropagation()}>
+              <div className="text-4xl mb-1">🎉</div>
+              <h3 className="font-bold text-slate-800 text-lg leading-snug">主人我满级了，现在我可以：</h3>
+              <div className="mt-4 space-y-2">
+                {canEvolve && (
+                  <button
+                    onClick={async () => { await handleEvolve(maxLevelPet.id, evolveTarget); setMaxLevelPet(null); }}
+                    disabled={evolvingPetId === maxLevelPet.id}
+                    className="w-full py-3 rounded-xl bg-purple-500 text-white font-bold hover:bg-purple-600 active:scale-95 disabled:opacity-50"
+                  >
+                    {evolvingPetId === maxLevelPet.id ? '进化中...' : `去进化（${evolveCost}⭐）`}
+                  </button>
+                )}
+                <button
+                  onClick={async () => { await handleSendStudy(maxLevelPet.id); setMaxLevelPet(null); }}
+                  className="w-full py-3 rounded-xl bg-indigo-500 text-white font-bold hover:bg-indigo-600 active:scale-95"
+                >
+                  去进修（{dailyStar}⭐/天）
+                </button>
+              </div>
+              <button onClick={() => setMaxLevelPet(null)} className="mt-3 text-sm text-slate-400 hover:text-slate-600">稍后再说</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 弹窗 */}
       {showCheckin && (
