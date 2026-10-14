@@ -60,6 +60,7 @@ export const COIN_RECORD_CATEGORIES: Record<CoinRecordCategory, { label: string;
   purchase: { label: '特权', color: 'orange' },
   manual: { label: '家长调整', color: 'purple' },
   system: { label: '系统', color: 'gray' },
+  medical: { label: '就医', color: 'red' },
 };
 
 // 路由常量

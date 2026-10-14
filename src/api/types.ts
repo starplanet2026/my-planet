@@ -9,7 +9,7 @@ export type TaskStatus = 'draft' | 'active' | 'pending_approval' | 'completed' |
 export type MemberRole = 'parent' | 'child';
 export type ItemStatus = 'active' | 'sold_out' | 'expired' | 'deleted';
 export type PurchaseStatus = 'pending' | 'redeemed' | 'expired' | 'cancelled' | 'sold';
-export type CoinRecordCategory = 'task' | 'purchase' | 'manual' | 'system' | 'task_reject' | 'manual_adjust';
+export type CoinRecordCategory = 'task' | 'purchase' | 'manual' | 'system' | 'task_reject' | 'manual_adjust' | 'medical';
 
 // 题库模块类型
 export type ChallengeSetType = 'word_vocab' | 'math' | 'choice';
