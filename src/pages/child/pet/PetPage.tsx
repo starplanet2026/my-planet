@@ -710,24 +710,22 @@ export function PetPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-xs text-slate-400 flex-1 min-w-0">
-                  共 {pets.length} 只宠物，"出来玩"的展示在草地上，可拖动改变位置
-                </p>
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={showAllPets}
-                    className="px-2.5 py-1 rounded-lg bg-green-500 text-white text-[11px] font-medium hover:bg-green-600 active:scale-95 transition whitespace-nowrap"
-                  >
-                    🏡 一键出来玩
-                  </button>
-                  <button
-                    onClick={hideAllPets}
-                    className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-600 text-[11px] font-medium hover:bg-amber-200 active:scale-95 transition whitespace-nowrap"
-                  >
-                    🏠 一键回家
-                  </button>
-                </div>
+              <p className="text-xs text-slate-400 text-center">
+                共 {pets.length} 只宠物，"出来玩"的展示在草地上，可拖动改变位置
+              </p>
+              <div className="flex justify-center gap-2 mb-2">
+                <button
+                  onClick={showAllPets}
+                  className="px-3 py-1.5 rounded-lg bg-green-500 text-white text-xs font-medium hover:bg-green-600 active:scale-95 transition whitespace-nowrap"
+                >
+                  🏡 一键出来玩
+                </button>
+                <button
+                  onClick={hideAllPets}
+                  className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-600 text-xs font-medium hover:bg-amber-200 active:scale-95 transition whitespace-nowrap"
+                >
+                  🏠 一键回家
+                </button>
               </div>
               {sortedPets.map(pet => {
                 const hidden = hiddenPetIds.has(pet.id);
