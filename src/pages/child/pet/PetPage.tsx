@@ -557,7 +557,7 @@ export function PetPage() {
               <button
                 onClick={() => handleClaimStudy()}
                 disabled={!studyPets.some(p => p.pending_star > 0)}
-                className="px-3 py-1 rounded-lg bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                className="px-3 py-1 rounded-lg bg-purple-500 text-white text-xs font-bold hover:bg-purple-600 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
               >
                 一键领取
               </button>
@@ -589,7 +589,7 @@ export function PetPage() {
                       />
 
                       {/* 顶部宠物名：纯文字，背景已自带椭圆框 */}
-                      <p className="absolute top-[4.5%] inset-x-0 text-center font-bold text-amber-600 text-xs leading-tight truncate px-2">
+                      <p className="absolute top-[3.2%] inset-x-0 text-center font-bold text-amber-600 text-xs leading-tight truncate px-2">
                         {sp.name || '进修宠物'}
                       </p>
 
