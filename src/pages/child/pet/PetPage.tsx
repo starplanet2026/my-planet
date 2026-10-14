@@ -625,7 +625,7 @@ export function PetPage() {
                               {sp.trait_name || '无特质'}
                             </span>
                           </div>
-                          <p className="text-[11px] font-bold text-slate-700 leading-tight">已进修 {sp.study_days} 天</p>
+                          <p className="text-[10px] text-slate-500 leading-tight">已进修 {sp.study_days} 天</p>
                           <p className="text-[10px] text-slate-500 leading-tight">
                             日产 <span className="text-amber-500 font-bold">{sp.daily_star}⭐</span>
                             <span className="mx-1 text-slate-300">|</span>
