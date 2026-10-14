@@ -332,7 +332,11 @@ export function PetPage() {
   // 草地展示"出来玩"的宠物，最多 10 只（可拖动）
   // 使用 useMemo 防止不必要的引用变化导致 PetGrassland 重渲染覆盖状态
   // 注意：useMemo 必须在 early return 之前调用，否则违反 Hooks 规则导致白屏
-  const grasslandPets = useMemo(() => pets.filter(p => !hiddenPetIds.has(p.id)).slice(0, 10), [pets, hiddenPetIds]);
+  // 进修中的宠物从草地移除（只能在「我的宠物」列表底部与宠物店进修列表查看/互动）
+  const grasslandPets = useMemo(
+    () => pets.filter(p => !hiddenPetIds.has(p.id) && !p.is_studying).slice(0, 10),
+    [pets, hiddenPetIds],
+  );
 
   // 「我的宠物」列表排序：进修中的宠物统一排到列表最下方
   const sortedPets = useMemo(
