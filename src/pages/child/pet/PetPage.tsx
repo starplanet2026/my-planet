@@ -609,7 +609,7 @@ export function PetPage() {
 
                       {/* 底部信息区：无底块，仅文字 + 按钮 */}
                       <div className="absolute bottom-0 inset-x-0 h-[42%] px-2 pt-0.5 pb-3 flex flex-col justify-between text-center">
-                        <div className="flex-1 flex flex-col justify-center">
+                        <div className="flex-1 flex flex-col justify-center pt-2">
                           {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色；三行以1.3倍行距向「已进修X天」靠拢 */}
                           <div className="flex items-center justify-center gap-1 flex-wrap leading-[1.3]">
                             <span className={cn(
