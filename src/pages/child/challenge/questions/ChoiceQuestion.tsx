@@ -13,8 +13,7 @@ interface ChoiceQuestionProps extends Omit<QuestionComponentProps, 'question'> {
   shuffleOptions?: boolean;
 }
 
-export function ChoiceQuestion({ question: q, answer, setAnswer, show_result, shuffleOptions = true }: ChoiceQuestionProps) {
-  if (!q.options) return null;
+export function ChoiceQuestion({ question: q, answer, setAnswer, showResult, shuffleOptions = true }: ChoiceQuestionProps) {
   const isMulti = q.type === 'multi_choice';
 
   // 兼容 correct_answer 可能存的是字母（A/C）或选项文本（多选以 || 拼接）
@@ -45,6 +44,9 @@ export function ChoiceQuestion({ question: q, answer, setAnswer, show_result, sh
     }
     setShuffledIndices(indices);
   }, [q.id, (q as any).question_id, shuffleOptions, q.options]);
+
+  // 注意：提前 return 必须放在所有 Hooks 之后，否则 Hooks 数量前后不一致会导致 React 崩溃白屏
+  if (!q.options) return null;
 
   return (
     <div className="space-y-3">
