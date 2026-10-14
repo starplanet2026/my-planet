@@ -591,7 +591,7 @@ export function PetPage() {
                         <span className="text-[11px] text-slate-400">
                           日产 <span className="text-amber-500 font-medium">{sp.daily_star}⭐</span>
                           <span className="mx-1 text-slate-300">|</span>
-                          待领 <span className="text-emerald-600 font-medium">{pending}⭐</span>
+                          总赚取 <span className="text-emerald-600 font-medium">{Math.floor(sp.total_star)}⭐</span>
                         </span>
                       </div>
 
