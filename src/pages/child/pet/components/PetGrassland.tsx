@@ -9,6 +9,7 @@ import { expNeeded } from '../../../../api/types';
 import {
   interactWithPet, claimPetCoins, fetchPetInventory, checkPet,
   fetchPetPositions, savePetPosition,
+  healSevereIllness, getSevereIllnessCost,
 } from '../../../../api/pets';
 import { PetLevelUpQuiz } from './PetLevelUpQuiz';
 
@@ -118,10 +119,14 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
+  const family = useFamilyStore(s => s.family);
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? '';
 
   const [interactingPetId, setInteractingPetId] = useState<string | null>(null);
+  // 重病就医：当前弹出确认框的宠物 id + 家庭配置的就医星光消耗
+  const [severePetId, setSeverePetId] = useState<string | null>(null);
+  const [severeCost, setSevereCost] = useState(200);
   const [petStates, setPetStates] = useState<Record<string, Pet>>({});
   const [inventory, setInventory] = useState<PetInventory[]>([]);
   const [acting, setActing] = useState<string | null>(null);
@@ -236,6 +241,14 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
   }, [childId]);
 
   useEffect(() => { loadInventory(); }, [loadInventory]);
+
+  // 加载家庭配置的重病就医星光消耗（默认 200）
+  useEffect(() => {
+    if (family?.id) {
+      getSevereIllnessCost(family.id).then(setSevereCost).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family?.id]);
 
   // 保存折叠状态
   useEffect(() => {
@@ -392,6 +405,30 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
     }
   };
 
+  // 重病就医：消耗星光值送宠物医院，治愈后刷新宠物状态
+  const handleHealSevere = async () => {
+    const petId = severePetId;
+    if (!petId) return;
+    setActing('heal_severe');
+    try {
+      const result = await healSevereIllness(childId, petId);
+      if (result.success) {
+        toast.success(result.message || '治疗成功！宠物已恢复健康 🎉');
+        setSeverePetId(null);
+        refreshMembers();
+        const updated = await checkPet(petId);
+        setPetStates(prev => ({ ...prev, [petId]: mergeShopMeta(updated, prev[petId]) }));
+        onPetUpdate?.(mergeShopMeta(updated, petStates[petId]));
+      } else {
+        toast.error(result.message || '治疗失败');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? '治疗失败');
+    } finally {
+      setActing(null);
+    }
+  };
+
   // 拖拽
   const onPointerDown = (e: React.PointerEvent, petId: string) => {
     dragRef.current = {
@@ -536,6 +573,23 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
                     </div>
                   );
                 })}
+                {/* 重病就医版块：仅重病时展示，十字按钮 + 星光消耗，点击弹出确认框 */}
+                {pet.has_severe_illness && (
+                  <div className="flex flex-col items-center gap-1 w-[52px]">
+                    <span className="text-[8px] font-medium text-red-500">重病</span>
+                    <div className="w-full h-1.5 bg-red-200/60 rounded-full" />
+                    <span className="text-[8px] font-bold text-red-500 whitespace-nowrap">{severeCost}⭐</span>
+                    <button
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setSeverePetId(pet.id); }}
+                      disabled={!!acting}
+                      className="w-full flex flex-col items-center gap-0.5 py-1 rounded-lg text-[9px] font-medium bg-red-500 text-white disabled:opacity-50 active:scale-95 transition"
+                    >
+                      <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-white text-red-500 text-[10px] font-black leading-none">✚</span>
+                      就医
+                    </button>
+                  </div>
+                )}
                 {/* 领取金币版块 */}
                 {pet.coin_balance >= 1 && (
                   <div className="flex flex-col items-center gap-1 w-[52px]">
@@ -661,6 +715,45 @@ export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelP
           onClose={() => setLevelUpPet(null)}
           onLevelUp={handleLevelUpDone}
         />
+      )}
+
+      {/* 重病就医确认弹窗 */}
+      {severePetId && petStates[severePetId] && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          onClick={() => setSeverePetId(null)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-[80vw] max-w-xs p-5 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-center space-y-2">
+              <div className="text-3xl">🏥</div>
+              <h3 className="font-bold text-slate-800 text-base">宠物重病就医</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                你的宠物重病啦，需要花费{' '}
+                <span className="text-amber-600 font-bold">{severeCost}</span>{' '}
+                星光值前往医院看病。是否确认消耗{' '}
+                <span className="text-amber-600 font-bold">{severeCost}</span> 星光值？
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSeverePetId(null)}
+                className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold active:scale-95"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleHealSevere}
+                disabled={acting === 'heal_severe'}
+                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-50 active:scale-95"
+              >
+                {acting === 'heal_severe' ? '治疗中...' : '去医院'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
