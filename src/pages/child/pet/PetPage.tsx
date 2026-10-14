@@ -159,11 +159,11 @@ export function PetPage() {
     }
   }, [child?.id]);
 
-  // 领取进修星光
-  const handleClaimStudy = async () => {
+  // 领取进修星光（不传 petId = 一键领取全部；传 petId = 领取该宠物）
+  const handleClaimStudy = async (petId?: string) => {
     if (!child) return;
     try {
-      const result = await claimStudyStarlight(child.id);
+      const result = await claimStudyStarlight(child.id, petId);
       if (result.success) {
         toast.success(result.message || '领取成功');
         await refreshMembers();
@@ -521,28 +521,27 @@ export function PetPage() {
         </Modal>
       )}
       {activeModal === 'store' && (
-        <Modal open onClose={() => setActiveModal(null)} title="我的宠物店" size="md">
-          {/* 顶部：宠物店建设进度 */}
-          <div className="text-center py-4 border-b border-slate-100">
-            <div className="text-5xl mb-2">🏪</div>
-            <p className="text-sm text-slate-500">集齐 10 只满级宠物即可解锁宠物店建设功能</p>
-            <p className="text-xs text-slate-400 mt-1">
-              当前满级宠物：{pets.filter(p => p.level >= p.max_level).length} / 10
+        <Modal open onClose={() => setActiveModal(null)} title="我的宠物店" size="xl">
+          {/* 顶部：宠物店建设进度（收窄为头部提示条） */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100">
+            <span className="text-lg leading-none">🏪</span>
+            <p className="text-xs text-slate-500 leading-tight">
+              集齐 10 只满级宠物即可解锁宠物店建设功能 · 当前满级宠物：
+              <span className="font-bold text-slate-700">{pets.filter(p => p.level >= p.max_level).length}</span> / 10
             </p>
           </div>
 
           {/* 进修宠物列表 */}
-          <div className="py-3">
+          <div className="mt-3">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-bold text-slate-700">📚 进修中的宠物</h4>
-              {studyPets.some(p => p.pending_star > 0) && (
-                <button
-                  onClick={handleClaimStudy}
-                  className="px-3 py-1 rounded-lg bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95"
-                >
-                  领取星光
-                </button>
-              )}
+              <button
+                onClick={() => handleClaimStudy()}
+                disabled={!studyPets.some(p => p.pending_star > 0)}
+                className="px-3 py-1 rounded-lg bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+              >
+                一键领取
+              </button>
             </div>
 
             {studyLoading ? (
@@ -553,33 +552,60 @@ export function PetPage() {
                 <p className="text-xs text-slate-300 mt-1">满级宠物可送去进修，被动产出星光值</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {studyPets.map(sp => (
-                  <div key={sp.pet_id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 bg-white">
-                    <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-amber-50 overflow-hidden">
-                      {sp.image_url ? (
-                        <img src={sp.image_url} alt={sp.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-xl">{sp.emoji || '🐾'}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-sm text-slate-700 truncate">{sp.name}</span>
-                        <span className={cn('text-[9px] px-1 py-0.5 rounded-full font-medium', RARITY_BADGE[sp.rarity].cls)}>
-                          {RARITY_BADGE[sp.rarity].label}
+              <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-0.5">
+                {studyPets.map(sp => {
+                  const pending = Math.floor(sp.pending_star);
+                  return (
+                    <div key={sp.pet_id} className="rounded-2xl border-2 border-emerald-100 bg-white p-2.5 flex flex-col shadow-sm">
+                      {/* 工位场景：宠物在办公室上班 */}
+                      <div className="relative h-28 rounded-xl overflow-hidden bg-gradient-to-b from-sky-50 via-indigo-50 to-emerald-50 border border-sky-100">
+                        <span className="absolute top-1.5 left-2 text-sm opacity-80">🗓️</span>
+                        <span className="absolute top-1.5 right-2 text-sm opacity-80">💡</span>
+                        <span className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] opacity-60">📈</span>
+                        {/* 桌面 */}
+                        <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-b from-amber-200 to-amber-300" />
+                        {/* 桌面陈设 */}
+                        <span className="absolute bottom-[18px] left-1.5 text-base">📚</span>
+                        <span className="absolute bottom-[18px] right-1.5 text-base">📄</span>
+                        <span className="absolute bottom-[19px] left-1/2 -translate-x-1/2 text-lg">💻</span>
+                        <span className="absolute bottom-[18px] left-1/2 translate-x-7 text-sm">☕</span>
+                        {/* 宠物坐在电脑后 */}
+                        <div className="absolute bottom-[26px] left-1/2 -translate-x-1/2 w-16 h-16 rounded-2xl bg-white/80 border-2 border-white shadow-sm overflow-hidden flex items-center justify-center">
+                          {sp.image_url ? (
+                            <img src={sp.image_url} alt={sp.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl">{sp.emoji || '🐾'}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 信息（竖排） */}
+                      <div className="mt-2 flex flex-col items-center gap-1 text-center">
+                        <div className="flex items-center gap-1.5 max-w-full">
+                          <span className="font-bold text-sm text-slate-700 truncate">{sp.name}</span>
+                          <span className={cn('text-[9px] px-1 py-0.5 rounded-full font-medium shrink-0', RARITY_BADGE[sp.rarity].cls)}>
+                            {RARITY_BADGE[sp.rarity].label}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500">进修 {sp.study_days} 天</span>
+                        <span className="text-[11px] text-slate-400">
+                          日产 <span className="text-amber-500 font-medium">{sp.daily_star}⭐</span>
+                          <span className="mx-1 text-slate-300">|</span>
+                          待领 <span className="text-emerald-600 font-medium">{pending}⭐</span>
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400">进修 {sp.study_days} 天 · {sp.daily_star}⭐/天</p>
+
+                      {/* 领取我的工资 */}
+                      <button
+                        onClick={() => handleClaimStudy(sp.pet_id)}
+                        disabled={pending <= 0}
+                        className="mt-2 w-full py-1.5 rounded-xl bg-amber-400 text-white text-xs font-bold hover:bg-amber-500 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                      >
+                        领取我的工资（{pending}星光）
+                      </button>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs font-bold text-amber-500">累计 {Math.floor(sp.total_star)}⭐</p>
-                      {sp.pending_star > 0 && (
-                        <p className="text-[10px] text-emerald-500">待领 {Math.floor(sp.pending_star)}⭐</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -1121,8 +1121,8 @@ export async function getStudyPets(memberId: string): Promise<StudyPet[]> {
   return (data ?? []) as StudyPet[];
 }
 
-export async function claimStudyStarlight(memberId: string): Promise<ClaimStudyResult> {
-  const { data, error } = await supabase.rpc('claim_study_starlight', { p_member_id: memberId });
+export async function claimStudyStarlight(memberId: string, petId?: string): Promise<ClaimStudyResult> {
+  const { data, error } = await supabase.rpc('claim_study_starlight', { p_member_id: memberId, p_pet_id: petId ?? null });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as ClaimStudyResult;
