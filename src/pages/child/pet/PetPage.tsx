@@ -682,7 +682,11 @@ export function PetPage() {
                     key={pet.id}
                     className={cn(
                       'flex items-center gap-3 p-2.5 rounded-xl border-2 transition-all',
-                      hidden ? 'border-slate-100 bg-slate-50 opacity-70' : 'border-slate-100 bg-white hover:border-green-200'
+                      pet.is_studying
+                        ? 'border-green-200 bg-green-50'
+                        : hidden
+                          ? 'border-slate-100 bg-slate-50 opacity-70'
+                          : 'border-slate-100 bg-white hover:border-green-200'
                     )}
                   >
                     <div className="w-12 h-16 flex items-center justify-center rounded-lg overflow-hidden bg-amber-50">
