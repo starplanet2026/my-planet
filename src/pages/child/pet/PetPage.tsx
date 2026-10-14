@@ -607,8 +607,8 @@ export function PetPage() {
                         )}
                       </div>
 
-                      {/* 底部纯色信息区：标签行 + 两行数据 + 按钮均匀分布 */}
-                      <div className="absolute bottom-0 inset-x-0 h-[42%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-2 pt-0.5 pb-3 flex flex-col justify-between text-center">
+                      {/* 底部信息区：无底块，仅文字 + 按钮 */}
+                      <div className="absolute bottom-0 inset-x-0 h-[42%] px-2 pt-0.5 pb-3 flex flex-col justify-between text-center">
                         <div className="flex-1 flex flex-col justify-evenly">
                           {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色 */}
                           <div className="flex items-center justify-center gap-1 flex-wrap">
@@ -635,7 +635,10 @@ export function PetPage() {
                         <button
                           onClick={() => handleClaimStudy(sp.pet_id)}
                           disabled={pending <= 0}
-                          className="w-full py-1 rounded-full bg-purple-500 text-white text-[11px] font-bold shadow hover:bg-purple-600 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400"
+                          className={cn(
+                            'w-full py-1 rounded-full text-white text-[11px] font-bold shadow active:scale-95',
+                            pending > 0 ? 'bg-purple-500 hover:bg-purple-600' : 'bg-amber-400'
+                          )}
                         >
                           领取我的工资&nbsp;{pending}⭐
                         </button>
