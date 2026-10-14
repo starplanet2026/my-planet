@@ -608,7 +608,7 @@ export function PetPage() {
                       </div>
 
                       {/* 底部纯色信息区：标签行 + 两行数据 + 按钮均匀分布 */}
-                      <div className="absolute bottom-0 inset-x-0 h-[55%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-2 py-2 flex flex-col justify-between text-center">
+                      <div className="absolute bottom-0 inset-x-0 h-[42%] bg-amber-50/95 backdrop-blur-sm border-t border-amber-100 px-2 pt-0.5 pb-3 flex flex-col justify-between text-center">
                         <div className="flex-1 flex flex-col justify-evenly">
                           {/* 性别 / 稀有度 / 特质：统一沿用全站已有标签配色 */}
                           <div className="flex items-center justify-center gap-1 flex-wrap">
