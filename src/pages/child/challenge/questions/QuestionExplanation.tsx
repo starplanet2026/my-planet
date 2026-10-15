@@ -54,7 +54,7 @@ export function QuestionExplanation({ show, isCorrect, explanation, correctAnswe
           isCorrect ? 'text-emerald-700' : 'text-red-700'
         )}>
           {isCorrect ? (
-            <p>{explanation}</p>
+            <p className="whitespace-pre-wrap">{explanation}</p>
           ) : (
             <p className="whitespace-pre-wrap">
               {fullText.slice(0, revealedChars)}

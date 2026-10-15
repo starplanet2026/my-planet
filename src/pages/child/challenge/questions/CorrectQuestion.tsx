@@ -108,7 +108,7 @@ export function CorrectQuestion({ question: q, answer, setAnswer, showResult, is
             )}
           </div>
           {q.explanation && (
-            <p className="text-sm text-slate-600 mt-2 pt-2 border-t border-slate-200">{q.explanation}</p>
+            <p className="text-sm text-slate-600 mt-2 pt-2 border-t border-slate-200 whitespace-pre-wrap">{q.explanation}</p>
           )}
         </div>
       )}

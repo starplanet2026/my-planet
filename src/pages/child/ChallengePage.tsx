@@ -2500,7 +2500,7 @@ function ReadOnlyQuestionsView({ questions, title, onBack }: {
                   {q.explanation && (
                     <div className="mt-2 text-xs text-slate-400 bg-slate-50 rounded p-2">
                       <Lightbulb className="w-3 h-3 inline-block mr-1" />
-                      {q.explanation}
+                      <span className="whitespace-pre-wrap">{q.explanation}</span>
                     </div>
                   )}
                 </div>
