@@ -548,10 +548,16 @@ export function StudyCompanionModal({
                     </button>
                   )}
                 </div>
-                {onlineTasks.some(t => t.is_basic) && (
+                {onlineTasks.length > 0 && (
                   <p className="text-[10px] text-slate-400 leading-tight">
-                    <span className="mr-1 px-1 rounded bg-green-100 text-green-600 font-medium">基础</span>
-                    任务全部完成后解锁萌宠星球（宠物店除外），全部任务完成后解锁宠物店
+                    {onlineTasks.some(t => t.is_basic) ? (
+                      <>
+                        <span className="mr-1 px-1 rounded bg-green-100 text-green-600 font-medium">基础</span>
+                        任务全部完成后解锁萌宠星球（宠物店除外），全部任务完成后解锁宠物店
+                      </>
+                    ) : (
+                      <>全部任务完成后解锁萌宠星球（含宠物店）</>
+                    )}
                   </p>
                 )}
                 <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">

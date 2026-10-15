@@ -37,7 +37,11 @@ export function BottomNav() {
   }, [refresh]);
 
   const isLocked = (to: string) => level === 2 && LOCKED_TABS.includes(to);
-  const warnLocked = () => useToastStore.getState().warning('请先完成陪伴学习基础任务');
+  // 无基础任务时第一档也视作未完成，提示文案按是否有基础任务区分
+  const warnLocked = () => {
+    const { basicCount } = useStudyLockStore.getState();
+    useToastStore.getState().warning(basicCount > 0 ? '请先完成陪伴学习基础任务' : '请先完成今日陪伴学习任务');
+  };
 
   return (
     <nav

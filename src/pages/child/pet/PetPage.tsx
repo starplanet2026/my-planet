@@ -378,9 +378,11 @@ export function PetPage() {
   const lockedAll = studyLockLevel === 2;
   const storeLocked = studyLockLevel >= 1;
   // 点击锁定元素时先刷新一次状态（家长在其它设备审核通过后即可立即解锁）
+  // 无基础任务时第一档也视作未完成，提示文案按是否有基础任务区分
   const warnLocked = () => {
     refreshStudyLock();
-    toast.warning('请先完成陪伴学习基础任务');
+    const { basicCount } = useStudyLockStore.getState();
+    toast.warning(basicCount > 0 ? '请先完成陪伴学习基础任务' : '请先完成今日陪伴学习任务');
   };
   const gate = (locked: boolean, fn: () => void) => (locked ? warnLocked : fn);
   const lockCls = (locked: boolean) => (locked ? 'grayscale opacity-60 cursor-not-allowed' : '');
