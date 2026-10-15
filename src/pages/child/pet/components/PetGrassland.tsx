@@ -640,7 +640,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
                   <span className={cn('px-1.5 py-0.5 rounded-full text-[9px] font-bold', RARITY_STYLE[pet.rarity ?? 'common'])}>
                     {rarityLabel(pet.rarity)}
                   </span>
-                  <span className="text-xs font-bold text-slate-700 truncate max-w-[70px]">{pet.name || pet.breed}</span>
+                  <span className="text-[10px] font-bold text-slate-700 truncate max-w-[70px]">{pet.name || pet.breed}</span>
                   {pet.gender && (
                     <span className={cn(
                       'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',
@@ -659,10 +659,10 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
                     src={pet.image_url}
                     alt=""
                     draggable={false}
-                    className="w-[98px] h-[119px] sm:w-[126px] sm:h-[154px] md:w-[168px] md:h-[196px] object-contain drop-shadow-lg"
+                    className="w-[78px] h-[95px] sm:w-[101px] sm:h-[123px] md:w-[134px] md:h-[157px] object-contain drop-shadow-lg"
                   />
                 ) : (
-                  <span className="text-5xl sm:text-6xl md:text-7xl drop-shadow-lg">{pet.emoji || '🐾'}</span>
+                  <span className="text-[38px] sm:text-[48px] md:text-[58px] drop-shadow-lg">{pet.emoji || '🐾'}</span>
                 )}
                 {/* 会话框：宠物头部右侧，内外层常驻显示（全局右侧偏移25px） */}
                 {petMessage(pet) && (
