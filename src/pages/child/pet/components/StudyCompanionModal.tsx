@@ -27,6 +27,7 @@ interface StudyTask {
   rewarded: boolean; // 是否已发放奖励（防止重复）
   selected?: boolean; // 任务模板是否被勾选（选择页使用）
   subject?: 'chinese' | 'math' | 'english'; // 学科归属
+  is_basic?: boolean; // 是否为基础任务（完成当日全部基础任务可解锁萌宠星球，宠物店除外）
 }
 
 const SUBJECT_META: { id: 'chinese' | 'math' | 'english'; label: string; color: string; cls: string }[] = [
@@ -200,6 +201,7 @@ export function StudyCompanionModal({
         id: t.id, text: t.text, reward: t.reward,
         done: false, rewarded: false, selected: t.selected,
         subject: t.subject,
+        is_basic: t.is_basic,
       }));
       setTaskTemplates(mapped);
       // 默认不勾选任何任务，由学生自行勾选
@@ -546,6 +548,12 @@ export function StudyCompanionModal({
                     </button>
                   )}
                 </div>
+                {onlineTasks.some(t => t.is_basic) && (
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    <span className="mr-1 px-1 rounded bg-green-100 text-green-600 font-medium">基础</span>
+                    任务全部完成后解锁萌宠星球（宠物店除外），全部任务完成后解锁宠物店
+                  </p>
+                )}
                 <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
                   {SUBJECT_META.map(sub => {
                     const subTasks = taskTemplates.filter(t => t.selected && t.subject === sub.id);
@@ -584,6 +592,11 @@ export function StudyCompanionModal({
                                   doneToday ? 'cursor-not-allowed' : ''
                                 }`}>
                                   <span className={`truncate ${doneToday ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{t.text}</span>
+                                  {t.is_basic && (
+                                    <span className={`text-[8px] px-1 rounded flex-shrink-0 font-medium ${
+                                      doneToday ? 'bg-slate-100 text-slate-400' : 'bg-green-100 text-green-600'
+                                    }`}>基础</span>
+                                  )}
                                   {t.reward > 0 && (
                                     <span className={`text-[9px] ml-0.5 flex-shrink-0 ${doneToday ? 'text-slate-300' : 'text-amber-500'}`}>⭐{t.reward}</span>
                                   )}
