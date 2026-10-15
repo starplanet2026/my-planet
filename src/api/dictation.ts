@@ -127,6 +127,9 @@ export async function importWords(
 
 // ==================== 错词库 ====================
 
+// 错词答案归一化：匹配/判重统一按「去首尾空格 + 小写」，防止仅大小写/空格差异的词条分裂
+const normAnswer = (s: string) => s.trim().toLowerCase();
+
 export async function listErrorWords(memberId: string, subject?: DictationSubject): Promise<DictationErrorWord[]> {
   let q = supabase
     .from('dictation_error_words')
@@ -181,7 +184,7 @@ export async function createErrorWord(memberId: string, input: ErrorWordInput): 
       chinese_meaning: input.chinese_meaning ?? null,
       part_of_speech: input.part_of_speech ?? null,
       pinyin: input.pinyin ?? null,
-      answer: input.answer,
+      answer: input.answer.trim(),
       cycle_start_date: today,
       current_node: 1,
       next_review_date: nextDate,
@@ -200,9 +203,11 @@ export async function updateErrorWord(
   id: string,
   fields: { answer?: string; chinese_meaning?: string | null; pinyin?: string | null },
 ): Promise<void> {
+  // 答案入库前 trim，配合归一化唯一索引防止分裂
+  const patch = fields.answer !== undefined ? { ...fields, answer: fields.answer.trim() } : fields;
   const { error } = await supabase
     .from('dictation_error_words')
-    .update(fields)
+    .update(patch)
     .eq('id', id);
   if (error) throw error;
 }
@@ -250,17 +255,19 @@ export async function importErrorWords(
   rows: ErrorWordInput[],
 ): Promise<ImportResult> {
   let success = 0, duplicate = 0, failed = 0;
+  // 预取现有词条答案，按归一化（去首尾空格 + 小写）判重，防止仅大小写/空格差异的词条分裂
+  const { data: existingRows } = await supabase
+    .from('dictation_error_words')
+    .select('answer')
+    .eq('member_id', memberId)
+    .eq('subject', subject);
+  const seen = new Set((existingRows ?? []).map(r => normAnswer((r as { answer?: string }).answer ?? '')));
   for (const row of rows) {
+    const answer = row.answer.trim();
     try {
-      const { data: existing } = await supabase
-        .from('dictation_error_words')
-        .select('id')
-        .eq('member_id', memberId)
-        .eq('subject', subject)
-        .eq('answer', row.answer)
-        .limit(1);
-      if (existing && existing.length > 0) { duplicate++; continue; }
-      await createErrorWord(memberId, { ...row, subject });
+      if (!answer || seen.has(normAnswer(answer))) { duplicate++; continue; }
+      await createErrorWord(memberId, { ...row, answer, subject });
+      seen.add(normAnswer(answer));
       success++;
     } catch {
       failed++;
