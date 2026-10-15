@@ -4,7 +4,7 @@ import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
 import { playPetClick, playCoin, playDogBark } from '../../../../lib/audio';
-import type { Pet, DogHouse, PetInventory, PetSubcategory, PetRarity } from '../../../../api/types';
+import type { Pet, PetInventory, PetSubcategory, PetRarity } from '../../../../api/types';
 import { expNeeded } from '../../../../api/types';
 import {
   interactWithPet, claimPetCoins, fetchPetInventory, checkPet,
@@ -108,11 +108,9 @@ function getHealSubcategory(pet: Pet): PetSubcategory | null {
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-export function PetGrassland({ pets, dogHouse, bgImage, onPetUpdate, onMaxLevelPetClick }: {
+export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }: {
   pets: Pet[];
-  dogHouse: DogHouse | null;
   onPetClick?: (pet: Pet) => void;
-  onDogHouseUpgraded?: () => void;
   bgImage?: string;
   onPetUpdate?: (updated: Pet) => void;
   onMaxLevelPetClick?: (pet: Pet) => void;

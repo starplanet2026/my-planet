@@ -715,14 +715,6 @@ export interface CheckinResult {
   already_checked: boolean;
 }
 
-export interface UpgradeDogHouseResult {
-  success: boolean;
-  message: string;
-  new_level: number;
-  new_capacity: number;
-  new_star: number;
-}
-
 // 购买住所直接升级容量：不进背包，直接消费并扩容
 export interface BuyDoghouseUpgradeResult {
   success: boolean;

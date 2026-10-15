@@ -384,7 +384,6 @@ export function PetPage() {
       {/* 背景全屏：草地常驻渲染（最多10只可拖拽） */}
       <PetGrassland
         pets={grasslandPets}
-        dogHouse={dogHouse}
         onPetClick={(pet) => setActivePet(pet)}
         onMaxLevelPetClick={(pet) => setMaxLevelPet(pet)}
         bgImage={bgImage}

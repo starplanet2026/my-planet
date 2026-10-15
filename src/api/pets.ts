@@ -3,7 +3,7 @@ import type {
   PetShopItem, Pet, PetShopItemType, PetSubcategory, PetRarity, PetTrait,
   PetInventory, PetCheckin, DogHouse, PetWord, PetWordProgress, PetWordBook,
   BuyPetItemResult, ClaimPetCoinsResult,
-  CheckinResult, UpgradeDogHouseResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
+  CheckinResult, BuyDoghouseUpgradeResult, FinishWordMatchResult,
   PetBackground,
   GameLevelResult, GameWordStat, FinishGameLevelResult,
   BoardingStatus, BoardingHistoryItem, StudyPet,
@@ -262,13 +262,6 @@ export async function getDogHouse(memberId: string): Promise<DogHouse> {
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as DogHouse;
-}
-
-export async function upgradeDogHouse(memberId: string): Promise<UpgradeDogHouseResult> {
-  const { data, error } = await supabase.rpc('upgrade_dog_house', { p_member_id: memberId });
-  if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  return row as UpgradeDogHouseResult;
 }
 
 // 购买住所用品直接扩容（不进背包，直接消费）
