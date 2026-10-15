@@ -5,7 +5,7 @@
 --       / review_history 已被污染，需按统一口径全量重算。
 --
 -- 台账口径：
---   主台账 = review_history（每个条目视为一次复习事件，仅对完全相同的 日期+对错+动作 去重）
+--   主台账 = review_history（每个条目视为一次复习事件，不去重）
 --   补台账 = 三张永久答题日志，互为补充、互不重叠
 --       1) dictation_records               —— 直连批改路径，覆盖自 2026-09-28
 --       2) dictation_quick_review_records  —— 快速复习路径，覆盖自 2026-10-11
@@ -21,15 +21,14 @@
 --   · 只统计“错词入库之后”发生的答题：日志事件时间 >= 该行 created_at；
 --     历史条目日期 >= 该行 created_at 的 UTC 日期（与 current_date 写入口径一致）
 --
--- 节点重放规则（与 0234 存量重算、0237 修正口径一致）：
+-- 节点重放规则（方案 B）：
 --   · 答错 → 回到第 1 节点（首条即答错记为 new，否则 reset）
---   · 答对 → 按 1→2→4→7→15 序列推进；推进到第 15 节点即视为掌握
---   · 末次事件为答对且节点=15 → status='completed', next_review_date=null
---   · 否则 status='in_progress', next_review_date = 末次事件日期 + 当前节点
+--   · 答对 → 按 1→2→4→7→15 序列推进；到达第 15 节点后再答对 1 次才视为掌握
+--   · 末次事件为答对且已标记完成 → status='completed', next_review_date=null
+--   · 末次事件为答对且未完成 → status='in_progress', next_review_date = 末次事件日期 + 当前节点
+--   · 末次事件为答错 → current_node=1, status='in_progress', next_review_date = 末次事件日期 + 1
 --   · 同日期内按“答错在前、答对在后”重放
---   · 单调节点：末次事件为答对时，节点只前进不后退（取 max(重放节点, 原节点)），
---     避免因历史台账不全导致已完成词条被回退为未完成
---     （唯末次事件为答错时才强制回落到第 1 节点）
+--   · 严格按台账重推：不保留原有节点/完成状态（无任何答题证据的行除外）
 -- ------------------------------------------------------------------
 
 create temp table tmp_hist (
@@ -44,9 +43,9 @@ create temp table tmp_ev (
   ew_id uuid, ts timestamptz, d date, correct boolean, seq bigint
 ) on commit drop;
 
--- 一、主台账：review_history（按 日期+对错+动作 去重）
+-- 一、主台账：review_history（每个条目视为一次事件）
 insert into tmp_hist (ew_id, ts, d, correct, action)
-select distinct ew.id,
+select ew.id,
        ((h->>'date')::date::timestamp + interval '12 hours') at time zone 'UTC',
        (h->>'date')::date,
        coalesce((h->>'correct')::boolean, false),
@@ -95,7 +94,7 @@ left join (
 ) h on h.ew_id = z.ew_id and h.d = z.d and h.correct = z.correct
 where z.rn > coalesce(h.hc, 0);
 
--- 四、逐行重放，写回节点/状态/次数/历史
+-- 四、逐行重放（方案 B），写回节点/状态/次数/历史
 do $$
 declare
   r record;
@@ -106,18 +105,18 @@ declare
   v_ec int;
   v_action text;
   v_last_d date;
-  v_last_correct boolean;
+  v_done boolean;
   v_hist jsonb;
   v_cycle date;
   v_has boolean;
 begin
-  for r in select id, current_node from public.dictation_error_words loop
+  for r in select id from public.dictation_error_words loop
     v_has := false;
     v_node := 1;
     v_rc := 0;
     v_ec := 0;
     v_last_d := null;
-    v_last_correct := null;
+    v_done := false;
     v_hist := '[]'::jsonb;
     v_cycle := null;
 
@@ -126,25 +125,25 @@ begin
       v_rc := v_rc + 1;
 
       if e.correct then
-        if v_node >= 15 then
+        if v_done then
+          -- 已完成后再答对：保持完成
+          v_action := 'completed';
+        elsif v_node >= 15 then
+          -- 第15节点答对 → 完成
+          v_done := true;
           v_action := 'completed';
         else
+          -- 推进一级（含推进到第15节点，仍为进行中）
           v_next := case v_node when 1 then 2 when 2 then 4 when 4 then 7 else 15 end;
-          if v_next >= 15 then
-            v_action := 'completed';
-            v_node := 15;
-          else
-            v_action := 'advance';
-            v_node := v_next;
-          end if;
+          v_action := 'advance';
+          v_node := v_next;
         end if;
-        v_last_correct := true;
       else
         v_ec := v_ec + 1;
         v_node := 1;
+        v_done := false;
         v_cycle := e.d;
         v_action := case when v_rc = 1 then 'new' else 'reset' end;
-        v_last_correct := false;
       end if;
 
       v_hist := v_hist || jsonb_build_object('date', e.d::text, 'correct', e.correct, 'action', v_action);
@@ -152,42 +151,24 @@ begin
     end loop;
 
     if v_has then
-      if v_last_correct then
-        -- 单调节点：不因台账不全而后退
-        if r.current_node > v_node then
-          v_node := r.current_node;
-        end if;
-        if v_node >= 15 then
-          update public.dictation_error_words set
-            current_node = v_node,
-            status = 'completed',
-            next_review_date = null,
-            last_review_date = v_last_d,
-            review_count = v_rc,
-            error_count = v_ec,
-            review_history = v_hist,
-            cycle_start_date = coalesce(v_cycle, v_last_d),
-            updated_at = now()
-          where id = r.id;
-        else
-          update public.dictation_error_words set
-            current_node = v_node,
-            status = 'in_progress',
-            next_review_date = v_last_d + v_node,
-            last_review_date = v_last_d,
-            review_count = v_rc,
-            error_count = v_ec,
-            review_history = v_hist,
-            cycle_start_date = coalesce(v_cycle, v_last_d),
-            updated_at = now()
-          where id = r.id;
-        end if;
-      else
-        -- 末次事件为答错：强制回落到第 1 节点
+      if v_done then
         update public.dictation_error_words set
-          current_node = 1,
+          current_node = 15,
+          status = 'completed',
+          next_review_date = null,
+          last_review_date = v_last_d,
+          review_count = v_rc,
+          error_count = v_ec,
+          review_history = v_hist,
+          cycle_start_date = coalesce(v_cycle, v_last_d),
+          updated_at = now()
+        where id = r.id;
+      else
+        -- 未完成（含末次事件为答错时 v_node=1）：保持进行中
+        update public.dictation_error_words set
+          current_node = v_node,
           status = 'in_progress',
-          next_review_date = v_last_d + 1,
+          next_review_date = v_last_d + v_node,
           last_review_date = v_last_d,
           review_count = v_rc,
           error_count = v_ec,

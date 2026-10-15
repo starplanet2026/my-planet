@@ -4,8 +4,9 @@
 --      · 答对：对 dictation_error_words 完全无操作 → 节点永远不会推进、也不会完成；
 --      · 答错：insert … where not exists 静默跳过已有词条 → 不重置节点、不计错误次数、不写复习历史。
 --   2) 该链路不写 dictation_records → 答题目志缺失（孩子端 10-13 起的默写记录全部缺失）。
---   3) 完成语义统一为：答对推进到第15节点即视为掌握 → status='completed'、next_review_date=null
---      （与 0234 存量重算、0237 存量修正口径一致）。
+--   3) 完成语义（方案 B）：答对按 1→2→4→7→15 序列推进（到达第15节点共需 4 次连续答对），
+--      在第15节点再答对 1 次（即第 5 次连续答对）才置为 status='completed'、next_review_date=null；
+--      推进到第15节点时仍为 status='in_progress'、next_review_date = 当日 + 15。
 --   4) submit_dictation_result（0237 起）丢失 dictation_records 写入，一并补回。
 
 -- ============================================================
@@ -143,25 +144,14 @@ begin
           v_next_node := case v_ew.current_node
             when 1 then 2 when 2 then 4 when 4 then 7 else 15
           end;
-          if v_next_node >= 15 then
-            -- 推进到第15节点即完成
-            update public.dictation_error_words set
-              current_node = 15,
-              status = 'completed',
-              next_review_date = null,
-              last_review_date = v_today,
-              review_count = review_count + 1,
-              review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'completed')
-            where id = v_ew.id;
-          else
-            update public.dictation_error_words set
-              current_node = v_next_node,
-              next_review_date = v_today + v_next_node,
-              last_review_date = v_today,
-              review_count = review_count + 1,
-              review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
-            where id = v_ew.id;
-          end if;
+          -- 推进一级；推进到第15节点仍为进行中，需在第15节点再答对一次才完成
+          update public.dictation_error_words set
+            current_node = v_next_node,
+            next_review_date = v_today + v_next_node,
+            last_review_date = v_today,
+            review_count = review_count + 1,
+            review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
+          where id = v_ew.id;
         end if;
       end if;
     else
@@ -213,7 +203,7 @@ end;
 $$;
 
 -- ============================================================
--- 二、重写 submit_dictation_result：补回 dictation_records 写入 + 统一节点15完成语义
+-- 二、重写 submit_dictation_result：补回 dictation_records 写入 + 方案B节点语义
 -- ============================================================
 create or replace function public.submit_dictation_result(
   p_task_id uuid,
@@ -334,24 +324,13 @@ begin
           v_next_node := case v_ew.current_node
             when 1 then 2 when 2 then 4 when 4 then 7 else 15
           end;
-          if v_next_node >= 15 then
-            update public.dictation_error_words set
-              current_node = 15,
-              status = 'completed',
-              next_review_date = null,
-              last_review_date = v_today,
-              review_count = review_count + 1,
-              review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'completed')
-            where id = v_ew.id;
-          else
-            update public.dictation_error_words set
-              current_node = v_next_node,
-              next_review_date = v_today + v_next_node,
-              last_review_date = v_today,
-              review_count = review_count + 1,
-              review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
-            where id = v_ew.id;
-          end if;
+          update public.dictation_error_words set
+            current_node = v_next_node,
+            next_review_date = v_today + v_next_node,
+            last_review_date = v_today,
+            review_count = review_count + 1,
+            review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
+          where id = v_ew.id;
         end if;
       end if;
     end if;
@@ -364,7 +343,7 @@ end;
 $$;
 
 -- ============================================================
--- 三、重写 save_quick_review_record（9参）：统一节点15完成语义
+-- 三、重写 save_quick_review_record（9参）：方案B节点语义
 -- ============================================================
 create or replace function public.save_quick_review_record(
   p_task_id uuid,
@@ -444,24 +423,13 @@ begin
         v_next_node := case v_ew.current_node
           when 1 then 2 when 2 then 4 when 4 then 7 else 15
         end;
-        if v_next_node >= 15 then
-          update public.dictation_error_words set
-            current_node = 15,
-            status = 'completed',
-            next_review_date = null,
-            last_review_date = v_today,
-            review_count = review_count + 1,
-            review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'completed')
-          where id = v_ew.id;
-        else
-          update public.dictation_error_words set
-            current_node = v_next_node,
-            next_review_date = v_today + v_next_node,
-            last_review_date = v_today,
-            review_count = review_count + 1,
-            review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
-          where id = v_ew.id;
-        end if;
+        update public.dictation_error_words set
+          current_node = v_next_node,
+          next_review_date = v_today + v_next_node,
+          last_review_date = v_today,
+          review_count = review_count + 1,
+          review_history = review_history || jsonb_build_object('date', v_today::text, 'correct', true, 'action', 'advance')
+        where id = v_ew.id;
       end if;
     end if;
   end if;
