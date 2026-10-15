@@ -5,6 +5,7 @@ import { usePetUiStore } from '../../../store/petUiStore';
 import { Loading } from '../../../components/common/Loading';
 import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
+import { useStudyLockStore } from '../../../store/studyLockStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
@@ -46,6 +47,9 @@ export function PetPage() {
   const currentChildId = useModeStore(s => s.currentChildId);
   const child = members.find(m => m.id === currentChildId && m.role === 'child') ?? members.find(m => m.role === 'child');
   const toast = useToastStore();
+  // 陪伴学习任务分级解锁等级（2 全部锁定 / 1 仅锁宠物店 / 0 全部解锁）
+  const studyLockLevel = useStudyLockStore(s => s.level);
+  const refreshStudyLock = useStudyLockStore(s => s.refresh);
   const { traitMap } = usePetTraits();
 
   const [pets, setPets] = useState<Pet[]>([]);
@@ -368,6 +372,19 @@ export function PetPage() {
   // 弹窗打开时隐藏所有外层 icon
   const modalOpen = activeModal !== null || showAdopt || showStudy || showDex || showCheckin || showHelp || showBgSwitcher || showPetList || showBoarding || showPetMessages || !!maxLevelPet;
 
+  // ===== 陪伴学习任务分级解锁门禁（仅限制前端手动点击） =====
+  // 等级2：基础任务未完成 → 除「陪伴学习」外全部锁定（智慧星战不在本页）
+  // 等级1：基础任务已完成 → 除「宠物店」外全部解锁
+  const lockedAll = studyLockLevel === 2;
+  const storeLocked = studyLockLevel >= 1;
+  // 点击锁定元素时先刷新一次状态（家长在其它设备审核通过后即可立即解锁）
+  const warnLocked = () => {
+    refreshStudyLock();
+    toast.warning('请先完成陪伴学习基础任务');
+  };
+  const gate = (locked: boolean, fn: () => void) => (locked ? warnLocked : fn);
+  const lockCls = (locked: boolean) => (locked ? 'grayscale opacity-60 cursor-not-allowed' : '');
+
   const base = import.meta.env.BASE_URL;
   // 菜单图标：使用圆角矩形裁剪 + object-cover 去除 jpg 白边
   // 移动端缩小（56px）让 4 个按钮更靠近；桌面端保持 72px
@@ -385,8 +402,10 @@ export function PetPage() {
       <PetGrassland
         pets={grasslandPets}
         onPetClick={(pet) => setActivePet(pet)}
-        onMaxLevelPetClick={(pet) => setMaxLevelPet(pet)}
+        onMaxLevelPetClick={gate(lockedAll, (pet: Pet) => setMaxLevelPet(pet))}
         bgImage={bgImage}
+        locked={lockedAll}
+        onLockedClick={warnLocked}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
       />
 
@@ -394,30 +413,30 @@ export function PetPage() {
       {!modalOpen && (
         <div className="fixed top-20 left-4 sm:left-6 md:left-10 z-30 flex flex-col gap-2">
           <button
-            onClick={() => setShowDex(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, () => setShowDex(true))}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <BookOpen className="w-4 h-4" />
             <span className="text-xs font-medium">图鉴</span>
           </button>
           <button
-            onClick={() => setShowPetList(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, () => setShowPetList(true))}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <PawPrint className="w-4 h-4" />
             <span className="text-xs font-medium">我的宠物</span>
           </button>
           <button
-            onClick={() => setShowCheckin(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, () => setShowCheckin(true))}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <Calendar className="w-4 h-4" />
             <span className="text-xs font-medium">签到</span>
           </button>
           {pets.length >= 3 && (
             <button
-              onClick={() => setShowBoarding(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-indigo-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+              onClick={gate(lockedAll, () => setShowBoarding(true))}
+              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-indigo-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
             >
               <Store className="w-4 h-4" />
               <span className="text-xs font-medium">托管</span>
@@ -430,22 +449,22 @@ export function PetPage() {
       {!modalOpen && (
         <div className="fixed top-20 right-4 sm:right-6 md:right-10 z-30 flex flex-col gap-2">
           <button
-            onClick={openBgSwitcher}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, openBgSwitcher)}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <ImageIcon className="w-4 h-4" />
             <span className="text-xs font-medium">背景</span>
           </button>
           <button
-            onClick={() => setShowHelp(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, () => setShowHelp(true))}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <HelpCircle className="w-4 h-4" />
             <span className="text-xs font-medium">帮助</span>
           </button>
           <button
-            onClick={() => setShowPetMessages(true)}
-            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95"
+            onClick={gate(lockedAll, () => setShowPetMessages(true))}
+            className={cn('relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 text-green-600 hover:bg-white/90 shadow-sm transition-colors active:scale-95', lockCls(lockedAll))}
           >
             <MessageCircle className="w-4 h-4" />
             <span className="text-xs font-medium">消息</span>
@@ -455,7 +474,15 @@ export function PetPage() {
               </span>
             )}
           </button>
-          <AudioToggleButton />
+          {/* 音效按钮：锁定态用透明蒙层拦截点击 */}
+          <div className="relative">
+            <div className={cn(lockedAll && 'grayscale opacity-60 pointer-events-none')}>
+              <AudioToggleButton />
+            </div>
+            {lockedAll && (
+              <div className="absolute inset-0 z-10 cursor-not-allowed" onClick={warnLocked} />
+            )}
+          </div>
         </div>
       )}
 
@@ -463,8 +490,8 @@ export function PetPage() {
       {!modalOpen && (
         pets.length === 0 && (
           <div
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer active:scale-95 transition-transform"
-            onClick={() => setShowAdopt(true)}
+            className={cn('fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer active:scale-95 transition-transform', lockCls(lockedAll))}
+            onClick={gate(lockedAll, () => setShowAdopt(true))}
           >
             <span className="inline-block px-6 py-3 rounded-full bg-white/90 backdrop-blur-sm shadow-lg text-[22px] font-bold text-green-600 animate-pulse whitespace-nowrap">
               快来点击领养你的第一只宠物吧 ✨
@@ -475,8 +502,8 @@ export function PetPage() {
       {!modalOpen && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 flex gap-2 sm:gap-4">
           <button
-            onClick={() => setShowAdopt(true)}
-            className="flex flex-col items-center gap-0.5 sm:gap-1 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95"
+            onClick={gate(lockedAll, () => setShowAdopt(true))}
+            className={cn('flex flex-col items-center gap-0.5 sm:gap-1 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-green-200 text-green-600 hover:bg-white hover:border-green-400 shadow-md transition-all active:scale-95', lockCls(lockedAll))}
           >
             <PawPrint className="w-6 h-6 sm:w-8 sm:h-8" />
             <span className="text-xs sm:text-sm font-bold">领养新宠</span>
@@ -496,15 +523,19 @@ export function PetPage() {
         <nav className="fixed bottom-32 left-0 right-0 z-30 px-4">
           <div className="max-w-md mx-auto">
             <div className="grid grid-cols-4 py-1">
-              {navButtons.map(({ id, icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveModal(id)}
-                  className="flex flex-col items-center justify-center transition-all"
-                >
-                  {icon}
-                </button>
-              ))}
+              {navButtons.map(({ id, icon }) => {
+                // 宠物店为第二层权限（需完成当日全部任务）；其余为第一层权限
+                const itemLocked = id === 'store' ? storeLocked : lockedAll;
+                return (
+                  <button
+                    key={id}
+                    onClick={gate(itemLocked, () => setActiveModal(id))}
+                    className={cn('flex flex-col items-center justify-center transition-all', lockCls(itemLocked))}
+                  >
+                    {icon}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </nav>
@@ -969,7 +1000,7 @@ export function PetPage() {
         <StudyCompanionModal
           pets={pets}
           onClose={() => setShowStudy(false)}
-          onCompleted={() => refreshData()}
+          onCompleted={() => { refreshData(); refreshStudyLock(); }}
         />
       )}
 

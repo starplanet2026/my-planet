@@ -108,12 +108,15 @@ function getHealSubcategory(pet: Pet): PetSubcategory | null {
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }: {
+export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, locked, onLockedClick }: {
   pets: Pet[];
   onPetClick?: (pet: Pet) => void;
   bgImage?: string;
   onPetUpdate?: (updated: Pet) => void;
   onMaxLevelPetClick?: (pet: Pet) => void;
+  /** 草坪交互锁定（基础任务未完成时）：点击宠物只提示，不展开互动面板 */
+  locked?: boolean;
+  onLockedClick?: () => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -518,7 +521,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
         return (
           <div
             key={pet.id}
-            className="absolute flex flex-col items-center"
+            className={cn('absolute flex flex-col items-center', locked && 'grayscale opacity-60')}
             style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', touchAction: 'none', zIndex: petZIndex(pet.id) }}
             onDoubleClick={(e) => { e.stopPropagation(); bringToFront(pet.id); }}
           >
@@ -710,6 +713,14 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
 
       {/* 底部草地 */}
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-green-500/40 z-0" />
+
+      {/* 基础任务未完成：整块草坪交互锁定（拖拽 / 点击宠物 / 升级挑战均不可用），点击仅提示 */}
+      {locked && (
+        <div
+          className="absolute inset-0 z-[50] cursor-not-allowed"
+          onClick={() => onLockedClick?.()}
+        />
+      )}
 
       {/* 升级挑战弹窗 */}
       {levelUpPet && (

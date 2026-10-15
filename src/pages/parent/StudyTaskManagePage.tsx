@@ -42,6 +42,8 @@ export function StudyTaskManagePage() {
   const [formText, setFormText] = useState('');
   const [formReward, setFormReward] = useState(1);
   const [formSubject, setFormSubject] = useState<StudySubject>('chinese');
+  // 是否基础任务：完成当日全部基础任务即解锁萌宠星球（宠物店除外）
+  const [formIsBasic, setFormIsBasic] = useState(false);
 
   useEffect(() => {
     if (children.length > 0 && !selectedChildId) {
@@ -63,6 +65,7 @@ export function StudyTaskManagePage() {
     setFormText('');
     setFormReward(1);
     setFormSubject(subject);
+    setFormIsBasic(false);
     setShowEdit(true);
   };
 
@@ -71,6 +74,7 @@ export function StudyTaskManagePage() {
     setFormText(t.text);
     setFormReward(t.reward);
     setFormSubject(t.subject);
+    setFormIsBasic(t.is_basic);
     setShowEdit(true);
   };
 
@@ -79,10 +83,10 @@ export function StudyTaskManagePage() {
     if (!selectedChildId) return;
     try {
       if (editingId) {
-        await updateStudyTaskTemplate(editingId, { text: formText.trim(), reward: formReward, subject: formSubject });
+        await updateStudyTaskTemplate(editingId, { text: formText.trim(), reward: formReward, subject: formSubject, is_basic: formIsBasic });
         toast.success('已更新');
       } else {
-        await addStudyTaskTemplates(selectedChildId, [{ text: formText.trim(), reward: formReward, subject: formSubject }]);
+        await addStudyTaskTemplates(selectedChildId, [{ text: formText.trim(), reward: formReward, subject: formSubject, is_basic: formIsBasic }]);
         toast.success('已添加');
       }
       setShowEdit(false);
@@ -239,6 +243,9 @@ export function StudyTaskManagePage() {
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span className="text-[9px] text-amber-500">⭐{t.reward}</span>
+                            {t.is_basic && (
+                              <span className="text-[9px] px-1 rounded bg-green-100 text-green-600 font-medium">基础</span>
+                            )}
                           </div>
                         </div>
                         {/* 操作 */}
@@ -288,6 +295,23 @@ export function StudyTaskManagePage() {
               value={formReward}
               onChange={e => setFormReward(Math.max(0, Number(e.target.value) || 0))}
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">基础任务</label>
+            <button
+              type="button"
+              onClick={() => setFormIsBasic(v => !v)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left text-xs transition-colors ${
+                formIsBasic ? 'bg-green-50 border-green-300 text-green-700' : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              <span className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[8px] ${
+                formIsBasic ? 'bg-green-400 border-green-400 text-white' : 'border-slate-300'
+              }`}>
+                {formIsBasic ? '✓' : ''}
+              </span>
+              完成当日全部基础任务，即解锁萌宠星球（宠物店除外）
+            </button>
           </div>
           <div className="flex gap-2">
             <Button onClick={submitForm} className="flex-1">保存</Button>

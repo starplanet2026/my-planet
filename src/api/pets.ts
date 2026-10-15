@@ -896,6 +896,8 @@ export interface StudyTaskTemplate {
   selected: boolean;
   display_order: number;
   subject: StudySubject;
+  /** 是否为基础任务：完成当日全部基础任务即解锁萌宠星球（宠物店除外） */
+  is_basic: boolean;
   created_at: string;
 }
 
@@ -912,7 +914,7 @@ export async function fetchStudyTaskTemplates(memberId: string): Promise<StudyTa
 
 export async function addStudyTaskTemplates(
   memberId: string,
-  items: { text: string; reward: number; subject: StudySubject }[],
+  items: { text: string; reward: number; subject: StudySubject; is_basic?: boolean }[],
 ): Promise<StudyTaskTemplate[]> {
   if (items.length === 0) return [];
   // 获取当前最大 display_order（同学科内排序）
@@ -929,6 +931,7 @@ export async function addStudyTaskTemplates(
     text: it.text,
     reward: it.reward,
     subject: it.subject,
+    is_basic: it.is_basic ?? false,
     selected: true,
     display_order: maxOrder + 1 + i,
   }));
@@ -942,7 +945,7 @@ export async function addStudyTaskTemplates(
 
 export async function updateStudyTaskTemplate(
   id: string,
-  patch: Partial<Pick<StudyTaskTemplate, 'selected' | 'text' | 'reward' | 'subject'>>,
+  patch: Partial<Pick<StudyTaskTemplate, 'selected' | 'text' | 'reward' | 'subject' | 'is_basic'>>,
 ): Promise<void> {
   const { error } = await supabase.from('study_task_templates').update(patch).eq('id', id);
   if (error) throw error;
@@ -957,6 +960,33 @@ export async function deleteStudyTaskTemplate(id: string): Promise<void> {
 export async function reorderStudyTaskTemplates(orderedIds: string[]): Promise<void> {
   const { error } = await supabase.rpc('reorder_study_task_templates', { p_ids: orderedIds });
   if (error) throw error;
+}
+
+// ====== 陪伴学习任务分级解锁（权限门禁） ======
+
+// 当日解锁状态：仅统计「家长审核通过」的当日学习记录中的 done 任务（数据库端实时计算）
+export interface StudyUnlockState {
+  /** 当日基础任务是否全部完成 */
+  basicDone: boolean;
+  /** 当日已发布任务是否全部完成 */
+  allDone: boolean;
+  /** 当日已发布任务数（0 表示家长未发布任务，视作全部完成） */
+  publishedCount: number;
+  /** 其中的基础任务数 */
+  basicCount: number;
+}
+
+export async function fetchStudyUnlockState(memberId: string): Promise<StudyUnlockState> {
+  const { data, error } = await supabase.rpc('get_study_unlock_state', { p_member_id: memberId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const r = (row ?? {}) as { basic_done?: boolean; all_done?: boolean; published_count?: number; basic_count?: number };
+  return {
+    basicDone: r.basic_done !== false,
+    allDone: r.all_done !== false,
+    publishedCount: r.published_count ?? 0,
+    basicCount: r.basic_count ?? 0,
+  };
 }
 
 // ====== 陪伴学习家长审核 ======
