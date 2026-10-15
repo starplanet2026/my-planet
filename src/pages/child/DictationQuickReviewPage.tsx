@@ -62,17 +62,29 @@ export function DictationQuickReviewPage({ task, subject, childId }: Props) {
     ]).then(([words, records]) => {
       setAllWords(words);
       setRoundWords(words);
-      // 恢复判题状态 + 跨轮次错误计数
+      // 恢复判题状态 + 跨轮次错误计数 + 星光累计（否则重进页面后点「复习完成」时
+      // totalGainedStar 为 0，会静默跳过提交审核）
+      const sorted = [...records].sort((a, b) => a.created_at.localeCompare(b.created_at));
       const restored = new Map<string, WordStatus>();
       const restoredWrongs = new Map<string, number>();
-      records.forEach(r => {
+      const restoredAwarded = new Set<string>();
+      let restoredStar = 0;
+      sorted.forEach(r => {
         restored.set(r.task_word_id, r.is_correct ? 'correct' : 'incorrect');
-        if (!r.is_correct) {
+        if (r.is_correct) {
+          // 同一词全程只奖励一次，奖励 = 星光单价 - 截至该次答对时的累计错误次数
+          if (!restoredAwarded.has(r.task_word_id)) {
+            restoredAwarded.add(r.task_word_id);
+            restoredStar += Math.max(0, task.star_per_word - (restoredWrongs.get(r.task_word_id) ?? 0));
+          }
+        } else {
           restoredWrongs.set(r.task_word_id, (restoredWrongs.get(r.task_word_id) ?? 0) + 1);
         }
       });
       setJudgedWords(restored);
       setWrongCounts(restoredWrongs);
+      setAwardedWords(restoredAwarded);
+      setTotalGainedStar(restoredStar);
     }).catch(e => toast.error('加载失败：' + e.message))
       .finally(() => setLoading(false));
   }, [task.id, childId]);
