@@ -43,6 +43,7 @@ export interface Member {
   display_order: number;
   created_at: string;
   updated_at: string;
+  cat_unlocked: boolean;
 }
 
 export interface Task {

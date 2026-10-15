@@ -79,11 +79,11 @@ const traitTagCls = (hasTrait: boolean) =>
 // - 普通狗: 始终解锁
 // - 稀有狗: 拥有宠物>=2 解锁
 // - 史诗狗: 拥有宠物>=5 解锁
-// - 猫(所有稀有度): 拥有宠物>=10 且 至少1只正在店内进修 解锁
+// - 猫(所有稀有度): 读取用户持久标记 cat_unlocked（一次性永久解锁，不回退）
 export function isPetUnlocked(
   item: PetShopItem,
   ownedCount: number,
-  hasStudyingPet: boolean,
+  catUnlocked: boolean,
 ): boolean {
   if (item.type !== 'pet') return true;
   if (item.subcategory === 'dog') {
@@ -93,7 +93,8 @@ export function isPetUnlocked(
     return true;
   }
   if (item.subcategory === 'cat') {
-    return ownedCount >= 10 && hasStudyingPet;
+    // 历史达标即永久解锁：不随当前草地数量 / 进修状态变化回退
+    return catUnlocked;
   }
   return true;
 }
@@ -102,6 +103,7 @@ export function isPetUnlocked(
 function getNextUnlockHint(
   ownedCount: number,
   hasStudyingPet: boolean,
+  catUnlocked: boolean,
 ): { text: string; progress: string } | null {
   if (ownedCount < 2) {
     return { text: '领养满 2 只宠物，解锁【稀有】狗狗', progress: `${ownedCount}/2` };
@@ -109,6 +111,8 @@ function getNextUnlockHint(
   if (ownedCount < 5) {
     return { text: '领养满 5 只宠物，解锁【史诗】狗狗', progress: `${ownedCount}/5` };
   }
+  // 猫咪已永久解锁 → 无待解锁条件
+  if (catUnlocked) return null;
   if (ownedCount < 10) {
     return { text: '领养满 10 只宠物，解锁【猫咪】', progress: `${ownedCount}/10` };
   }
@@ -184,6 +188,9 @@ export function PetShopModal({
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const { traitMap } = usePetTraits();
+  // 猫咪一次性永久解锁标记（来自 members.cat_unlocked，随 Realtime 更新）
+  const members = useFamilyStore(s => s.members);
+  const catUnlocked = members.find(m => m.id === childId)?.cat_unlocked ?? false;
 
   const [activeMain, setActiveMain] = useState<PetShopItemType>(jumpDoghouse ? 'supply' : 'pet');
   const [activeSub, setActiveSub] = useState<PetSubcategory>(jumpDoghouse ? 'doghouse' : 'dog');
@@ -536,7 +543,7 @@ export function PetShopModal({
           {/* 解锁条件提示横幅：仅在宠物 tab 且有待解锁宠物时显示 */}
           {activeMain === 'pet' && (() => {
             const studying = ownedPets.some(p => p.is_studying);
-            const hint = getNextUnlockHint(ownedPets.length, studying);
+            const hint = getNextUnlockHint(ownedPets.length, studying, catUnlocked);
             if (!hint) return null;
             return (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
@@ -553,7 +560,7 @@ export function PetShopModal({
           {items.map(item => {
             const soldOut = item.stock !== null && item.stock <= 0;
             const owned = item.type === 'pet' && isOwned(item.id);
-            const unlocked = isPetUnlocked(item, ownedPets.length, ownedPets.some(p => p.is_studying));
+            const unlocked = isPetUnlocked(item, ownedPets.length, catUnlocked);
             const disabled = soldOut || !unlocked;
             const cardCls = cn(
               'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all text-center relative',
