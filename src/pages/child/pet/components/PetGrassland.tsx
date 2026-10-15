@@ -511,6 +511,10 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
       {Object.values(petStates).map(pet => {
         const pos = positions[pet.id] || { ...DEFAULT_PET_POSITION };
         const isInteracting = interactingPetId === pet.id;
+        const chatMsg = petMessage(pet);
+        const chatCollapsed = collapsedChats.has(pet.id);
+        // 联动：会话框收起时同步隐藏头顶信息；无会话内容时不联动（无小图标可点击）
+        const showHeadInfo = !chatMsg || !chatCollapsed;
         return (
           <div
             key={pet.id}
@@ -612,7 +616,8 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
               onPointerDown={(e) => onPointerDown(e, pet.id)}
               className="flex flex-col items-center cursor-pointer select-none relative"
             >
-              {/* 信息板块（内外层页面完全一致） */}
+              {/* 信息板块（内外层页面完全一致）：会话框收起时同步隐藏 */}
+              {showHeadInfo && (
               <div className="mb-1 flex flex-col items-center gap-0.5">
                 {/* 上一行：等级数字（左）+ 经验条（缩短）+ 经验数值 */}
                 <div className="flex items-center gap-1">
@@ -651,6 +656,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
                   )}
                 </div>
               </div>
+              )}
 
               {/* 宠物形象 + 会话框（会话框常驻显示，位于宠物头部右侧） */}
               <div className="relative">
@@ -665,9 +671,9 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
                   <span className="text-[38px] sm:text-[48px] md:text-[58px] drop-shadow-lg">{pet.emoji || '🐾'}</span>
                 )}
                 {/* 会话框：宠物头部右侧，内外层常驻显示（全局右侧偏移25px） */}
-                {petMessage(pet) && (
+                {chatMsg && (
                   <div className="absolute top-[25px] left-full -ml-[25px]">
-                    {collapsedChats.has(pet.id) ? (
+                    {chatCollapsed ? (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
@@ -682,7 +688,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick }:
                         className="w-[116px] cursor-pointer relative"
                       >
                         <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-normal break-words pet-bubble-breathe">
-                          {petMessage(pet)}
+                          {chatMsg}
                         </div>
                       </div>
                     )}
