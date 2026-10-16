@@ -419,6 +419,14 @@ export function PetLevelUpQuiz({
               {/* 题面 */}
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-sm font-medium text-slate-700 leading-relaxed">
+                  {(current.type === 'choice' || current.type === 'multi_choice') && (
+                    <span className={cn(
+                      'inline-block align-middle mr-2 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap',
+                      current.type === 'multi_choice' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                    )}>
+                      {current.type === 'multi_choice' ? '多选' : '单选'}
+                    </span>
+                  )}
                   {current.question_text}
                 </p>
               </div>
