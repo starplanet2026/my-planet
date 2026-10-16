@@ -10,6 +10,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
+import { useSessionState } from '../../hooks/useSessionState';
 import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Sparkles, Upload, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -45,7 +46,8 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   const [selectedChildId, setSelectedChildId] = useState('');
   const childId = selectedChildId;
 
-  const [subject, setSubject] = useState<DictationSubject>('english');
+  // 筛选条件会话级持久化：刷新/标签回收后切回仍保留原筛选（不丢用户选择）
+  const [subject, setSubject] = useSessionState<DictationSubject>('mp-dictation-create-subject', 'english');
   const [title, setTitle] = useState('英语家默');
   const [starPerWord, setStarPerWord] = useState(1);
   const [mode, setMode] = useState<DictationTaskMode>('dictation');
@@ -53,15 +55,15 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
   // 词条库筛选
   const [textbooks, setTextbooks] = useState<string[]>([]);
   const [units, setUnits] = useState<number[]>([]);
-  const [filterBook, setFilterBook] = useState('');
-  const [filterUnit, setFilterUnit] = useState<number | ''>('');
+  const [filterBook, setFilterBook] = useSessionState('mp-dictation-create-book', '');
+  const [filterUnit, setFilterUnit] = useSessionState<number | ''>('mp-dictation-create-unit', '');
   const [libraryWords, setLibraryWords] = useState<DictationWord[]>([]);
   const [libSelected, setLibSelected] = useState<Set<string>>(new Set());
 
   // 错词候选
   const [dueErrors, setDueErrors] = useState<DictationErrorWord[]>([]);
   const [errSelected, setErrSelected] = useState<Set<string>>(new Set());
-  const [dueFilterUnit, setDueFilterUnit] = useState<number | ''>('');
+  const [dueFilterUnit, setDueFilterUnit] = useSessionState<number | ''>('mp-dictation-create-dueunit', '');
 
   // 已加入
   const [added, setAdded] = useState<AddedWord[]>([]);

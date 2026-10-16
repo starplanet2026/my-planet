@@ -12,6 +12,7 @@ import { Loading } from '../../components/common/Loading';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES } from '../../lib/constants';
 import { cn } from '../../lib/utils';
+import { useSessionState } from '../../hooks/useSessionState';
 import { Plus, ArrowLeft, Upload, Download, AlertCircle, Trash2, CheckSquare, Square } from 'lucide-react';
 import { listErrorWords, createErrorWord, importErrorWords, deleteErrorWords, updateErrorWord, updateErrorWordNode, updateErrorWordUnit } from '../../api/dictation';
 import type { DictationErrorWord, DictationSubject } from '../../api/types';
@@ -30,7 +31,8 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
   const childId = currentChildId ?? '';
   const toast = useToastStore();
 
-  const [subject, setSubject] = useState<DictationSubject | ''>('');
+  // 学科筛选会话级持久化：刷新/标签回收后切回仍保留原筛选条件
+  const [subject, setSubject] = useSessionState<DictationSubject | ''>('mp-dictation-errword-subject', '');
   const [words, setWords] = useState<DictationErrorWord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());

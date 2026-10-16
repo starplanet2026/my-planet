@@ -30,12 +30,27 @@ export function KeepAlive({ when, children, className }: KeepAliveProps) {
   const [mounted, setMounted] = useState(active);
   const scrollYRef = useRef(0);
   const restoringRef = useRef(false);
+  // 是否已从 sessionStorage 还原过滚动位置（只在刷新后首次挂载时读一次）
+  const scrollRestoredRef = useRef(false);
+  const scrollKey = `mp-scroll:${pathname}`;
 
   useEffect(() => {
     if (active && !mounted) {
       setMounted(true);
     }
   }, [active, mounted]);
+
+  // 浏览器刷新 / 标签被回收后重新挂载：还原上次停留的滚动位置
+  useEffect(() => {
+    if (!active || !mounted || scrollRestoredRef.current) return;
+    scrollRestoredRef.current = true;
+    try {
+      const saved = sessionStorage.getItem(scrollKey);
+      if (saved !== null) scrollYRef.current = Number(saved) || 0;
+    } catch {
+      // 忽略读取失败
+    }
+  }, [active, mounted, scrollKey]);
 
   // 切走时保存滚动位置；切回时恢复
   useEffect(() => {
@@ -51,6 +66,27 @@ export function KeepAlive({ when, children, className }: KeepAliveProps) {
       scrollYRef.current = window.scrollY;
     }
   }, [active, mounted]);
+
+  // 切后台 / 关闭标签前把滚动位置写入 sessionStorage，刷新或标签回收后可还原
+  useEffect(() => {
+    if (!mounted || !active) return;
+    const save = () => {
+      try {
+        sessionStorage.setItem(scrollKey, String(window.scrollY));
+      } catch {
+        // 忽略写入失败
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [mounted, active, scrollKey]);
 
   if (!mounted) return null;
 

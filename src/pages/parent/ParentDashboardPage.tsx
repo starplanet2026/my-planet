@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
@@ -71,6 +71,8 @@ export function ParentDashboardPage() {
   const [pendingReportCount, setPendingReportCount] = useState(0);
   const [pendingDictationCount, setPendingDictationCount] = useState(0);
 
+  const { pathname } = useLocation();
+
   const loadBadgeCounts = () => {
     // 任务达成：待审核任务数
     setPendingTaskCount(tasks.filter(t => t.status === 'pending_approval').length);
@@ -85,12 +87,11 @@ export function ParentDashboardPage() {
   };
 
   useEffect(() => { loadBadgeCounts(); }, [family?.id, tasks]);
-  // 从子页面返回时刷新计数
+  // 仅在「用户主动切回本页」时刷新计数。
+  // 不再监听 window focus：避免切后台/切其他窗口再切回时自动发起请求（工单要求取消焦点触发的自动刷新）
   useEffect(() => {
-    const onFocus = () => loadBadgeCounts();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [family?.id, tasks]);
+    if (pathname === ROUTES.PARENT_DASHBOARD) loadBadgeCounts();
+  }, [pathname, family?.id, tasks]);
 
   const childMembers = members.filter(m => m.role === 'child');
   const parentMember = members.find(m => m.role === 'parent');

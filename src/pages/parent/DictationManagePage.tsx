@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSessionState } from '../../hooks/useSessionState';
 import { DictationWordManagePage } from './DictationWordManagePage';
 import { DictationErrorWordPage } from './DictationErrorWordPage';
 import { DictationTaskCreatePage } from './DictationTaskCreatePage';
@@ -19,8 +19,10 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 
 export function DictationManagePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('tasks');
-  const [taskSubTab, setTaskSubTab] = useState<TaskSubTab>('publish');
+  // Tab 与子 Tab 会话级持久化：浏览器刷新、标签被回收（内存节省/手机切后台）后
+  // 重新打开仍停留在原页面（错词库还是错词库），不会跳回家默首页
+  const [tab, setTab] = useSessionState<Tab>('mp-dictation-tab', 'tasks');
+  const [taskSubTab, setTaskSubTab] = useSessionState<TaskSubTab>('mp-dictation-tasksub', 'publish');
 
   return (
     <div className="max-w-6xl mx-auto py-4 px-4">
