@@ -9,6 +9,8 @@ export interface PersistedStudyTask {
   reward: number;
   done: boolean;
   rewarded: boolean;
+  subject?: 'chinese' | 'math' | 'english';
+  is_basic?: boolean;
 }
 
 // 全局（内存级）UI 状态：切换 tab 时组件卸载，但 store 保留；

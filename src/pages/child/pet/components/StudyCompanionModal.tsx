@@ -298,7 +298,8 @@ export function StudyCompanionModal({
       return;
     }
     const tasks: StudyTask[] = selectedTasks.map((t, i) => ({
-      id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false, subject: t.subject,
+      id: String(i), text: t.text, reward: t.reward, done: false, rewarded: false,
+      subject: t.subject, is_basic: t.is_basic,
     }));
     const totalSec = minutes * 60;
     setTaskList(tasks);
@@ -837,6 +838,13 @@ export function StudyCompanionModal({
                             {t.subject && (
                               <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded ${SUBJECT_META.find(s => s.id === t.subject)?.cls || 'bg-slate-100 text-slate-500'}`}>
                                 {SUBJECT_META.find(s => s.id === t.subject)?.label || ''}
+                              </span>
+                            )}
+                            {t.is_basic && (
+                              <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                t.done ? 'bg-slate-100 text-slate-400' : 'bg-green-100 text-green-600'
+                              }`}>
+                                基础
                               </span>
                             )}
                             <span className={`text-base leading-snug block ${t.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
