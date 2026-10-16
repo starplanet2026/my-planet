@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { pinyin as pinyinPro } from 'pinyin-pro';
 import { useFamilyStore } from '../../store/familyStore';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../lib/constants';
@@ -229,6 +230,7 @@ export function DictationTaskManagePage() {
   const submitAddWord = async () => {
     if (!addWordTargetTask) return;
     if (!wordForm.answer.trim()) { toast.error('请填写答案'); return; }
+    if (!wordForm.unit_no || wordForm.unit_no <= 0) { toast.error('请填写单元序号（必填）'); return; }
     const isEnglish = addWordTargetTask.subject === 'english';
     try {
       await addTaskWords(addWordTargetTask.id, [{
@@ -239,7 +241,7 @@ export function DictationTaskManagePage() {
         page_no: null,
         chinese_meaning: isEnglish ? wordForm.chinese_meaning || null : null,
         part_of_speech: isEnglish ? wordForm.part_of_speech || null : null,
-        pinyin: !isEnglish ? wordForm.pinyin || null : null,
+        pinyin: !isEnglish ? (wordForm.pinyin.trim() || pinyinPro(wordForm.answer.trim(), { toneType: 'symbol', type: 'array' }).join(' ')) : null,
         answer: wordForm.answer.trim(),
         is_temporary: true,
         save_to_library: false,
@@ -578,8 +580,8 @@ export function DictationTaskManagePage() {
                 <Input value={wordForm.textbook_name} onChange={e => setWordForm({ ...wordForm, textbook_name: e.target.value })} placeholder="可不填" />
               </div>
               <div>
-                <label className="text-xs text-slate-500">单元序号（选填）</label>
-                <Input type="number" value={wordForm.unit_no === 0 ? '' : wordForm.unit_no} onChange={e => setWordForm({ ...wordForm, unit_no: e.target.value === '' ? 0 : Number(e.target.value) })} placeholder="可不填" />
+                <label className="text-xs text-slate-500">单元序号（必填）</label>
+                <Input type="number" min="1" value={wordForm.unit_no === 0 ? '' : wordForm.unit_no} onChange={e => setWordForm({ ...wordForm, unit_no: e.target.value === '' ? 0 : Number(e.target.value) })} placeholder="请填写" />
               </div>
             </div>
             <div>
@@ -606,12 +608,16 @@ export function DictationTaskManagePage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-500">拼音</label>
+                  <label className="text-xs text-slate-500">拼音（自动生成，可修改）</label>
                   <Input value={wordForm.pinyin} onChange={e => setWordForm({ ...wordForm, pinyin: e.target.value })} />
                 </div>
                 <div>
                   <label className="text-xs text-slate-500">汉字答案</label>
-                  <Input value={wordForm.answer} onChange={e => setWordForm({ ...wordForm, answer: e.target.value })} />
+                  <Input value={wordForm.answer} onChange={e => {
+                    const val = e.target.value;
+                    const autoPinyin = val ? pinyinPro(val, { toneType: 'symbol', type: 'array' }).join(' ') : '';
+                    setWordForm({ ...wordForm, answer: val, pinyin: autoPinyin || wordForm.pinyin });
+                  }} />
                 </div>
               </div>
             )}

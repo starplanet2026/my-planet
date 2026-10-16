@@ -76,7 +76,9 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
         unit_name: form.unit_name,
         chinese_meaning: subject === 'english' ? form.chinese_meaning || null : null,
         part_of_speech: subject === 'english' ? form.part_of_speech || null : null,
-        pinyin: subject === 'chinese' ? form.pinyin || null : null,
+        pinyin: subject === 'chinese'
+          ? (form.pinyin.trim() || pinyinPro(form.answer.trim(), { toneType: 'symbol', type: 'array' }).join(' ')) || null
+          : null,
         answer: form.answer.trim(),
       });
       toast.success('已添加到错词库');
@@ -105,16 +107,23 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
       const rows = XLSX.utils.sheet_to_json<any>(wb.Sheets[wb.SheetNames[0]], { defval: '' });
-      const payload = rows.map(r => ({
-        subject,
-        textbook_name: String(r['课本名称'] ?? ''),
-        unit_no: Number(r['单元序号']) || 0,
-        unit_name: String(r['单元名字'] ?? ''),
-        chinese_meaning: subject === 'english' ? String(r['中文释义'] ?? '') || null : null,
-        part_of_speech: subject === 'english' ? String(r['词性'] ?? '') || null : null,
-        pinyin: subject === 'chinese' ? String(r['拼音'] ?? '') || null : null,
-        answer: subject === 'english' ? String(r['英文答案'] ?? '') : String(r['汉字答案'] ?? ''),
-      })).filter(r => r.answer);
+      const payload = rows.map(r => {
+        const answer = subject === 'english' ? String(r['英文答案'] ?? '') : String(r['汉字答案'] ?? '');
+        const rawPinyin = subject === 'chinese' ? String(r['拼音'] ?? '').trim() : '';
+        return {
+          subject,
+          textbook_name: String(r['课本名称'] ?? ''),
+          unit_no: Number(r['单元序号']) || 0,
+          unit_name: String(r['单元名字'] ?? ''),
+          chinese_meaning: subject === 'english' ? String(r['中文释义'] ?? '') || null : null,
+          part_of_speech: subject === 'english' ? String(r['词性'] ?? '') || null : null,
+          // 语文：拼音列为空时按汉字自动生成
+          pinyin: subject === 'chinese'
+            ? (rawPinyin || (answer.trim() ? pinyinPro(answer.trim(), { toneType: 'symbol', type: 'array' }).join(' ') : '')) || null
+            : null,
+          answer,
+        };
+      }).filter(r => r.answer);
       // 校验：单元序号必填
       const missingUnit = payload.filter(r => !r.unit_no || r.unit_no <= 0);
       if (missingUnit.length > 0) {
@@ -454,8 +463,8 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
                   <Input value={form.textbook_name} onChange={e => setForm({ ...form, textbook_name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500">单元序号</label>
-                  <Input type="number" value={form.unit_no} onChange={e => setForm({ ...form, unit_no: Number(e.target.value) })} />
+                  <label className="text-xs text-slate-500">单元序号（必填）</label>
+                  <Input type="number" min="1" value={form.unit_no || ''} onChange={e => setForm({ ...form, unit_no: Number(e.target.value) })} placeholder="请填写" />
                 </div>
               </div>
               <div>
@@ -482,7 +491,7 @@ export function DictationErrorWordPage({ embedded = false }: { embedded?: boolea
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-500">拼音</label>
+                    <label className="text-xs text-slate-500">拼音（自动生成，可修改）</label>
                     <Input value={form.pinyin} onChange={e => setForm({ ...form, pinyin: e.target.value })} />
                   </div>
                   <div>

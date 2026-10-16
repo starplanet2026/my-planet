@@ -161,12 +161,15 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
 
   const addTemp = async () => {
     if (!tempForm.answer.trim()) { toast.error('请填写答案'); return; }
+    if (!tempForm.unit_no || tempForm.unit_no <= 0) { toast.error('请填写单元序号（必填）'); return; }
     const newWord: AddedWord = {
       key: `temp-${Date.now()}`, word_id: null, error_word_id: null,
       textbook_name: tempForm.textbook_name, unit_no: tempForm.unit_no, unit_name: tempForm.unit_name,
       page_no: null, chinese_meaning: subject === 'english' ? tempForm.chinese_meaning || null : null,
       part_of_speech: subject === 'english' ? tempForm.part_of_speech || null : null,
-      pinyin: subject === 'chinese' ? tempForm.pinyin || null : null,
+      pinyin: subject === 'chinese'
+        ? (tempForm.pinyin.trim() || pinyinPro(tempForm.answer.trim(), { toneType: 'symbol', type: 'array' }).join(' '))
+        : null,
       answer: tempForm.answer.trim(), is_temporary: true, save_to_library: false,
     };
     setTempWords(prev => [...prev, newWord]);
@@ -280,30 +283,47 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
       const rows = XLSX.utils.sheet_to_json<any>(wb.Sheets[wb.SheetNames[0]], { defval: '' });
       const newWords: AddedWord[] = [];
       let dupCount = 0;
-      for (const r of rows) {
+      const missingUnitRows: number[] = [];
+      rows.forEach((r, i) => {
         const answer = subject === 'english' ? String(r['英文答案'] ?? '') : String(r['汉字答案'] ?? '');
-        if (!answer.trim()) continue;
+        if (!answer.trim()) return;
+        // 单元序号必填：缺失或非正整数的行跳过并记录 Excel 行号（表头为第1行，数据从第2行开始）
+        const unitNo = Number(r['单元序号']);
+        if (!Number.isInteger(unitNo) || unitNo <= 0) { missingUnitRows.push(i + 2); return; }
         const key = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         // 去重：临时词条列表中同答案的跳过
-        if (tempWords.some(a => a.answer === answer.trim())) { dupCount++; continue; }
+        if (tempWords.some(a => a.answer === answer.trim())) { dupCount++; return; }
+        // 语文：拼音列为空时按汉字自动生成
+        const rawPinyin = subject === 'chinese' ? String(r['拼音'] ?? '').trim() : '';
         newWords.push({
           key,
           word_id: null, error_word_id: null,
           textbook_name: String(r['课本名称'] ?? ''),
-          unit_no: Number(r['单元序号']) || 0,
+          unit_no: unitNo,
           unit_name: String(r['单元名字'] ?? ''),
           page_no: subject === 'english' ? (r['页码'] ? Number(r['页码']) : null) : null,
           chinese_meaning: subject === 'english' ? String(r['中文释义'] ?? '') || null : null,
           part_of_speech: subject === 'english' ? String(r['词性'] ?? '') || null : null,
-          pinyin: subject === 'chinese' ? String(r['拼音'] ?? '') || null : null,
+          pinyin: subject === 'chinese'
+            ? (rawPinyin || pinyinPro(answer.trim(), { toneType: 'symbol', type: 'array' }).join(' '))
+            : null,
           answer: answer.trim(),
           is_temporary: true, save_to_library: false,
         });
-      }
+      });
       if (newWords.length > 0) {
         setTempWords(prev => [...prev, ...newWords]);
       }
-      toast.success(`导入完成：新增 ${newWords.length} 条${dupCount > 0 ? `，重复跳过 ${dupCount} 条` : ''}`);
+      const parts = [`导入完成：新增 ${newWords.length} 条`];
+      if (dupCount > 0) parts.push(`重复跳过 ${dupCount} 条`);
+      if (missingUnitRows.length > 0) {
+        parts.push(`缺少单元序号跳过 ${missingUnitRows.length} 条（第 ${missingUnitRows.slice(0, 10).join('、')}${missingUnitRows.length > 10 ? '…' : ''} 行）`);
+      }
+      if (newWords.length === 0 && missingUnitRows.length > 0) {
+        toast.error(`未导入任何词条：${missingUnitRows.length} 条数据缺少必填的单元序号，请补充后重新导入`);
+      } else {
+        toast.success(parts.join('，'));
+      }
     } catch (err: any) {
       toast.error('导入失败：' + err.message);
     } finally {
@@ -526,7 +546,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               <Button size="sm" onClick={() => setShowTemp(true)}><Plus className="w-3 h-3" />新增</Button>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。勾选后可批量加入任务与词条库。</p>
+          <p className="text-xs text-slate-400 mb-2">可添加临时词条，支持Excel批量导入。勾选后可批量加入任务与词条库。单元序号为必填项，导入时缺失的行会被跳过。</p>
           <input ref={tempFileRef} type="file" accept=".xlsx,.xls" onChange={onTempFileChange} className="hidden" />
           {tempWords.length > 0 && (
             <>
@@ -612,8 +632,8 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
               <Input value={tempForm.textbook_name} onChange={e => setTempForm({ ...tempForm, textbook_name: e.target.value })} placeholder="可不填" />
             </div>
             <div>
-              <label className="text-xs text-slate-500">单元序号（选填）</label>
-              <Input type="number" value={tempForm.unit_no === 0 ? '' : tempForm.unit_no} onChange={e => setTempForm({ ...tempForm, unit_no: e.target.value === '' ? 0 : Number(e.target.value) })} placeholder="可不填" />
+              <label className="text-xs text-slate-500">单元序号（必填）</label>
+              <Input type="number" min="1" value={tempForm.unit_no === 0 ? '' : tempForm.unit_no} onChange={e => setTempForm({ ...tempForm, unit_no: e.target.value === '' ? 0 : Number(e.target.value) })} placeholder="请填写" />
             </div>
           </div>
           <div>
@@ -640,7 +660,7 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
           ) : (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-slate-500">拼音</label>
+                <label className="text-xs text-slate-500">拼音（自动生成，可修改）</label>
                 <Input value={tempForm.pinyin} onChange={e => setTempForm({ ...tempForm, pinyin: e.target.value })} />
               </div>
               <div>
