@@ -1,29 +1,29 @@
 import { supabase } from './client';
 import type { Family, Member, InitFamilyResult } from './types';
 
-// 初始化家庭（首次设置）——只需邮箱+密码+家庭名称
-export async function initFamily(
-  name: string, email: string, password: string
-): Promise<{ family: Family; childMember: Member }> {
-  // 1. 注册家长账号
-  const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
-  if (authErr) throw new Error(`注册失败：${authErr.message}`);
-  if (!authData.user) throw new Error('注册失败：未返回用户信息');
+// 手机号规范化为 E.164 格式（默认中国大陆区号 +86）
+export function normalizePhone(input: string): string {
+  const digits = input.replace(/[^\d]/g, '');
+  if (digits.startsWith('86') && digits.length === 13) return `+${digits}`;
+  if (digits.length === 11) return `+86${digits}`;
+  return `+${digits}`;
+}
 
-  // 2. 如果注册后没有 session，自动登录
-  if (!authData.session) {
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInErr) throw new Error(`自动登录失败：${signInErr.message}`);
-  }
+// 校验中国大陆手机号（11 位，1[3-9] 开头；允许带 86 前缀）
+export function isValidChinaPhone(input: string): boolean {
+  const digits = input.replace(/[^\d]/g, '');
+  const core = digits.startsWith('86') && digits.length === 13 ? digits.slice(2) : digits;
+  return /^1[3-9]\d{9}$/.test(core);
+}
 
-  // 3. 调用 init_family RPC（v2：只需家庭名称）
+// 注册成功后创建家庭 + 默认成员（邮箱/手机注册共用）
+async function createFamilyAfterAuth(name: string): Promise<{ family: Family; childMember: Member }> {
   const { data, error } = await supabase.rpc('init_family', { p_name: name });
   if (error) throw new Error(`创建家庭失败：${error.message}`);
 
   const result = (Array.isArray(data) ? data[0] : data) as InitFamilyResult;
   if (!result?.family_id) throw new Error('创建家庭失败：未返回家庭 ID');
 
-  // 4. 查询创建的 family 和 child member
   const { data: family, error: famErr } = await supabase
     .from('families').select('*').eq('id', result.family_id).single();
   if (famErr) throw new Error(`查询家庭失败：${famErr.message}`);
@@ -35,9 +35,50 @@ export async function initFamily(
   return { family: family as Family, childMember: childMember as Member };
 }
 
-// 登录
+// 初始化家庭（邮箱注册）——只需邮箱+密码+家庭名称
+export async function initFamily(
+  name: string, email: string, password: string
+): Promise<{ family: Family; childMember: Member }> {
+  const { data: authData, error: authErr } = await supabase.auth.signUp({ email, password });
+  if (authErr) throw new Error(`注册失败：${authErr.message}`);
+  if (!authData.user) throw new Error('注册失败：未返回用户信息');
+
+  // 如果注册后没有 session，自动登录（需在 Supabase 后台关闭邮箱确认）
+  if (!authData.session) {
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInErr) throw new Error(`自动登录失败：${signInErr.message}`);
+  }
+
+  return createFamilyAfterAuth(name);
+}
+
+// 初始化家庭（手机号注册）——手机号+密码+家庭名称
+export async function initFamilyByPhone(
+  name: string, phone: string, password: string
+): Promise<{ family: Family; childMember: Member }> {
+  const { data: authData, error: authErr } = await supabase.auth.signUp({ phone, password });
+  if (authErr) throw new Error(`注册失败：${authErr.message}`);
+  if (!authData.user) throw new Error('注册失败：未返回用户信息');
+
+  // 如果注册后没有 session，用手机号自动登录（需在 Supabase 后台关闭手机确认）
+  if (!authData.session) {
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ phone, password });
+    if (signInErr) throw new Error(`自动登录失败：${signInErr.message}`);
+  }
+
+  return createFamilyAfterAuth(name);
+}
+
+// 邮箱登录
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
+
+// 手机号登录（密码方式）
+export async function signInWithPhone(phone: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
   if (error) throw error;
   return data;
 }

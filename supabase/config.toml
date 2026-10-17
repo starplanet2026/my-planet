@@ -31,6 +31,12 @@ enable_signup = true
 enable_signup = true
 enable_confirmations = false
 
+# 手机号注册/登录（密码方式）。关闭手机确认后，手机注册直接建立会话、不发短信，
+# 因此无需配置 SMS 服务商；若以后要做短信验证码登录，需改为 true 并配置 [auth.sms.xxx] 服务商
+[auth.sms]
+enable_signup = true
+enable_confirmations = false
+
 [realtime]
 enabled = true
 
