@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>萌宠奇遇记</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: linear-gradient(180deg, #FFF5E6 0%, #FFE8D6 50%, #FFDAB9 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px;
+  }
+  .game-container {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 8px 32px rgba(255, 166, 88, 0.2);
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-bar { height: 6px; background: #FFF0E0; width: 100%; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #FFB347, #FF8C42); border-radius: 0 3px 3px 0; transition: width 0.4s ease; }
+  .screen { padding: 24px 20px; min-height: 540px; display: none; flex-direction: column; }
+  .screen.active { display: flex; }
+  .start-screen { text-align: center; justify-content: center; }
+  .start-screen h1 { font-family: 'ZCOOL KuaiLe', cursive; font-size: 30px; color: #E67E22; margin-bottom: 12px; line-height: 1.4; }
+  .start-screen .subtitle { font-size: 14px; color: #8B7355; line-height: 1.8; margin-bottom: 24px; }
+  .start-dog { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; margin: 0 auto 20px; border: 6px solid #FFE4C4; box-shadow: 0 4px 20px rgba(255, 179, 71, 0.3); }
+  .btn-primary { background: linear-gradient(135deg, #FFB347, #FF8C42); color: white; border: none; padding: 12px 36px; font-size: 17px; font-family: 'ZCOOL KuaiLe', cursive; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 140, 66, 0.4); transition: transform 0.2s; }
+  .btn-primary:active { transform: scale(0.96); }
+  .scene-image { width: 100%; height: 160px; border-radius: 16px; background: linear-gradient(135deg, #FFE4B5, #FFDAB9); margin-bottom: 16px; display: flex; align-items: center; justify-content: center; font-size: 48px; overflow: hidden; }
+  .scene-emoji { font-size: 56px; }
+  .question-text { font-size: 16px; line-height: 1.7; color: #4A3728; margin-bottom: 6px; font-weight: 500; }
+  .question-hint { font-size: 12px; color: #B0A090; margin-bottom: 16px; }
+  .options { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+  .option-btn { background: #FFF8F0; border: 2px solid #FFE4C4; border-radius: 14px; padding: 12px 16px; font-size: 14px; color: #5D4E37; text-align: left; cursor: pointer; transition: all 0.2s; line-height: 1.5; }
+  .option-btn:hover { background: #FFF0E0; border-color: #FFB347; }
+  .option-btn:active { transform: scale(0.98); background: #FFE4C4; }
+  .dog-meet-screen { text-align: center; }
+  .dog-image { width: 180px; height: 180px; border-radius: 50%; object-fit: cover; margin: 0 auto 12px; border: 6px solid #FFE4C4; animation: bounce-in 0.6s ease; }
+  @keyframes bounce-in { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+  .dog-name { font-family: 'ZCOOL KuaiLe', cursive; font-size: 26px; color: #E67E22; margin-bottom: 6px; }
+  .dog-desc { font-size: 13px; color: #8B7355; line-height: 1.7; margin-bottom: 20px; }
+  .adopt-buttons { display: flex; gap: 12px; justify-content: center; margin-top: auto; }
+  .btn-adopt { background: linear-gradient(135deg, #FF8C42, #FF6B6B); color: white; border: none; padding: 11px 26px; font-size: 15px; font-family: 'ZCOOL KuaiLe', cursive; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4); }
+  .btn-skip { background: #F5F0E8; color: #8B7355; border: 2px solid #E8E0D0; padding: 11px 26px; font-size: 15px; border-radius: 50px; cursor: pointer; }
+  .ending-screen { text-align: center; justify-content: center; }
+  .ending-icon { font-size: 56px; margin-bottom: 12px; }
+  .ending-title { font-family: 'ZCOOL KuaiLe', cursive; font-size: 24px; color: #E67E22; margin-bottom: 10px; }
+  .ending-text { font-size: 14px; color: #8B7355; line-height: 1.8; margin-bottom: 28px; }
+  .codex-screen { }
+  .codex-title { font-family: 'ZCOOL KuaiLe', cursive; font-size: 22px; color: #E67E22; margin-bottom: 12px; }
+  .codex-progress { background: #F0E8FF; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .codex-progress-label { font-size: 13px; color: #9B59B6; }
+  .codex-progress-num { font-size: 17px; font-weight: bold; color: #9B59B6; }
+  .codex-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .codex-card { background: #FAFAFA; border-radius: 14px; padding: 12px; text-align: center; border: 2px solid #F0F0F0; }
+  .codex-card.unlocked { background: #FFF8F0; border-color: #FFE4C4; }
+  .codex-card img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 6px; }
+  .codex-card.locked img { filter: grayscale(1) opacity(0.3); }
+  .codex-card .name { font-size: 14px; font-weight: bold; color: #5D4E37; margin-bottom: 4px; }
+  .codex-card .rarity { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-top: 4px; }
+  .rarity.common { background: #E8E8E8; color: #666; }
+  .rarity.rare { background: #E8E0FF; color: #7C3AED; }
+  .codex-card .status { font-size: 11px; color: #B0A090; }
+  .cloud { position: absolute; opacity: 0.5; animation: float 6s ease-in-out infinite; }
+  .cloud1 { top: 16px; left: 16px; font-size: 28px; }
+  .cloud2 { top: 36px; right: 24px; font-size: 22px; animation-delay: 2s; }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+  <div class="screen start-screen active" id="startScreen">
+    <div class="cloud cloud1">☁️</div>
+    <div class="cloud cloud2">☁️</div>
+    <img src="https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/EjxYbsRkKoBVSFxd5IXc3h62nPb" alt="可爱小狗" class="start-dog">
+    <h1>萌宠奇遇记</h1>
+    <p class="subtitle">微风暖暖的午后，<br>出门走走，遇见属于你的小狗吧！</p>
+    <button class="btn-primary" onclick="startGame()">开始冒险</button>
+  </div>
+
+  <div class="screen question-screen" id="questionScreen">
+    <div class="scene-image" id="sceneImage"><span class="scene-emoji">🌳</span></div>
+    <p class="question-text" id="questionText"></p>
+    <p class="question-hint" id="questionHint"></p>
+    <div class="options" id="optionsContainer"></div>
+  </div>
+
+  <div class="screen dog-meet-screen" id="dogMeetScreen">
+    <img src="" alt="小狗" class="dog-image" id="dogImage">
+    <h2 class="dog-name" id="dogName"></h2>
+    <p class="dog-desc" id="dogDesc"></p>
+    <div class="adopt-buttons">
+      <button class="btn-adopt" onclick="adoptDog()">带我回家</button>
+      <button class="btn-skip" onclick="notAdopt()">再想想</button>
+    </div>
+  </div>
+
+  <div class="screen ending-screen" id="endingScreen">
+    <div class="ending-icon" id="endingIcon">🎉</div>
+    <h2 class="ending-title" id="endingTitle"></h2>
+    <p class="ending-text" id="endingText"></p>
+    <button class="btn-primary" onclick="restartGame()">再玩一次</button>
+  </div>
+
+  <div class="screen codex-screen" id="codexScreen">
+    <h2 class="codex-title">宠物图鉴</h2>
+    <div class="codex-progress">
+      <span class="codex-progress-label">收集进度</span>
+      <span class="codex-progress-num" id="codexCount">0 / 5</span>
+    </div>
+    <div class="codex-grid" id="codexGrid"></div>
+    <button class="btn-primary" onclick="restartGame()" style="width:100%">继续冒险</button>
+  </div>
+</div>
+
+<script>
+const DOGS = {
+  bichon: { name: '比熊', img: 'https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/EjxYbsRkKoBVSFxd5IXc3h62nPb', desc: '卷毛小白狗，头上戴着粉色蝴蝶结。它胆子小小的，最喜欢温柔安静的人，会乖乖趴在你脚边撒娇。', rarity: 'common' },
+  husky: { name: '哈士奇', img: 'https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/CuBGbz3ZwoYnahxhRqjcYADSnDh', desc: '围着浅蓝色围巾的小家伙，精力满满爱笑爱闹，每天都有新游戏拉着你一起玩，是你的开心果！', rarity: 'common' },
+  labrador: { name: '拉布拉多', img: 'https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/WzT6bjh7EoTIz2x3wGHc8Ss0nse', desc: '戴着红色三角巾的暖心中等个子，能读懂你的开心和难过，会安安静静陪着你，是最可靠的倾听伙伴。', rarity: 'common' },
+  malamute: { name: '阿拉斯加', img: 'https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/Ys1EbRMXkoa815xlnPAc4900nme', desc: '看起来威风凛凛的大个子，内心却超级温柔！最喜欢爬山探险，是你最棒的户外冒险伙伴。', rarity: 'rare' },
+  shihTzu: { name: '西施犬', img: 'https://media.doubao.com/space/api/box/stream/download/all_by_mount_point/AKpGbMLZSoyqswxChdFcEX19nMe', desc: '戴着黄色蝴蝶结的傲娇小公主，慢热又敏感，一旦认定你，就会全心全意黏着你！', rarity: 'rare' }
+};
+
+const STORY = {
+  start: { type: 'question', scene: '🌤️', question: '微风暖暖的午后，阳光轻轻洒在路上。你打算出门，去寻找属于你的小狗。你现在的心情怎么样？', hint: '第 1 问 / 共 5 问', options: [
+    { text: '轻松悠闲，只想随便出门逛逛', next: 'q2_a' },
+    { text: '心里有点孤单，想找活泼的小伙伴', next: 'q2_b' },
+    { text: '内心安安静静，想要温柔的陪伴', next: 'q2_c' }
+  ]},
+  q2_a: { type: 'question', scene: '🏘️', question: '这么放松，你打算出门做什么呢？', hint: '第 2 问 / 共 5 问', options: [
+    { text: '去热闹的街边逛街', next: 'q3_a1' },
+    { text: '去公园安静看花', next: 'q3_a2' }
+  ]},
+  q3_a1: { type: 'question', scene: '🛍️', question: '街上有两家小店，你想走进哪一家？', hint: '第 3 问 / 共 5 问', options: [
+    { text: '可爱的宠物小店', next: 'q4_a11' },
+    { text: '香香的甜品店', next: 'q4_a11' }
+  ]},
+  q4_a11: { type: 'question', scene: '🐶', question: '走进宠物小店，里面有好多小狗跑来跑去。你会怎么做呢？', hint: '第 4 问 / 共 5 问', options: [
+    { text: '慢慢轻轻走，不大声吵闹', next: 'meet_bichon' },
+    { text: '大声挥手，喊小狗过来', next: 'meet_bichon' }
+  ]},
+  q3_a2: { type: 'question', scene: '🌸', question: '来到公园，你想在哪里停留？', hint: '第 3 问 / 共 5 问', options: [
+    { text: '湖边的长椅旁', next: 'q4_a21' },
+    { text: '开阔的大草坪', next: 'q4_a21' }
+  ]},
+  q4_a21: { type: 'question', scene: '🌿', question: '坐在长椅上，草丛里传来轻轻的响动，你会？', hint: '第 4 问 / 共 5 问', options: [
+    { text: '压低声音，轻轻打招呼', next: 'meet_shihTzu' },
+    { text: '坐着不动，远远观察', next: 'meet_shihTzu' }
+  ]},
+  q2_b: { type: 'question', scene: '⚽', question: '想要好玩的伙伴，你准备去哪里？', hint: '第 2 问 / 共 5 问', options: [
+    { text: '足球场，和朋友玩飞盘', next: 'q3_b1' },
+    { text: '郊外，进山徒步', next: 'q3_b2' }
+  ]},
+  q3_b1: { type: 'question', scene: '🥏', question: '你的飞盘一下子飞到旁边草坪，你决定？', hint: '第 3 问 / 共 5 问', options: [
+    { text: '跑过去捡飞盘', next: 'q4_b11' },
+    { text: '请朋友帮忙捡', next: 'q4_b11' }
+  ]},
+  q4_b11: { type: 'question', scene: '🐕', question: '跑到草坪，有只小狗抢先叼住飞盘，围着你转圈！你要？', hint: '第 4 问 / 共 5 问', options: [
+    { text: '伸手，和它一起玩飞盘', next: 'meet_husky' },
+    { text: '拿回飞盘，直接离开', next: 'meet_husky' }
+  ]},
+  q3_b2: { type: 'question', scene: '🏔️', question: '到了山脚下，前方有长长的林间小路，你？', hint: '第 3 问 / 共 5 问', options: [
+    { text: '大胆向前，往林子深处走走', next: 'q4_b21' },
+    { text: '只在山脚附近逛逛', next: 'q4_b21' }
+  ]},
+  q4_b21: { type: 'question', scene: '🌲', question: '走到林间木屋旁边，一只大大的棕褐色小狗站在那里，笑眯眯看着你。你会？', hint: '第 4 问 / 共 5 问', options: [
+    { text: '慢慢走过去打招呼', next: 'meet_malamute' },
+    { text: '有点害怕，转身往回走', next: 'meet_malamute' }
+  ]},
+  q2_c: { type: 'question', scene: '🏠', question: '想找安静的陪伴，你准备去哪里？', hint: '第 2 问 / 共 5 问', options: [
+    { text: '社区小动物救助小屋', next: 'q3_c1' },
+    { text: '图书馆旁的小花园', next: 'q3_c1' }
+  ]},
+  q3_c1: { type: 'question', scene: '🚪', question: '救助小屋的门半掩着，你打算？', hint: '第 3 问 / 共 5 问', options: [
+    { text: '轻轻推开门，进去看看小狗', next: 'q4_c11' },
+    { text: '站在门外远远张望', next: 'q4_c11' }
+  ]},
+  q4_c11: { type: 'question', scene: '🪑', question: '房间里，一只浅黄的小狗安静趴在垫子上，看见你抬起爪子挥一挥。你会？', hint: '第 4 问 / 共 5 问', options: [
+    { text: '慢慢蹲下，伸出手心', next: 'meet_labrador' },
+    { text: '站在原地静静看着', next: 'meet_labrador' }
+  ]},
+  meet_bichon: { type: 'meet', dog: 'bichon' },
+  meet_husky: { type: 'meet', dog: 'husky' },
+  meet_labrador: { type: 'meet', dog: 'labrador' },
+  meet_malamute: { type: 'meet', dog: 'malamute' },
+  meet_shihTzu: { type: 'meet', dog: 'shihTzu' }
+};
+
+let currentNode = 'start';
+let stepCount = 0;
+const MAX_STEPS = 5;
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function updateProgress(step) {
+  document.getElementById('progressFill').style.width = (step / MAX_STEPS * 100) + '%';
+}
+function startGame() { currentNode = 'start'; stepCount = 0; renderNode(currentNode); }
+function renderNode(nodeId) {
+  const node = STORY[nodeId];
+  currentNode = nodeId;
+  if (node.type === 'question') {
+    showScreen('questionScreen');
+    document.getElementById('sceneImage').innerHTML = '<span class="scene-emoji">' + node.scene + '</span>';
+    document.getElementById('questionText').textContent = node.question;
+    document.getElementById('questionHint').textContent = node.hint;
+    const container = document.getElementById('optionsContainer');
+    container.innerHTML = '';
+    node.options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.textContent = opt.text;
+      btn.onclick = () => { stepCount++; updateProgress(stepCount); renderNode(opt.next); };
+      container.appendChild(btn);
+    });
+  } else if (node.type === 'meet') {
+    const dog = DOGS[node.dog];
+    showScreen('dogMeetScreen');
+    document.getElementById('dogImage').src = dog.img;
+    document.getElementById('dogName').textContent = dog.name;
+    document.getElementById('dogDesc').textContent = dog.desc;
+    window.currentDog = node.dog;
+  }
+}
+function adoptDog() {
+  var dogKey = window.currentDog;
+  var dog = DOGS[dogKey];
+  // 通知父应用领养
+  window.parent.postMessage({ type: 'encounter_adopt', dog: dogKey, name: dog.name, emoji: '🐶' }, '*');
+  showScreen('endingScreen');
+  document.getElementById('endingIcon').textContent = '🎉';
+  document.getElementById('endingTitle').textContent = '恭喜！遇见成功！';
+  document.getElementById('endingText').textContent = '你和' + dog.name + '成为了好朋友！去萌宠星球领养吧～';
+}
+function notAdopt() {
+  window.parent.postMessage({ type: 'encounter_skip' }, '*');
+  showScreen('endingScreen');
+  document.getElementById('endingIcon').textContent = '🐾';
+  document.getElementById('endingTitle').textContent = '下次再遇见吧';
+  document.getElementById('endingText').textContent = '也许你们还需要一点时间熟悉彼此，再去别的地方走走看看吧！';
+}
+function restartGame() { currentNode = 'start'; stepCount = 0; updateProgress(0); showScreen('startScreen'); }
+updateProgress(0);
+</script>
+</body>
+</html>
