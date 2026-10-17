@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppRoutes } from './routes';
 import { ToastContainer } from './components/common/Toast';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -9,6 +9,7 @@ import { Loading } from './components/common/Loading';
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const load = useFamilyStore(s => s.load);
   const family = useFamilyStore(s => s.family);
   const loading = useFamilyStore(s => s.loading);
@@ -71,7 +72,9 @@ export default function App() {
 
   // 未登录且不在 setup 页 → 重定向（用 <Navigate> 在渲染期安全跳转，
   // 避免在 render 中调用 navigate() 触发"渲染期间更新组件"循环告警导致卡死）
-  if (!family && window.location.pathname !== '/setup') {
+  // 注意：必须用 useLocation().pathname（相对 basename），不能用 window.location.pathname，
+  // 否则子路径部署（/my-planet/）下路径永远不等于 '/setup' 导致无限重定向白屏。
+  if (!family && location.pathname !== '/setup') {
     return <Navigate to="/setup" replace />;
   }
 
