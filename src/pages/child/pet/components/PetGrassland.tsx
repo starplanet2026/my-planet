@@ -108,7 +108,7 @@ function getHealSubcategory(pet: Pet): PetSubcategory | null {
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, locked, onLockedClick }: {
+export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, locked, onLockedClick, inventoryVersion }: {
   pets: Pet[];
   onPetClick?: (pet: Pet) => void;
   bgImage?: string;
@@ -117,6 +117,8 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
   /** 草坪交互锁定（基础任务未完成时）：点击宠物只提示，不展开互动面板 */
   locked?: boolean;
   onLockedClick?: () => void;
+  /** 背包版本号：商店购买成功后自增，驱动互动面板实时刷新背包数量 */
+  inventoryVersion?: number;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -232,7 +234,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
     });
   }, [pets, positionsLoaded]);
 
-  // 加载背包
+  // 加载背包；inventoryVersion 变化（商店购买成功）时自动重拉，实现实时同步
   const loadInventory = useCallback(async () => {
     try {
       setInventory(await fetchPetInventory(childId));
@@ -241,7 +243,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
     }
   }, [childId]);
 
-  useEffect(() => { loadInventory(); }, [loadInventory]);
+  useEffect(() => { loadInventory(); }, [loadInventory, inventoryVersion]);
 
   // 加载家庭配置的重病就医星光消耗（默认 200）
   useEffect(() => {
@@ -335,6 +337,16 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
 
       if (updated.pending_levelup && !pet.pending_levelup) {
         toast.success('经验已满！点击宠物上方的「升级挑战」完成升级');
+      } else if (action === 'heal') {
+        // 喂药：展示恢复量与痊愈还需的瓶数（每瓶恢复量按本次实际恢复推算）
+        const newHealth = updated.health ?? 0;
+        const healed = Math.max(0, Math.round(newHealth - oldStat));
+        if (newHealth >= 100) {
+          toast.success('已恢复健康 🎉');
+        } else {
+          const remaining = Math.ceil((100 - newHealth) / Math.max(1, healed));
+          toast.success(`健康 +${healed}，还需 ${remaining} 瓶`);
+        }
       } else if (actionCfg) {
         const newStat = updated[actionCfg.stat] ?? 0;
         const recovery = Math.max(0, Math.round(newStat - oldStat));

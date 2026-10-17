@@ -113,12 +113,15 @@ export function PetInteractPanel({ pet, onClose, onUpdated }: {
       const prevCoin = currentPet.coin_balance || 0;
       const prevHealth = currentPet.health || 0;
       const updated = await interactWithPet(childId, currentPet.id, action, item.item_id);
-      // 检查 heal 是否成功（health 恢复到 100）
+      // 检查 heal 结果：展示恢复量与痊愈还需的瓶数
       if (action === 'heal') {
-        if ((updated.health || 0) >= 100 && prevHealth < 100) {
-          toast.success('药品有效！宠物已恢复健康 🎉');
+        const newHealth = updated.health || 0;
+        const healed = Math.max(0, Math.round(newHealth - prevHealth));
+        if (newHealth >= 100) {
+          toast.success('已恢复健康 🎉');
         } else {
-          toast.info('药品无效，请使用对应药品');
+          const remaining = Math.ceil((100 - newHealth) / Math.max(1, healed));
+          toast.success(`健康 +${healed}，还需 ${remaining} 瓶`);
         }
       } else if ((updated.coin_balance || 0) > prevCoin) {
         toast.success('获得今日金币 💰');

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal } from '../../../../components/common/Modal';
 import { Button } from '../../../../components/common/Button';
 import { Input } from '../../../../components/common/Input';
@@ -209,6 +209,8 @@ export function PetShopModal({
     name: string;
   } | null>(null);
   const [savingName, setSavingName] = useState(false);
+  // 购买防抖（同步 ref 守卫）：state 守卫在 re-render 前存在极窄竞态窗口，ref 立即生效
+  const purchasingRef = useRef(false);
 
   // 切换主 tab 时重置子分类到首个
   const switchMain = (main: PetShopItemType) => {
@@ -253,8 +255,9 @@ export function PetShopModal({
 
   // 购买商品
   const handleBuy = async (item: PetShopItem) => {
-    if (buying) return;
+    if (buying || purchasingRef.current) return;
     setBuying(true);
+    purchasingRef.current = true;
     try {
       // 住所：直接消费升级容量，不进背包
       if (item.type === 'supply' && item.subcategory === 'doghouse') {
@@ -312,13 +315,15 @@ export function PetShopModal({
       toast.error(e?.message ?? '购买失败');
     } finally {
       setBuying(false);
+      purchasingRef.current = false;
     }
   };
 
   // 内联购买用品（卡片外层直接购买，支持数量）
   const handleInlineBuy = async (item: PetShopItem, qty: number) => {
-    if (buyingItem || qty < 1) return;
+    if (buyingItem || purchasingRef.current || qty < 1) return;
     setBuyingItem(item.id);
+    purchasingRef.current = true;
     try {
       let lastErr: any = null;
       let successCount = 0;
@@ -347,6 +352,7 @@ export function PetShopModal({
       toast.error(e?.message ?? '购买失败');
     } finally {
       setBuyingItem(null);
+      purchasingRef.current = false;
     }
   };
 

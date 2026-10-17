@@ -80,6 +80,8 @@ export function PetPage() {
   const [bgImage, setBgImage] = useState(() => localStorage.getItem('pet-bg') || 'default');
   const [backgrounds, setBackgrounds] = useState<PetBackground[]>([]);
   const [bgLoading, setBgLoading] = useState(false);
+  // 背包版本号：商店购买成功后自增，驱动草地互动面板实时刷新背包数量
+  const [inventoryVersion, setInventoryVersion] = useState(0);
   // 进修宠物列表（我的宠物店弹窗）
   const [studyPets, setStudyPets] = useState<StudyPet[]>([]);
   const [studyLoading, setStudyLoading] = useState(false);
@@ -409,6 +411,7 @@ export function PetPage() {
         locked={lockedAll}
         onLockedClick={warnLocked}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
+        inventoryVersion={inventoryVersion}
       />
 
       {/* 左上角功能按钮组：图鉴 / 我的宠物 / 签到（弹窗时隐藏，往中间靠） */}
@@ -552,7 +555,7 @@ export function PetPage() {
           jumpDoghouse={shopJumpDoghouse}
           onJumpDone={() => setShopJumpDoghouse(false)}
           onClose={() => setActiveModal(null)}
-          onBought={() => { refreshData(); refreshMembers(); }}
+          onBought={() => { refreshData(); refreshMembers(); setInventoryVersion(v => v + 1); }}
         />
       )}
       {activeModal === 'inventory' && (
