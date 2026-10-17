@@ -13,13 +13,13 @@ import { Avatar } from '../../components/common/Avatar';
 import { useToastStore } from '../../store/toastStore';
 import { ROUTES, CHILD_EMOJIS, STAR_ICON_SM, COIN_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
-import { changePassword, resetAllData, setParentPin } from '../../api/family';
+import { changePassword, resetAllData, setParentPin, signOut } from '../../api/family';
 import { addChild, deleteMember } from '../../api/members';
 import { fetchPendingStudyReviews } from '../../api/pets';
 import { fetchQuestionReports } from '../../api/challenges';
 import { listPendingDictationSubmissions } from '../../api/dictation';
 import { supabase } from '../../api/client';
-import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint } from 'lucide-react';
+import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint, LogOut } from 'lucide-react';
 
 // 板块 ID
 type SectionId = 'quick' | 'achievement' | 'privilege' | 'battle' | 'pet';
@@ -122,6 +122,9 @@ export function ParentDashboardPage() {
   const [changingPin, setChangingPin] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [resetting, setResetting] = useState(false);
+  // 退出登录
+  const [showLogout, setShowLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleManualAdjust = async () => {
     if (!family || !parentMember || !currentChild) return;
@@ -226,6 +229,19 @@ export function ParentDashboardPage() {
       toast.error(e?.message ?? '重置失败');
     } finally {
       setResetting(false);
+    }
+  };
+
+  // 退出登录：清除 Supabase 登录态并跳转登录注册页（即使接口异常也强制跳转，避免卡住）
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+    } catch {
+      // 忽略登出接口异常，本地会话仍会被清除
+    } finally {
+      setLoggingOut(false);
+      navigate(ROUTES.SETUP, { replace: true });
     }
   };
 
@@ -598,6 +614,19 @@ export function ParentDashboardPage() {
 
           <div className="border-t border-slate-100" />
 
+          {/* 退出登录 */}
+          <button
+            onClick={() => setShowLogout(true)}
+            className="w-full flex items-center justify-between p-2 hover:bg-red-50 rounded-lg"
+          >
+            <div className="flex items-center gap-2">
+              <LogOut className="w-4 h-4 text-red-400" />
+              <span className="text-sm font-medium text-red-500">退出登录</span>
+            </div>
+          </button>
+
+          <div className="border-t border-slate-100" />
+
           {/* 重置所有数据 */}
           <button
             onClick={() => setShowReset(true)}
@@ -707,6 +736,17 @@ export function ParentDashboardPage() {
         variant="danger"
         onConfirm={handleReset}
         onClose={() => setShowReset(false)}
+      />
+
+      {/* 退出登录确认 */}
+      <ConfirmDialog
+        open={showLogout}
+        title="确认退出当前账号？"
+        message="退出后需重新登录才能使用家长后台，可在登录页切换其他账号登录。"
+        confirmText={loggingOut ? '退出中...' : '确认退出'}
+        variant="danger"
+        onConfirm={handleLogout}
+        onClose={() => { if (!loggingOut) setShowLogout(false); }}
       />
     </div>
   );
