@@ -92,6 +92,7 @@ export interface TaskTemplate {
 
 export interface Item {
   id: string;
+  family_id: string;
   name: string;
   description: string | null;
   price: number;

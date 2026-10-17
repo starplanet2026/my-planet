@@ -65,7 +65,7 @@ export function ShopManagePage() {
   const members = useFamilyStore(s => s.members);
   const parentMember = members.find(m => m.role === 'parent');
 
-  const { items, loading, createItem, updateItem, deleteItem } = useItems();
+  const { items, loading, createItem, updateItem, deleteItem } = useItems(family?.id);
   const toast = useToastStore();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +143,7 @@ export function ShopManagePage() {
     setSaving(true);
     try {
       const data = {
+        family_id: family.id,
         name: form.name.trim(),
         description: form.description.trim() || null,
         price: Number(form.price),

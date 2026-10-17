@@ -130,13 +130,14 @@ export function ShopPage() {
   // 幸运大转盘入口图片加载失败兜底
   const [wheelBgError, setWheelBgError] = useState(false);
 
+  const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const currentChildId = useModeStore(s => s.currentChildId);
   const child = members.find(m => m.id === currentChildId && m.role === 'child')
     ?? members.find(m => m.role === 'child');
 
-  const { items, loading } = useItems(true);
+  const { items, loading } = useItems(family?.id, true);
   const toast = useToastStore();
 
   const availableItems = items.filter(i =>
