@@ -14,6 +14,7 @@ import { ROUTES } from '../lib/constants';
  */
 export function RequireParentMode({ children }: { children: ReactNode }) {
   const unlocked = useModeStore(s => s.parentUnlocked);
+  const returnPath = useModeStore(s => s.returnPath);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const isParentRoute = pathname.startsWith('/parent');
@@ -30,7 +31,7 @@ export function RequireParentMode({ children }: { children: ReactNode }) {
     <>
       {children}
       {isParentRoute && !unlocked && (
-        <PinGate open={showPin} onClose={() => navigate(ROUTES.HOME)} />
+        <PinGate open={showPin} onClose={() => navigate(returnPath || ROUTES.PET, { replace: true })} />
       )}
     </>
   );

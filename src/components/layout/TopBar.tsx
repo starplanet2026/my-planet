@@ -33,6 +33,8 @@ export function TopBar() {
   const multiChild = useModeStore(s => s.multiChildMode);
   const mode = useModeStore(s => s.mode);
   const lockParent = useModeStore(s => s.lockParent);
+  const setReturnPath = useModeStore(s => s.setReturnPath);
+  const returnPath = useModeStore(s => s.returnPath);
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showTodayCompleted, setShowTodayCompleted] = useState(false);
@@ -278,6 +280,8 @@ export function TopBar() {
 
   const handleToggleClick = () => {
     if (mode === 'parent') return;
+    // 记录进入家长模式前所在的孩子端页面，退出家长时原路返回
+    setReturnPath(location.pathname + location.search);
     navigate(ROUTES.PARENT_DASHBOARD);
   };
 
@@ -465,7 +469,7 @@ export function TopBar() {
           </button>
           {mode === 'parent' && (
             <button
-              onClick={() => { lockParent(); navigate(ROUTES.HOME); }}
+              onClick={() => { lockParent(); navigate(returnPath || ROUTES.PET); }}
               className="text-sm text-slate-500 hover:text-slate-700 px-2"
             >
               退出家长

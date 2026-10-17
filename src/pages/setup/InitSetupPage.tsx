@@ -55,7 +55,8 @@ export function InitSetupPage() {
       }
       await enterApp();
       toast.success('注册成功！欢迎使用 My Planet');
-      navigate(ROUTES.HOME);
+      // 首次进入默认落在「萌宠星球」板块
+      navigate(ROUTES.PET, { replace: true });
     } catch (e: any) {
       toast.error(e?.message ?? '注册失败');
     } finally {
@@ -75,7 +76,8 @@ export function InitSetupPage() {
       }
       await enterApp();
       toast.success('登录成功！');
-      navigate(ROUTES.HOME);
+      // 登录后默认落在「萌宠星球」板块
+      navigate(ROUTES.PET, { replace: true });
     } catch (e: any) {
       toast.error(e?.message ?? '登录失败');
     } finally {

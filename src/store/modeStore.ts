@@ -10,6 +10,8 @@ interface ModeState {
   isUnlocking: boolean;
   unlockError: string | null;
   pinConfigured: boolean | null;
+  // 进入家长模式前所在的孩子端页面，退出家长时原路返回
+  returnPath: string | null;
 
   unlockParent: (pin: string) => Promise<boolean>;
   setupParentPin: (pin: string) => Promise<boolean>;
@@ -17,6 +19,7 @@ interface ModeState {
   lockParent: () => void;
   setChild: (id: string) => void;
   setMultiChildMode: (on: boolean) => void;
+  setReturnPath: (p: string) => void;
 }
 
 export const useModeStore = create<ModeState>()(
@@ -29,6 +32,7 @@ export const useModeStore = create<ModeState>()(
       isUnlocking: false,
       unlockError: null,
       pinConfigured: null,
+      returnPath: null,
 
       unlockParent: async (pin) => {
         set({ isUnlocking: true, unlockError: null });
@@ -70,6 +74,7 @@ export const useModeStore = create<ModeState>()(
       lockParent: () => set({ mode: 'child', parentUnlocked: false, unlockError: null }),
       setChild: (id) => set({ currentChildId: id }),
       setMultiChildMode: (on) => set({ multiChildMode: on }),
+      setReturnPath: (p) => set({ returnPath: p }),
     }),
     {
       name: 'mp-mode',
