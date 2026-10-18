@@ -50,7 +50,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () => void; disabled?: boolean }) {
   const soldOut = item.stock !== null && item.stock <= 0;
   const expired = item.expires_at && isExpired(item.expires_at);
-  const unAvailable = soldOut || !!expired;
+  // 稀有卡：不可购买（只能抽奖/发放获得），不显示价格与兑换按钮
+  const isRare = item.category === '稀有';
+  const unAvailable = soldOut || !!expired || isRare;
   const categoryColor = item.category ? (CATEGORY_COLORS[item.category] ?? '#a855f7') : '#a855f7';
 
   return (
@@ -102,10 +104,16 @@ function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () =
           <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-3 mb-2">{item.description}</p>
         )}
         <div className="flex items-center justify-between">
-          <CoinBadge price={item.price} />
+          {isRare ? (
+            <span className="text-xs font-bold text-purple-500 bg-white/60 px-2 py-1 rounded-full">
+              仅抽奖/发放
+            </span>
+          ) : (
+            <CoinBadge price={item.price} />
+          )}
           {unAvailable ? (
             <span className="text-xs text-slate-400 font-medium">
-              {soldOut ? '售罄' : '已下架'}
+              {soldOut ? '售罄' : expired ? '已下架' : '不可兑换'}
             </span>
           ) : (
             <span className="text-xs font-bold text-star-600 bg-white/60 px-2 py-1 rounded-full">
@@ -113,7 +121,7 @@ function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () =
             </span>
           )}
         </div>
-        {item.stock !== null && item.stock <= 5 && !soldOut && (
+        {item.stock !== null && item.stock <= 5 && !soldOut && !isRare && (
           <p className="text-[10px] text-red-400 mt-1">仅剩 {item.stock} 件</p>
         )}
       </div>

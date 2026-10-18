@@ -826,7 +826,7 @@ function UserDataTab({
     ? purchases.filter(p => p.member_id === selectedChildId)
     : purchases;
 
-  // 合并宠物用品 + 特权卡为统一列表
+  // 合并宠物用品 + 特权卡为统一列表；特权卡按 item_id 同类合并显示数量
   const allItems: EditableItem[] = useMemo(() => {
     const list: EditableItem[] = [];
     for (const i of filteredInventory) {
@@ -841,20 +841,31 @@ function UserDataTab({
         source: 'inventory',
       });
     }
+    // 特权卡按 item_id 合并：同一卡片多笔记录合并为一条，数量累加
+    const purchaseMap = new Map<string, EditableItem>();
     for (const p of filteredPurchases) {
-      list.push({
-        id: p.id,
-        name: p.item_name_snapshot,
-        emoji: null,
-        image_url: p.items?.image_url ?? null,
-        subcategory: p.items?.category || 'privilege',
-        quantity: p.quantity,
-        status: p.status,
-        created_at: p.created_at,
-        source: 'purchase',
-      });
+      const key = p.item_id;
+      if (purchaseMap.has(key)) {
+        const existing = purchaseMap.get(key)!;
+        purchaseMap.set(key, {
+          ...existing,
+          quantity: existing.quantity + p.quantity,
+        });
+      } else {
+        purchaseMap.set(key, {
+          id: p.id,
+          name: p.item_name_snapshot,
+          emoji: null,
+          image_url: p.items?.image_url ?? null,
+          subcategory: p.items?.category || 'privilege',
+          quantity: p.quantity,
+          status: p.status,
+          created_at: p.created_at,
+          source: 'purchase',
+        });
+      }
     }
-    return list;
+    return list.concat(Array.from(purchaseMap.values()));
   }, [filteredInventory, filteredPurchases]);
 
   // 按子分类分组

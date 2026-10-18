@@ -191,6 +191,7 @@ export function ProfilePage() {
     [purchases, child],
   );
   // 同一特权卡多笔购买合并展示（按 item_id 合并数量）
+  // 合并后保留最早一笔的 id（用于 redeem/sell 操作，因为 RPC 按 purchase_id 操作）
   const pendingPurchases = useMemo(() => {
     const map = new Map<string, Purchase>();
     for (const p of myPurchases.filter(p => p.status === 'pending')) {
@@ -208,7 +209,24 @@ export function ProfilePage() {
     }
     return Array.from(map.values());
   }, [myPurchases]);
-  const usedPurchases = myPurchases.filter(p => p.status === 'redeemed' || p.status === 'sold');
+  // 使用记录也按 item_id 合并，避免同一卡片出现多条重复记录
+  const usedPurchases = useMemo(() => {
+    const map = new Map<string, Purchase>();
+    for (const p of myPurchases.filter(p => p.status === 'redeemed' || p.status === 'sold')) {
+      const key = p.item_id;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        map.set(key, {
+          ...existing,
+          quantity: existing.quantity + p.quantity,
+          redeemed_at: existing.redeemed_at ?? p.redeemed_at,
+        });
+      } else {
+        map.set(key, { ...p });
+      }
+    }
+    return Array.from(map.values());
+  }, [myPurchases]);
 
   // 获取本周特权卡使用次数
   useEffect(() => {
@@ -410,12 +428,14 @@ export function ProfilePage() {
                     >
                       使用
                     </button>
-                    <button
-                      onClick={() => { setSellTarget(p); setSellQty(1); }}
-                      className="flex-1 py-1 rounded-lg text-[11px] font-bold text-star-600 bg-white/70 hover:bg-white border border-star-200 transition-all"
-                    >
-                      出售
-                    </button>
+                    {p.items?.category !== '稀有' && (
+                      <button
+                        onClick={() => { setSellTarget(p); setSellQty(1); }}
+                        className="flex-1 py-1 rounded-lg text-[11px] font-bold text-star-600 bg-white/70 hover:bg-white border border-star-200 transition-all"
+                      >
+                        出售
+                      </button>
+                    )}
                   </div>
                 </div>
               );
