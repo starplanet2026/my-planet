@@ -14,8 +14,9 @@ const navItems = [
   { to: ROUTES.PROFILE, icon: User, label: '我的星球' },
 ];
 
-// 基础任务未完成（等级2）时锁定的板块；智慧星战开放（需做家默任务）
-const LOCKED_TABS: string[] = [ROUTES.TASKS, ROUTES.SHOP, ROUTES.PROFILE];
+// 基础任务未完成（等级2）时锁定的板块：仅萌宠星球（PetPage 内部草坪锁定）与兑换特权
+// 领取成就、我的星球、智慧星战均开放
+const LOCKED_TABS: string[] = [ROUTES.SHOP];
 
 export function BottomNav() {
   const { pathname } = useLocation();
