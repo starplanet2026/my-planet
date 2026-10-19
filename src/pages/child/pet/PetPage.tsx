@@ -7,7 +7,7 @@ import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { useStudyLockStore } from '../../../store/studyLockStore';
 import { cn } from '../../../lib/utils';
-import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle, Heart } from 'lucide-react';
+import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
 import { expNeeded } from '../../../api/types';
@@ -20,7 +20,6 @@ import { PetCheckinModal } from './components/PetCheckinModal';
 import { PetDexModal } from './components/PetDexModal';
 import { WordMatchGame } from './components/WordMatchGame';
 import { AdoptPetModal } from './components/AdoptPetModal';
-import { DestinyPetFlow } from './components/DestinyPetFlow';
 import { StudyCompanionModal } from './components/StudyCompanionModal';
 import { PetBoardingModal } from './components/PetBoardingModal';
 import { AudioToggleButton } from './components/AudioToggleButton';
@@ -66,7 +65,6 @@ export function PetPage() {
   const [showCheckin, setShowCheckin] = useState(false);
   const [showDex, setShowDex] = useState(false);
   const [showAdopt, setShowAdopt] = useState(false);
-  const [showDestiny, setShowDestiny] = useState(false);
   const [shopJumpDoghouse, setShopJumpDoghouse] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
@@ -514,14 +512,6 @@ export function PetPage() {
           >
             <PawPrint className="w-6 h-6 sm:w-8 sm:h-8" />
             <span className="text-xs sm:text-sm font-bold">领养新宠</span>
-          </button>
-          <button
-            onClick={() => setShowDestiny(true)}
-            className="relative flex flex-col items-center gap-0.5 sm:gap-1 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border-2 border-pink-200 text-pink-500 hover:bg-white hover:border-pink-400 shadow-md transition-all active:scale-95"
-          >
-            <Heart className="w-6 h-6 sm:w-8 sm:h-8" />
-            <span className="text-xs sm:text-sm font-bold whitespace-nowrap">我的本命宠</span>
-            <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-green-500 text-white text-[10px] font-bold shadow-sm">免费</span>
           </button>
           <button
             onClick={() => setShowStudy(true)}
@@ -1007,14 +997,6 @@ export function PetPage() {
           onGoShop={() => { setShowAdopt(false); setShopJumpDoghouse(true); setActiveModal('shop'); }}
           onAdopted={() => refreshData()}
           onGoGame={() => { setShowAdopt(false); setActiveModal('game'); }}
-        />
-      )}
-
-      {/* 我的本命宠弹窗（入口始终开放，不受基础任务限定影响） */}
-      {showDestiny && (
-        <DestinyPetFlow
-          onClose={() => setShowDestiny(false)}
-          onAdopted={() => refreshData()}
         />
       )}
 
