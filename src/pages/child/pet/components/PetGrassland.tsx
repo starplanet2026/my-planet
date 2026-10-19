@@ -3,7 +3,7 @@ import { cn } from '../../../../lib/utils';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
-import { playPetClick, playCoin, playDogBark } from '../../../../lib/audio';
+import { playPetClick, playCoin, playPetSound } from '../../../../lib/audio';
 import type { Pet, PetInventory, PetSubcategory, PetRarity } from '../../../../api/types';
 import { expNeeded } from '../../../../api/types';
 import {
@@ -328,12 +328,9 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
       const newCoin = updated.coin_balance ?? 0;
       const coinEarned = Math.max(0, newCoin - oldCoin);
       const expEarned = Math.max(0, (updated.exp ?? 0) - oldExp);
-      const isLevelUp = (updated.level ?? 1) > oldLevel;
 
-      // 升级/状态条满时播放小狗叫声（预留：素材确认后生效）
-      if (isLevelUp || (updated.pending_levelup && !pet.pending_levelup)) {
-        playDogBark();
-      }
+      // 互动成功：播放宠物叫声（猫喵狗汪；升级时同样以该宠物叫声庆祝，避免重复播放）
+      playPetSound(pet.species);
 
       if (updated.pending_levelup && !pet.pending_levelup) {
         toast.success('经验已满！点击宠物上方的「升级挑战」完成升级');
@@ -492,9 +489,10 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
         });
       }
     } else {
-      // 点击：切换互动面板 + 互动音效
-      playPetClick();
+      // 点击：切换互动面板 + 宠物叫声（猫喵狗汪，未知物种回退通用点击音）
       const pet = petStates[petId];
+      if (pet?.species) playPetSound(pet.species);
+      else playPetClick();
       // 满级且未进修、未生病：弹出「去进化 / 去进修」选择弹框
       if (pet && pet.level >= pet.max_level && !pet.is_studying && !pet.is_sick) {
         onMaxLevelPetClick?.(pet);

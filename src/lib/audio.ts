@@ -126,9 +126,116 @@ export function stopBGM() {
   // TODO: 素材确认后接入
 }
 
-// 小狗叫声（预留：确认素材后接入）
+// ====== 宠物叫声（WebAudio 合成，无音频文件依赖）======
+
+// 狗叫：单声「汪」—— 锯齿波快速下滑 + 噪声爆破（喉咙质感）
+function barkOnce(ac: AudioContext, startAt: number, out: GainNode) {
+  const dur = 0.16;
+
+  // 主体：锯齿波 380Hz → 140Hz 快速下滑
+  const osc = ac.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(380, startAt);
+  osc.frequency.exponentialRampToValueAtTime(140, startAt + dur);
+  const oscGain = ac.createGain();
+  oscGain.gain.setValueAtTime(0.0001, startAt);
+  oscGain.gain.exponentialRampToValueAtTime(0.5, startAt + 0.015);
+  oscGain.gain.exponentialRampToValueAtTime(0.0001, startAt + dur);
+  // 低通让声音更"厚"
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(1600, startAt);
+  osc.connect(oscGain);
+  oscGain.connect(lp);
+  lp.connect(out);
+  osc.start(startAt);
+  osc.stop(startAt + dur + 0.02);
+
+  // 噪声爆破
+  const noiseLen = Math.floor(ac.sampleRate * 0.1);
+  const buf = ac.createBuffer(1, noiseLen, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < noiseLen; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen);
+  const noise = ac.createBufferSource();
+  noise.buffer = buf;
+  const noiseGain = ac.createGain();
+  noiseGain.gain.setValueAtTime(0.18, startAt);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.1);
+  const bp = ac.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(700, startAt);
+  bp.Q.setValueAtTime(0.8, startAt);
+  noise.connect(noiseGain);
+  noiseGain.connect(bp);
+  bp.connect(out);
+  noise.start(startAt);
+}
+
+// 小狗叫声：汪汪两声
 export function playDogBark() {
-  // TODO: 素材确认后接入
-  // const audio = new Audio('/sounds/dog-bark.mp3');
-  // audio.play();
+  if (muted) return;
+  const ac = getCtx();
+  if (!ac) return;
+  try {
+    const out = ac.createGain();
+    out.gain.setValueAtTime(0.9, ac.currentTime);
+    out.connect(ac.destination);
+    const t = ac.currentTime;
+    barkOnce(ac, t, out);
+    barkOnce(ac, t + 0.22, out);
+  } catch { /* 静默降级 */ }
+}
+
+// 小猫叫声：一声拉长的「喵～」—— 三角波滑音（420→720→320Hz）+ 轻颤音 + 低通柔化
+export function playMeow() {
+  if (muted) return;
+  const ac = getCtx();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const dur = 0.55;
+    const out = ac.createGain();
+    out.gain.setValueAtTime(0.8, t);
+    out.connect(ac.destination);
+
+    const osc = ac.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(420, t);
+    osc.frequency.exponentialRampToValueAtTime(720, t + dur * 0.35);
+    osc.frequency.exponentialRampToValueAtTime(320, t + dur);
+
+    // 颤音
+    const lfo = ac.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(9, t);
+    const lfoGain = ac.createGain();
+    lfoGain.gain.setValueAtTime(18, t);
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    // 振幅包络：快速起音，缓慢衰减
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.5, t + 0.06);
+    env.gain.setValueAtTime(0.5, t + dur * 0.6);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(2400, t);
+
+    osc.connect(env);
+    env.connect(lp);
+    lp.connect(out);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+    lfo.start(t);
+    lfo.stop(t + dur + 0.02);
+  } catch { /* 静默降级 */ }
+}
+
+// 按物种播放宠物叫声：狗 → 汪汪；猫 → 喵；未知物种静默
+export function playPetSound(species: 'dog' | 'cat' | null | undefined) {
+  if (species === 'dog') playDogBark();
+  else if (species === 'cat') playMeow();
 }

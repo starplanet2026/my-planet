@@ -666,6 +666,8 @@ export interface Pet {
   dialogue_medium_stats: string | null;
   dialogue_high_stats: string | null;
   dialogue_study: string | null;
+  /** 物种（来自 pet_shop_items.subcategory，fetchPets 时带出）：用于互动叫声 */
+  species?: 'dog' | 'cat' | null;
 }
 
 export type PetActionType = 'feed' | 'clean' | 'play' | 'heal' | 'claim_coin';

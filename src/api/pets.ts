@@ -159,14 +159,15 @@ export async function updatePetTrait(
 export async function fetchPets(memberId: string): Promise<Pet[]> {
   const { data, error } = await supabase
     .from('pets')
-    .select('*, pet_shop_items(image_url, dialogue_new_pet, dialogue_low_stats, dialogue_medium_stats, dialogue_high_stats, dialogue_study)')
+    .select('*, pet_shop_items(image_url, subcategory, dialogue_new_pet, dialogue_low_stats, dialogue_medium_stats, dialogue_high_stats, dialogue_study)')
     .eq('member_id', memberId)
     .order('created_at');
   if (error) throw error;
-  // 家长更新商店形象图后，已购宠物应同步展示最新图片；同时带出品种定制会话
+  // 家长更新商店形象图后，已购宠物应同步展示最新图片；同时带出品种定制会话与物种（猫/狗叫声）
   return ((data ?? []) as any[]).map(p => ({
     ...p,
     image_url: p.pet_shop_items?.image_url ?? p.image_url,
+    species: p.pet_shop_items?.subcategory === 'cat' ? 'cat' : p.pet_shop_items?.subcategory === 'dog' ? 'dog' : null,
     dialogue_new_pet: p.pet_shop_items?.dialogue_new_pet ?? null,
     dialogue_low_stats: p.pet_shop_items?.dialogue_low_stats ?? null,
     dialogue_medium_stats: p.pet_shop_items?.dialogue_medium_stats ?? null,
