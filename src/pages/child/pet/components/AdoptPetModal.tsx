@@ -8,7 +8,8 @@ import { useModeStore } from '../../../../store/modeStore';
 import { usePetTraits } from '../../../../hooks/usePetTraits';
 import { cn } from '../../../../lib/utils';
 import { ShoppingBag, Heart, Dices, Sparkles } from 'lucide-react';
-import { fetchPetShopItems, buyPetItem, checkPet, updatePetInfo, fetchGachaConfig } from '../../../../api/pets';
+import { checkPet, updatePetInfo, fetchGachaConfig } from '../../../../api/pets';
+import { DestinyPetFlow } from './DestinyPetFlow';
 import { supabase } from '../../../../api/client';
 import type { PetShopItem, Pet, GachaConfig } from '../../../../api/types';
 
@@ -22,45 +23,6 @@ const RARITY_CLS: Record<string, string> = {
   common: 'bg-slate-100 text-slate-500',
   rare: 'bg-blue-100 text-blue-600',
   epic: 'bg-purple-100 text-purple-600',
-};
-
-// 性格测试题
-const QUIZ_QUESTIONS = [
-  {
-    q: '你最喜欢的活动是？',
-    options: [
-      { text: '户外运动', trait: 'active' },
-      { text: '安静看书', trait: 'calm' },
-      { text: '和朋友聚会', trait: 'social' },
-      { text: '独自旅行', trait: 'independent' },
-    ],
-  },
-  {
-    q: '你理想的周末是？',
-    options: [
-      { text: '公园散步', trait: 'active' },
-      { text: '家里宅着', trait: 'calm' },
-      { text: '朋友来家里', trait: 'social' },
-      { text: '一个人冒险', trait: 'independent' },
-    ],
-  },
-  {
-    q: '你希望宠物是？',
-    options: [
-      { text: '活力满满', trait: 'active' },
-      { text: '安静乖巧', trait: 'calm' },
-      { text: '亲人友善', trait: 'social' },
-      { text: '独立有个性', trait: 'independent' },
-    ],
-  },
-];
-
-// trait → 推荐描述
-const TRAIT_DESC: Record<string, { title: string; desc: string }> = {
-  active: { title: '活力型', desc: '适合喜欢运动的你，每天陪你跑步散步！' },
-  calm: { title: '安静型', desc: '适合喜欢安静的你，乖巧地陪你看书。' },
-  social: { title: '亲人型', desc: '热情友善，来客人也会开心迎接。' },
-  independent: { title: '独立型', desc: '有个性不粘人，给你足够空间。' },
 };
 
 // 萌宠奇遇记故事场景
@@ -92,21 +54,6 @@ const STORIES = [
 ];
 
 type AdoptMode = 'menu' | 'quiz' | 'gacha' | 'story';
-
-// 根据 trait 推荐具体宠物（排除已拥有的）
-function recommendPetByTrait(trait: string, items: PetShopItem[], ownedIds?: Set<string>): PetShopItem | null {
-  // 问题16: 剔除已拥有的宠物
-  const available = ownedIds && ownedIds.size > 0
-    ? items.filter(i => !ownedIds.has(i.id))
-    : items;
-  if (available.length === 0) return null;
-  const dogs = available.filter(i => i.subcategory === 'dog');
-  const cats = available.filter(i => i.subcategory === 'cat');
-  if (trait === 'active' || trait === 'social') {
-    return dogs[0] || available[0];
-  }
-  return cats[0] || available[0];
-}
 
 // 星光值不足引导：展示当前余额、所需数额，并提供赚取入口
 function InsufficientGuide({
@@ -166,7 +113,6 @@ export function AdoptPetModal({
   onGoGame: () => void;
 }) {
   const toast = useToastStore();
-  const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const currentChildId = useModeStore(s => s.currentChildId);
@@ -174,15 +120,7 @@ export function AdoptPetModal({
   const { traitMap } = usePetTraits();
 
   const [mode, setMode] = useState<AdoptMode>('menu');
-  const [quizStep, setQuizStep] = useState(0);
-  const [traits, setTraits] = useState<string[]>([]);
-  const [topTrait, setTopTrait] = useState('');
-  const [petItems, setPetItems] = useState<PetShopItem[]>([]);
-  const [recommendedPet, setRecommendedPet] = useState<PetShopItem | null>(null);
   const [adopting, setAdopting] = useState(false);
-  const [adoptedPet, setAdoptedPet] = useState<Pet | null>(null);
-  // 问题16: 已拥有的宠物 shop_item_id 集合
-  const [ownedIds, setOwnedIds] = useState<Set<string>>(new Set());
 
   const [gachaPaid, setGachaPaid] = useState(false);
   const [gachaCfg, setGachaCfg] = useState<GachaConfig | null>(null);
@@ -194,22 +132,6 @@ export function AdoptPetModal({
   // 问题11: 领养后直接弹起名框，不跳转
   const [namingPet, setNamingPet] = useState<{ petId: string; name: string } | null>(null);
   const [savingName, setSavingName] = useState(false);
-
-  // 加载宠物商品 + 已拥有宠物
-  useEffect(() => {
-    if (family?.id && (mode === 'quiz' || mode === 'gacha')) {
-      fetchPetShopItems('pet', undefined, false).then(items => {
-        setPetItems(items);
-      }).catch(() => {});
-      // 问题16: 查询已拥有的宠物
-      if (childId) {
-        supabase.from('pets').select('shop_item_id').eq('member_id', childId)
-          .then(({ data }) => {
-            setOwnedIds(new Set((data ?? []).map((p: any) => p.shop_item_id).filter(Boolean)));
-          }).catch(() => {});
-      }
-    }
-  }, [family?.id, mode, childId]);
 
   // 组件挂载即加载抽卡配置（领养扣费/放弃扣费），避免进入抽卡后才异步加载导致短暂显示默认值
   useEffect(() => {
@@ -409,7 +331,6 @@ export function AdoptPetModal({
       toast.success('命名成功！好好照顾它吧');
       const pet = await checkPet(namingPet.petId);
       setGachaResult(pet);
-      setAdoptedPet(pet);
       setNamingPet(null);
       refreshMembers();
       onAdopted();
@@ -420,56 +341,11 @@ export function AdoptPetModal({
     }
   };
 
-  // 领养推荐的宠物
-  const handleAdoptRecommended = async () => {
-    if (!recommendedPet) return;
-    setAdopting(true);
-    try {
-      const result = await buyPetItem(recommendedPet.id, childId);
-      if (!result.success) {
-        if (isInsufficientError(result.message)) {
-          setInsufficientInfo({ current: starValue, needed: recommendedPet.price_star });
-        } else if (result.message?.includes('小屋') || result.message?.includes('狗屋') || result.message?.includes('住所') || result.message?.includes('饲养位')) {
-          toast.error(result.message);
-        } else {
-          toast.error(result.message || '领养失败');
-        }
-        return;
-      }
-      toast.success('领养成功！');
-      refreshMembers();
-      // 问题11: 直接弹起名框，不跳转
-      if (result.pet_id) {
-        setNamingPet({ petId: result.pet_id, name: '' });
-      }
-      onAdopted();
-    } catch (e: any) {
-      if (isInsufficientError(e?.message)) {
-        setInsufficientInfo({ current: starValue, needed: recommendedPet.price_star });
-      } else {
-        toast.error(e?.message ?? '领养失败');
-      }
-    } finally {
-      setAdopting(false);
-    }
-  };
-
-  // 性格测试完成
-  const finishQuiz = (allTraits: string[]) => {
-    const traitCount: Record<string, number> = {};
-    allTraits.forEach(t => traitCount[t] = (traitCount[t] || 0) + 1);
-    const top = Object.entries(traitCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'active';
-    setTopTrait(top);
-    // 问题16: 传入 ownedIds 排除已拥有
-    const pet = recommendPetByTrait(top, petItems, ownedIds);
-    setRecommendedPet(pet);
-  };
-
   // 选项菜单
   if (mode === 'menu') {
     const options = [
       { id: 'shop' as const, icon: <ShoppingBag className="w-6 h-6" />, label: '商城选购', desc: '直接去商城挑选喜欢的宠物', color: 'from-blue-400 to-cyan-500' },
-      { id: 'quiz' as const, icon: <Heart className="w-6 h-6" />, label: '性格测试', desc: '答题测出最适合你的宠物', color: 'from-pink-400 to-rose-500' },
+      { id: 'quiz' as const, icon: <Heart className="w-6 h-6" />, label: '我的本命宠', desc: '来做性格测试免费领养你的本命宠吧！', color: 'from-pink-400 to-rose-500' },
       { id: 'gacha' as const, icon: <Dices className="w-6 h-6" />, label: '抽卡', desc: `花${adoptCost}星光值，最多可抽取三次`, color: 'from-amber-400 to-orange-500' },
       { id: 'story' as const, icon: <Sparkles className="w-6 h-6" />, label: '萌宠奇遇记', desc: '在故事中与宠物相遇', color: 'from-purple-400 to-indigo-500' },
     ];
@@ -482,8 +358,15 @@ export function AdoptPetModal({
               onClick={() => opt.id === 'shop' ? onGoShop() : setMode(opt.id)}
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 transition-all active:scale-95"
             >
-              <div className={cn('flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br text-white shadow-sm', opt.color)}>
-                {opt.icon}
+              <div className="relative">
+                <div className={cn('flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br text-white shadow-sm', opt.color)}>
+                  {opt.icon}
+                </div>
+                {opt.id === 'quiz' && (
+                  <span className="absolute -top-1 -right-2 px-1.5 py-0.5 rounded-full bg-green-500 text-white text-[10px] font-bold shadow-sm">
+                    免费
+                  </span>
+                )}
               </div>
               <p className="font-bold text-slate-700 text-sm">{opt.label}</p>
               <p className="text-[11px] text-slate-400 text-center leading-tight">{opt.desc}</p>
@@ -494,128 +377,9 @@ export function AdoptPetModal({
     );
   }
 
-  // 性格测试
+  // 我的本命宠（性格测试）
   if (mode === 'quiz') {
-    if (quizStep < QUIZ_QUESTIONS.length) {
-      const q = QUIZ_QUESTIONS[quizStep];
-      return (
-        <Modal open onClose={onClose} title="性格测试" size="md">
-          <div className="space-y-4">
-            <div className="text-center">
-              <span className="text-xs text-slate-400">第 {quizStep + 1} / {QUIZ_QUESTIONS.length} 题</span>
-            </div>
-            <h3 className="text-lg font-bold text-slate-700 text-center">{q.q}</h3>
-            <div className="space-y-2">
-              {q.options.map((opt, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    const newTraits = [...traits, opt.trait];
-                    setTraits(newTraits);
-                    if (quizStep + 1 >= QUIZ_QUESTIONS.length) {
-                      setQuizStep(quizStep + 1);
-                      finishQuiz(newTraits);
-                    } else {
-                      setQuizStep(quizStep + 1);
-                    }
-                  }}
-                  className="w-full p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm font-medium transition-colors"
-                >
-                  {opt.text}
-                </button>
-              ))}
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-    // 测试结果
-    const result = TRAIT_DESC[topTrait] || TRAIT_DESC.active;
-    return (
-      <Modal open onClose={onClose} title="测试结果" size="md">
-        <div className="space-y-4 py-2">
-          <div className="text-center">
-            <p className="text-lg font-bold text-slate-700">推荐类型：{result.title}</p>
-            <p className="text-sm text-slate-500 mt-1">{result.desc}</p>
-          </div>
-
-          {/* 问题11: 起名弹框 */}
-          {namingPet ? (
-            <div className="space-y-3 py-4">
-              <p className="text-sm text-slate-500 text-center">领养成功！给它取个名字吧</p>
-              {recommendedPet?.image_url ? (
-                <img src={recommendedPet.image_url} alt="" className="w-28 h-36 mx-auto object-contain" />
-              ) : (
-                <div className="text-6xl text-center">{recommendedPet?.emoji || '🐾'}</div>
-              )}
-              <input
-                value={namingPet.name}
-                onChange={e => setNamingPet({ ...namingPet, name: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-green-300 text-sm text-center"
-                placeholder="给它取个名字"
-                maxLength={10}
-                autoFocus
-              />
-              <Button onClick={handleSaveName} disabled={savingName || !namingPet.name.trim()} className="w-full">
-                {savingName ? '保存中...' : '确认命名'}
-              </Button>
-            </div>
-          ) : adoptedPet ? (
-            // 命名完成
-            <div className="text-center space-y-3 py-4">
-              <p className="text-sm text-slate-500">领养成功！</p>
-              {adoptedPet.image_url ? (
-                <img src={adoptedPet.image_url} alt="" className="w-32 h-40 mx-auto object-contain" />
-              ) : (
-                <div className="text-6xl">{adoptedPet.emoji || '🐾'}</div>
-              )}
-              <p className="font-bold text-slate-700">{adoptedPet.breed || adoptedPet.name}</p>
-              <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
-            </div>
-          ) : recommendedPet ? (
-            // 推荐宠物
-            <div className="space-y-3">
-              <div className="flex flex-col items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
-                {recommendedPet.image_url ? (
-                  <img src={recommendedPet.image_url} alt="" className="w-28 h-36 object-contain" />
-                ) : (
-                  <div className="text-6xl">{recommendedPet.emoji || '🐾'}</div>
-                )}
-                <p className="font-bold text-slate-700">{recommendedPet.breed || recommendedPet.name}</p>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 font-medium">
-                    💰 {recommendedPet.base_coin_per_day || 0}/天
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-medium">
-                    {recommendedPet.price_star} 星光值
-                  </span>
-                </div>
-              </div>
-              {(insufficientInfo || starValue < recommendedPet.price_star) && (
-                <InsufficientGuide
-                  current={insufficientInfo?.current ?? starValue}
-                  needed={insufficientInfo?.needed ?? recommendedPet.price_star}
-                  onGoTasks={() => goEarnStars('/tasks')}
-                  onGoChallenge={() => goEarnStars('/challenge')}
-                  onGoPetGame={onGoGame}
-                />
-              )}
-              <Button onClick={handleAdoptRecommended} disabled={adopting} className="w-full">
-                {adopting ? '领养中...' : '立即领养'}
-              </Button>
-              <button onClick={() => onGoShop()} className="w-full text-xs text-slate-400">
-                去商城看看其他宠物
-              </button>
-            </div>
-          ) : (
-            <p className="text-center text-sm text-slate-400 py-4">暂无可领养的宠物</p>
-          )}
-          <button onClick={() => { setMode('menu'); setQuizStep(0); setTraits([]); setAdoptedPet(null); }} className="text-xs text-slate-400 w-full text-center">
-            返回菜单
-          </button>
-        </div>
-      </Modal>
-    );
+    return <DestinyPetFlow onClose={onClose} onAdopted={onAdopted} />;
   }
 
   // 抽卡：开始不扣，领养扣 adoptCost，放弃扣 cancelPenalty（均从配置读取）

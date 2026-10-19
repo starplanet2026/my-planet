@@ -9,6 +9,7 @@ import type {
   BoardingStatus, BoardingHistoryItem, StudyPet,
   BuyBoardingCardResult, SetBoardingSelectionResult, HealSevereResult, SendStudyResult, ClaimStudyResult,
   PetMessage, GachaConfig,
+  DestinyState, AdoptDestinyResult,
 } from './types';
 
 export interface QuizQueueItem {
@@ -1196,6 +1197,66 @@ export async function fetchGachaConfig(): Promise<GachaConfig> {
     rarity_rare_prob: Number(row.rarity_rare_prob),
     rarity_epic_prob: Number(row.rarity_epic_prob),
   };
+}
+
+// ====== 我的本命宠（性格测试）======
+
+// 读取成员本命宠状态（作答记录 / 人格编码 / 是否已领养）
+export async function fetchDestinyState(memberId: string): Promise<DestinyState> {
+  const { data, error } = await supabase
+    .from('members')
+    .select('destiny_answers, destiny_type, destiny_pet_id, destiny_adopted_at')
+    .eq('id', memberId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = (data ?? {}) as {
+    destiny_answers?: unknown;
+    destiny_type?: string | null;
+    destiny_pet_id?: string | null;
+    destiny_adopted_at?: string | null;
+  };
+  return {
+    answers: Array.isArray(row.destiny_answers) ? (row.destiny_answers as number[]) : null,
+    type: row.destiny_type ?? null,
+    petId: row.destiny_pet_id ?? null,
+    adoptedAt: row.destiny_adopted_at ?? null,
+  };
+}
+
+// 保存测试结果（领养前可反复覆盖）
+export async function saveDestinyResult(memberId: string, answers: number[], type: string): Promise<void> {
+  const { error } = await supabase.rpc('save_destiny_result', {
+    p_member_id: memberId,
+    p_answers: answers,
+    p_type: type,
+  });
+  if (error) throw error;
+}
+
+// 按「名称 + 稀有度 + 星光值」三字段精确匹配本命宠对应的商店模板
+export async function findDestinyShopItem(name: string, rarity: PetRarity, priceStar: number): Promise<PetShopItem | null> {
+  const { data, error } = await supabase
+    .from('pet_shop_items')
+    .select('*')
+    .eq('type', 'pet')
+    .eq('name', name)
+    .eq('rarity', rarity)
+    .eq('price_star', priceStar)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as PetShopItem | null;
+}
+
+// 免费领养本命宠（已有同款时折算等值星光值补偿）
+export async function adoptDestinyPet(memberId: string, shopItemId: string): Promise<AdoptDestinyResult> {
+  const { data, error } = await supabase.rpc('adopt_destiny_pet', {
+    p_member_id: memberId,
+    p_shop_item_id: shopItemId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row as AdoptDestinyResult;
 }
 
 // 更新抽卡配置

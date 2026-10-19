@@ -523,6 +523,31 @@ export interface PetShopItem {
   updated_at: string;
 }
 
+// ====== 我的本命宠（性格测试）======
+
+// 成员本命宠状态（来自 members 表 destiny_* 字段）
+export interface DestinyState {
+  /** 32 题作答选项下标；null 表示未测试 */
+  answers: number[] | null;
+  /** 人格编码，如 INFP */
+  type: string | null;
+  /** 领养后的宠物 id */
+  petId: string | null;
+  /** 领养时间；null 表示未领养（可重新测试） */
+  adoptedAt: string | null;
+}
+
+export interface AdoptDestinyResult {
+  success: boolean;
+  message: string;
+  pet_id: string | null;
+  /** 是否走「已有同款 → 等值星光值补偿」分支 */
+  compensated: boolean;
+  /** 补偿发放的星光值 */
+  comp_star: number;
+  new_star: number;
+}
+
 // 抽卡配置（全局单行表 gacha_config）
 export interface GachaConfig {
   adopt_cost: number;          // 领养抽中宠物扣除的星光值
