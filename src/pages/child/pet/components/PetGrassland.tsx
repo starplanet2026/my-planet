@@ -211,7 +211,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
     return () => { cancelled = true; };
   }, [childId]);
 
-  // 为没有保存坐标的宠物分配错开的默认位置（网格排布，避免全部重叠在中间）
+  // 为没有保存坐标的宠物分配错开的默认位置（交错网格：偶数行偏移半格，两行拉开纵向间距，避免同列重叠）
   // 仅在数据库坐标加载完成后执行
   useEffect(() => {
     if (!positionsLoaded) return;
@@ -222,9 +222,11 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
         if (!next[p.id]) {
           const col = idx % 5;
           const row = Math.floor(idx / 5);
+          // 交错排布：奇数行整体右移半格；纵向行距拉大（38/62），避免两行挤在一起
+          const stagger = row % 2 === 1 ? 8.5 : 0;
           next[p.id] = {
-            x: Math.max(5, Math.min(95, 20 + col * 15)),
-            y: Math.max(10, Math.min(70, 45 + row * 10)),
+            x: Math.max(5, Math.min(95, 12 + col * 17 + stagger)),
+            y: Math.max(10, Math.min(70, 38 + row * 24)),
           };
           changed = true;
         }
