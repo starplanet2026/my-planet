@@ -319,11 +319,11 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
             <div className="grid md:grid-cols-2 gap-4">
               {/* 左：性格分析 */}
               <div className="space-y-3 rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                <p className="text-center text-slate-500 font-medium leading-tight">
-                  你的MBTI性格是：
-                  <span className="text-4xl font-bold text-slate-700">{result.code} {result.profile.name}</span>
-                </p>
-                <p className="text-lg text-purple-600 leading-relaxed">{result.profile.desc}</p>
+                <div className="text-center">
+                  <p className="text-slate-500 font-medium leading-tight">你的MBTI性格是：</p>
+                  <p className="text-4xl font-bold text-purple-600 leading-tight mt-1">{result.code} {result.profile.name}</p>
+                </div>
+                <p className="text-[12.6px] text-purple-600 leading-relaxed">{result.profile.desc}</p>
                 <div className="space-y-3 pt-1">
                   {result.dimensions.map(d => <DimBar key={d.dim} d={d} />)}
                 </div>
@@ -372,11 +372,11 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                   </div>
                 ) : shopItem ? (
                   <>
-                    <p className="text-center text-slate-500 font-medium leading-tight">
-                      你的本命宠物是：
-                      <span className="text-4xl font-bold text-slate-700">{shopItem.name}</span>
-                    </p>
-                    <p className="text-lg text-star-600 leading-relaxed text-center">{result.profile.petText}</p>
+                    <div className="text-center">
+                      <p className="text-slate-500 font-medium leading-tight">你的本命宠物是：</p>
+                      <p className="text-4xl font-bold text-star-600 leading-tight mt-1">{shopItem.name}</p>
+                    </div>
+                    <p className="text-[12.6px] text-star-600 leading-relaxed text-center">{result.profile.petText}</p>
                     <div className="flex-1 flex flex-col items-center justify-center gap-2">
                       {shopItem.image_url ? (
                         <img src={shopItem.image_url} alt="" className="w-32 h-40 object-contain drop-shadow" />
