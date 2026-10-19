@@ -323,7 +323,7 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                   <p className="text-slate-500 font-medium leading-tight">你的MBTI性格是：</p>
                   <p className="text-4xl font-bold text-purple-600 leading-tight mt-1">{result.code} {result.profile.name}</p>
                 </div>
-                <p className="text-[12.6px] text-purple-600 leading-relaxed">{result.profile.desc}</p>
+                <p className="text-[12.6px] text-purple-600 leading-relaxed text-center">{result.profile.desc}</p>
                 <div className="space-y-3 pt-1">
                   {result.dimensions.map(d => <DimBar key={d.dim} d={d} />)}
                 </div>
