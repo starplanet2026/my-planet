@@ -50,18 +50,19 @@ const CATEGORY_COLORS: Record<string, string> = {
 function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () => void; disabled?: boolean }) {
   const soldOut = item.stock !== null && item.stock <= 0;
   const expired = item.expires_at && isExpired(item.expires_at);
-  // 稀有卡：不可购买（只能抽奖/发放获得），不显示价格与兑换按钮
+  // 稀有卡：不可购买（只能抽奖/发放获得），不置灰、不显示兑换入口
   const isRare = item.category === '稀有';
-  const unAvailable = soldOut || !!expired || isRare;
+  const unAvailable = soldOut || !!expired;
+  const notClickable = unAvailable || isRare;
   const categoryColor = item.category ? (CATEGORY_COLORS[item.category] ?? '#a855f7') : '#a855f7';
 
   return (
     <div
-      onClick={unAvailable ? undefined : onClick}
+      onClick={notClickable ? undefined : onClick}
       className={cn(
         'relative rounded-2xl overflow-hidden border-2 transition-all',
         'bg-gradient-to-br from-star-50 via-amber-50 to-star-100 border-star-200',
-        unAvailable ? 'opacity-50 grayscale' : 'cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]',
+        unAvailable ? 'opacity-50 grayscale' : notClickable ? '' : 'cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]',
       )}
     >
       {/* 装饰星星 */}
@@ -113,9 +114,9 @@ function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () =
           )}
           {unAvailable ? (
             <span className="text-xs text-slate-400 font-medium">
-              {soldOut ? '售罄' : expired ? '已下架' : '不可兑换'}
+              {soldOut ? '售罄' : '已下架'}
             </span>
-          ) : (
+          ) : isRare ? null : (
             <span className="text-xs font-bold text-star-600 bg-white/60 px-2 py-1 rounded-full">
               兑换
             </span>
