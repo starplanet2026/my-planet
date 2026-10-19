@@ -823,7 +823,7 @@ export function expNeeded(level: number, rarity?: PetRarity): number {
 
 // 进修每日星光
 export function studyDailyStar(rarity: PetRarity): number {
-  return rarity === 'common' ? 2 : rarity === 'rare' ? 5 : 10;
+  return rarity === 'common' ? 10 : rarity === 'rare' ? 20 : 50;
 }
 
 // 托管卡类型

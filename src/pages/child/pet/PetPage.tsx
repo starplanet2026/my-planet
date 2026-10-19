@@ -856,7 +856,7 @@ export function PetPage() {
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
                             <span>{pet.is_studying ? '📚 进修中' : pet.is_sick ? '🤒 生病中' : '状态良好'}</span>
                             {pet.is_studying ? (
-                              <span className="text-indigo-500">⭐ {rarity === 'common' ? 5 : rarity === 'rare' ? 20 : 50}/天（进修）</span>
+                              <span className="text-indigo-500">⭐ {rarity === 'common' ? 10 : rarity === 'rare' ? 20 : 50}/天（进修）</span>
                             ) : (
                               <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
                             )}
@@ -944,7 +944,7 @@ export function PetPage() {
         const canEvolve = rarity === 'common' || rarity === 'rare';
         const evolveCost = rarity === 'common' ? 150 : 400;
         const evolveTarget: 'rare' | 'epic' = rarity === 'common' ? 'rare' : 'epic';
-        const dailyStar = rarity === 'common' ? 5 : rarity === 'rare' ? 20 : 50;
+        const dailyStar = rarity === 'common' ? 10 : rarity === 'rare' ? 20 : 50;
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setMaxLevelPet(null)}>
             <div className="bg-white rounded-2xl p-5 w-80 text-center" onClick={e => e.stopPropagation()}>
