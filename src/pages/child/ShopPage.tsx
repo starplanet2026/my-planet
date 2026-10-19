@@ -50,19 +50,18 @@ const CATEGORY_COLORS: Record<string, string> = {
 function PrivilegeCard({ item, onClick, disabled }: { item: Item; onClick?: () => void; disabled?: boolean }) {
   const soldOut = item.stock !== null && item.stock <= 0;
   const expired = item.expires_at && isExpired(item.expires_at);
-  // 稀有卡：不可购买（只能抽奖/发放获得），不置灰、不显示兑换入口
+  // 稀有卡：不可购买（只能抽奖/发放获得），可点击查看详情但不显示兑换入口
   const isRare = item.category === '稀有';
   const unAvailable = soldOut || !!expired;
-  const notClickable = unAvailable || isRare;
   const categoryColor = item.category ? (CATEGORY_COLORS[item.category] ?? '#a855f7') : '#a855f7';
 
   return (
     <div
-      onClick={notClickable ? undefined : onClick}
+      onClick={unAvailable ? undefined : onClick}
       className={cn(
         'relative rounded-2xl overflow-hidden border-2 transition-all',
         'bg-gradient-to-br from-star-50 via-amber-50 to-star-100 border-star-200',
-        unAvailable ? 'opacity-50 grayscale' : notClickable ? '' : 'cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]',
+        unAvailable ? 'opacity-50 grayscale' : 'cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]',
       )}
     >
       {/* 装饰星星 */}
@@ -275,11 +274,11 @@ export function ShopPage() {
       {/* 幸运大转盘弹窗 */}
       <LuckyWheelModal open={wheelOpen} onClose={() => setWheelOpen(false)} />
 
-      {/* 兑换确认弹层 */}
+      {/* 兑换确认弹层（稀有卡仅作详情查看） */}
       <Modal
         open={!!selectedItem}
         onClose={() => !purchasing && setSelectedItem(null)}
-        title="确认兑换"
+        title={selectedItem?.category === '稀有' ? '卡券详情' : '确认兑换'}
         size="sm"
       >
         {selectedItem && (
@@ -303,6 +302,7 @@ export function ShopPage() {
               <p className="text-sm text-slate-500 text-center">{selectedItem.description}</p>
             )}
 
+            {selectedItem.category !== '稀有' && (<>
             {/* 数量选择（手动输入） */}
             <div className="flex items-center justify-between bg-star-50 rounded-xl px-4 py-3">
               <span className="text-slate-600 font-medium">兑换数量</span>
@@ -347,6 +347,7 @@ export function ShopPage() {
                 {canAfford ? '确认兑换' : '金币不足'}
               </Button>
             </div>
+            </>)}
           </div>
         )}
       </Modal>
