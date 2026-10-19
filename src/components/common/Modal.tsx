@@ -7,7 +7,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xl25';
 }
 
 const sizes = {
@@ -15,6 +15,8 @@ const sizes = {
   md: 'sm:max-w-md',
   lg: 'sm:max-w-lg',
   xl: 'sm:max-w-2xl',
+  // xl 的 1.25 倍宽（42rem × 1.25 = 52.5rem），用于「我的本命宠」结果弹窗
+  xl25: 'sm:max-w-[52.5rem]',
 };
 
 export function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {

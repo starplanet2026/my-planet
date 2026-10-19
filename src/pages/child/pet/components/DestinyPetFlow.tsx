@@ -55,7 +55,7 @@ function DimBar({ d }: { d: DimensionResult }) {
         <div className={cn('h-full', leftWins ? 'bg-rose-400' : 'bg-rose-200')} style={{ width: `${lp}%` }} />
         <div className={cn('h-full', rightWins ? 'bg-indigo-400' : 'bg-indigo-200')} style={{ width: `${rp}%` }} />
       </div>
-      <p className="text-[11px] text-slate-500 leading-snug">{d.phrase}</p>
+      <p className="text-[11px] text-slate-500 leading-snug whitespace-nowrap">{d.phrase}</p>
     </div>
   );
 }
@@ -76,6 +76,8 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
   const [stage, setStage] = useState<'intro' | 'quiz' | 'result'>('intro');
   const [answers, setAnswers] = useState<number[]>(() => Array(QUIZ_QUESTIONS.length).fill(-1));
   const [quizIndex, setQuizIndex] = useState(0);
+  // 当前题已选中的选项下标（短暂高亮后自动进入下一题）
+  const [picked, setPicked] = useState<number | null>(null);
   const [result, setResult] = useState<DestinyResult | null>(null);
   const [shopItem, setShopItem] = useState<PetShopItem | null>(null);
   const [adoptedAt, setAdoptedAt] = useState<string | null>(null);
@@ -144,10 +146,21 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
     }
   };
 
+  // 选中选项：先高亮（领取成就同款黄色），短暂停留后自动进入下一题
+  const pickAnswer = (idx: number) => {
+    if (picked !== null) return;
+    setPicked(idx);
+    window.setTimeout(() => {
+      setPicked(null);
+      handleAnswer(idx);
+    }, 220);
+  };
+
   // 重新测试（领养前不限次）
   const handleRestart = () => {
     setAnswers(Array(QUIZ_QUESTIONS.length).fill(-1));
     setQuizIndex(0);
+    setPicked(null);
     setResult(null);
     setShopItem(null);
     setAlreadyOwns(false);
@@ -255,16 +268,21 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                 <span>{progress}%</span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-pink-400 to-rose-500 transition-all" style={{ width: `${progress}%` }} />
+                <div className="h-full bg-gradient-to-r from-star-300 to-star-500 transition-all" style={{ width: `${progress}%` }} />
               </div>
             </div>
             <h3 className="text-lg font-bold text-slate-700 text-center leading-relaxed">{q.text}</h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
               {q.options.map((opt, i) => (
                 <button
                   key={i}
-                  onClick={() => handleAnswer(i)}
-                  className="w-full p-3 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-100 hover:border-rose-200 text-slate-700 text-sm font-medium transition-colors text-left"
+                  onClick={() => pickAnswer(i)}
+                  className={cn(
+                    'min-h-[88px] p-3 rounded-2xl border-2 flex items-center justify-center text-center text-sm font-medium leading-snug transition-colors',
+                    picked === i
+                      ? 'bg-star-400 border-star-400 text-slate-800 font-bold'
+                      : 'bg-white border-star-300 text-slate-700 hover:bg-star-50 hover:border-star-400'
+                  )}
                 >
                   {opt.text}
                 </button>
@@ -289,7 +307,7 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
 
   // ===== 结果弹窗 =====
   return (
-    <Modal open onClose={onClose} title="我的本命宠" size="xl">
+    <Modal open onClose={onClose} title="我的本命宠" size="xl25">
       <div className="space-y-4" style={ROUNDED_FONT}>
         {result ? (
           <>
@@ -301,11 +319,11 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
             <div className="grid md:grid-cols-2 gap-4">
               {/* 左：性格分析 */}
               <div className="space-y-3 rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                <div className="text-center">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-500 text-xs font-bold">{result.code}</span>
-                  <p className="text-lg font-bold text-slate-700 mt-1">{result.profile.name}</p>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">{result.profile.desc}</p>
+                <p className="text-center text-slate-500 font-medium leading-tight">
+                  你的MBTI性格是：
+                  <span className="text-4xl font-bold text-slate-700">{result.code} {result.profile.name}</span>
+                </p>
+                <p className="text-lg text-purple-600 leading-relaxed">{result.profile.desc}</p>
                 <div className="space-y-3 pt-1">
                   {result.dimensions.map(d => <DimBar key={d.dim} d={d} />)}
                 </div>
@@ -354,6 +372,11 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                   </div>
                 ) : shopItem ? (
                   <>
+                    <p className="text-center text-slate-500 font-medium leading-tight">
+                      你的本命宠物是：
+                      <span className="text-4xl font-bold text-slate-700">{shopItem.name}</span>
+                    </p>
+                    <p className="text-lg text-star-600 leading-relaxed text-center">{result.profile.petText}</p>
                     <div className="flex-1 flex flex-col items-center justify-center gap-2">
                       {shopItem.image_url ? (
                         <img src={shopItem.image_url} alt="" className="w-32 h-40 object-contain drop-shadow" />
@@ -371,7 +394,6 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                         <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 font-medium">⭐ {result.profile.priceStar}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed text-center">{result.profile.petText}</p>
                     {adoptedAt ? (
                       <Button variant="ghost" onClick={onClose} className="w-full">完成</Button>
                     ) : (
@@ -379,9 +401,16 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                         {alreadyOwns && (
                           <p className="text-[11px] text-amber-600 text-center">你已拥有同款本命宠，领取将折算等值星光值补偿</p>
                         )}
-                        <Button onClick={handleAdopt} disabled={adopting} className="w-full">
+                        <button
+                          onClick={handleAdopt}
+                          disabled={adopting}
+                          className={cn(
+                            'w-full py-2.5 rounded-full text-sm font-medium text-white transition-colors',
+                            adopting ? 'bg-slate-300' : 'bg-star-400 hover:bg-star-500 active:bg-star-600'
+                          )}
+                        >
                           {adopting ? '领取中...' : '免费领养本命宠'}
-                        </Button>
+                        </button>
                       </div>
                     )}
                   </>
