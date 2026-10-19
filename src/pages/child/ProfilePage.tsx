@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../lib/constants';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useCoinRecords } from '../../hooks/useCoinRecords';
@@ -19,6 +21,9 @@ import { MessageSquare, Pencil, CornerDownRight, Upload, Trash2, ListChecks } fr
 import { CHILD_EMOJIS, PURCHASE_STATUS_LABELS, COIN_ICON_SM, STAR_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { CoinRecord, Purchase } from '../../api/types';
+
+// 幸运大转盘券：仅能在大转盘内使用，背包点击「使用」跳转至大转盘而非直接核销
+const isWheelTicket = (p: Purchase) => p.items?.name === '幸运大转盘';
 
 // 特权卡装饰星星
 function CardStar({ className }: { className?: string }) {
@@ -41,6 +46,7 @@ export function ProfilePage() {
 
   const { refresh: refreshRecords } = useCoinRecords(undefined, child?.id);
   const { purchases, loading: purchasesLoading, redeemPurchase, sellPurchase } = usePurchases(undefined, child?.id);
+  const navigate = useNavigate();
 
   // 资产明细日志：星光 / 金币 切换 + 分页
   const [assetTab, setAssetTab] = useState<BalanceType>('coin');
@@ -423,10 +429,10 @@ export function ProfilePage() {
                   {/* 操作按钮 */}
                   <div className="flex gap-1 px-2 pb-2">
                     <button
-                      onClick={() => setRedeemTarget(p)}
+                      onClick={() => (isWheelTicket(p) ? navigate(ROUTES.SHOP, { state: { openWheel: true } }) : setRedeemTarget(p))}
                       className="flex-1 py-1 rounded-lg text-[11px] font-bold text-white bg-gradient-to-r from-amber-400 to-star-400 hover:from-amber-500 hover:to-star-500 transition-all shadow-sm"
                     >
-                      使用
+                      {isWheelTicket(p) ? '去使用' : '使用'}
                     </button>
                     {p.items?.category !== '稀有' && (
                       <button
@@ -906,11 +912,15 @@ export function ProfilePage() {
               <Button
                 fullWidth
                 onClick={() => {
-                  setRedeemTarget(detailTarget);
                   setDetailTarget(null);
+                  if (isWheelTicket(detailTarget)) {
+                    navigate(ROUTES.SHOP, { state: { openWheel: true } });
+                  } else {
+                    setRedeemTarget(detailTarget);
+                  }
                 }}
               >
-                立即使用
+                {isWheelTicket(detailTarget) ? '去大转盘使用' : '立即使用'}
               </Button>
             </div>
           </div>

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useItems } from '../../hooks/useItems';
@@ -135,6 +136,16 @@ export function ShopPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [activeCat, setActiveCat] = useState<string>('全部');
   const [wheelOpen, setWheelOpen] = useState(false);
+  // 从背包「去使用」跳转过来时自动打开大转盘弹窗
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if ((location.state as { openWheel?: boolean } | null)?.openWheel) {
+      setWheelOpen(true);
+      // 清除 state，避免刷新页面后重复打开
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, location.pathname, navigate]);
   // 幸运大转盘入口图片加载失败兜底
   const [wheelBgError, setWheelBgError] = useState(false);
 
