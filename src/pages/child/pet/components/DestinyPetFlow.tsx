@@ -47,15 +47,15 @@ function DimBar({ d }: { d: DimensionResult }) {
   const rp = Math.round(d.rightRatio * 100);
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[11px] font-medium">
+      <div className="flex justify-between text-xs font-medium">
         <span className={cn(leftWins ? 'text-rose-500' : 'text-slate-400')}>{labels.left} {lp}%</span>
         <span className={cn(rightWins ? 'text-indigo-500' : 'text-slate-400')}>{rp}% {labels.right}</span>
       </div>
       <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden flex">
-        <div className={cn('h-full', leftWins ? 'bg-rose-400' : 'bg-rose-200')} style={{ width: `${lp}%` }} />
-        <div className={cn('h-full', rightWins ? 'bg-indigo-400' : 'bg-indigo-200')} style={{ width: `${rp}%` }} />
+        <div className={cn('h-full', leftWins ? 'bg-rose-300' : 'bg-rose-100')} style={{ width: `${lp}%` }} />
+        <div className={cn('h-full', rightWins ? 'bg-indigo-300' : 'bg-indigo-100')} style={{ width: `${rp}%` }} />
       </div>
-      <p className="text-[11px] text-slate-500 leading-snug whitespace-nowrap">{d.phrase}</p>
+      <p className="text-xs text-slate-600 leading-snug whitespace-nowrap">{d.phrase}</p>
     </div>
   );
 }
@@ -316,21 +316,21 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                 已完成测试并领取本命宠（每位小朋友仅限一次）
               </div>
             )}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-6">
               {/* 左：性格分析 */}
-              <div className="space-y-3 rounded-2xl bg-slate-50 border border-slate-100 p-4">
+              <div className="space-y-4 rounded-2xl bg-slate-50 border border-slate-100 p-5">
                 <div className="text-center">
-                  <p className="text-slate-500 font-medium leading-tight">你的MBTI性格是：</p>
-                  <p className="text-4xl font-bold text-purple-600 leading-tight mt-1">{result.code} {result.profile.name}</p>
+                  <p className="text-sm text-slate-500 font-medium leading-tight">你的MBTI性格是：</p>
+                  <p className="text-3xl font-semibold text-star-600 leading-tight mt-1">{result.code} {result.profile.name}</p>
                 </div>
-                <p className="text-[12.6px] text-purple-600 leading-relaxed text-center">{result.profile.desc}</p>
+                <p className="text-sm text-slate-600 leading-relaxed text-center">{result.profile.desc}</p>
                 <div className="space-y-3 pt-1">
                   {result.dimensions.map(d => <DimBar key={d.dim} d={d} />)}
                 </div>
               </div>
 
               {/* 右：本命宠 */}
-              <div className="space-y-3 rounded-2xl bg-gradient-to-b from-pink-50 to-amber-50 border border-pink-100 p-4 flex flex-col">
+              <div className="space-y-4 rounded-2xl bg-slate-50 border border-slate-100 p-5 flex flex-col">
                 {donePet ? (
                   <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
                     <p className="text-sm text-green-600 font-medium">领养成功！</p>
@@ -373,13 +373,13 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                 ) : shopItem ? (
                   <>
                     <div className="text-center">
-                      <p className="text-slate-500 font-medium leading-tight">你的本命宠物是：</p>
-                      <p className="text-4xl font-bold text-star-600 leading-tight mt-1">{shopItem.name}</p>
+                      <p className="text-sm text-slate-500 font-medium leading-tight">你的本命宠物是：</p>
+                      <p className="text-3xl font-semibold text-star-600 leading-tight mt-1">{shopItem.name}</p>
                     </div>
-                    <p className="text-[12.6px] text-star-600 leading-relaxed text-center">{result.profile.petText}</p>
-                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                    <p className="text-sm text-slate-600 leading-relaxed text-center">{result.profile.petText}</p>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-3">
                       {shopItem.image_url ? (
-                        <img src={shopItem.image_url} alt="" className="w-32 h-40 object-contain drop-shadow" />
+                        <img src={shopItem.image_url} alt="" className="w-36 h-44 object-contain drop-shadow" />
                       ) : (
                         <div className="text-6xl">{shopItem.emoji || '🐾'}</div>
                       )}
