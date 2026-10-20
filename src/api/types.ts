@@ -848,11 +848,6 @@ export function expNeeded(level: number, rarity?: PetRarity): number {
   return UNIFIED_EXP_TABLE[level] ?? 999999;
 }
 
-// 进修每日星光
-export function studyDailyStar(rarity: PetRarity): number {
-  return rarity === 'common' ? 10 : rarity === 'rare' ? 20 : 50;
-}
-
 // 托管卡类型
 export type BoardingCardType = 'daily' | 'weekly' | 'monthly';
 
