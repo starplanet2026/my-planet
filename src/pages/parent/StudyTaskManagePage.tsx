@@ -185,17 +185,19 @@ export function StudyTaskManagePage() {
         ))}
       </div>
 
-      {/* 任务列表：按学科三列分区 */}
+      {/* 任务列表：按学科三列分区（无论是否有任务始终渲染，保证可新建） */}
       {loading ? (
         <Loading />
-      ) : templates.length === 0 ? (
-        <EmptyState
-          icon="📚"
-          title="还没有学习任务"
-          description="点击列内新建任务，下发给孩子"
-        />
       ) : (
-        <div className="grid grid-cols-3 gap-3">
+        <>
+          {templates.length === 0 && (
+            <EmptyState
+              icon="📚"
+              title="还没有学习任务"
+              description="点击学科列右上角的 + 新建任务，下发给孩子"
+            />
+          )}
+          <div className="grid grid-cols-3 gap-3">
           {SUBJECTS.map(sub => {
             const subjectTasks = templates.filter(t => t.subject === sub.id);
             return (
@@ -273,6 +275,7 @@ export function StudyTaskManagePage() {
             );
           })}
         </div>
+        </>
       )}
 
       {/* 新建/编辑弹窗 */}
