@@ -725,7 +725,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
                             ? 'bg-red-500 text-white border-red-600/50'
                             : pet.is_sick
                               ? 'bg-orange-500 text-white border-orange-600/50'
-                              : 'bg-green-500/50 text-slate-900 border-green-700/30 font-medium',
+                              : 'bg-green-500/50 text-white border-green-700/30 font-medium',
                         )}>
                           {chatMsg}
                         </div>
