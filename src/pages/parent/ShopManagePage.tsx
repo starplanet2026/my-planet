@@ -383,35 +383,57 @@ export function ShopManagePage() {
               ) : userPurchases.length === 0 ? (
                 <EmptyState icon="🎴" title="该用户暂无特权卡" />
               ) : (
-                <div className="grid gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {userPurchases.map(p => {
                     const expired = p.expires_at ? isExpired(p.expires_at) : false;
+                    const statusText = expired
+                      ? '已过期'
+                      : p.status === 'pending' ? '可用'
+                      : p.status === 'redeemed' ? '已使用'
+                      : p.status === 'sold' ? '已出售'
+                      : p.status === 'cancelled' ? '已取消'
+                      : '可用';
+                    const statusCls = expired || p.status === 'redeemed' || p.status === 'cancelled'
+                      ? 'bg-slate-100 text-slate-400'
+                      : p.status === 'sold' ? 'bg-amber-50 text-amber-500'
+                      : 'bg-emerald-50 text-emerald-600';
                     return (
-                      <Card key={p.id} className="!p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-lg bg-star-50 flex items-center justify-center text-2xl flex-shrink-0">
-                            🎁
+                      <Card key={p.id} className="p-3">
+                        <div className="flex items-start gap-3">
+                          {/* 图标 */}
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
+                            {p.items?.image_url ? (
+                              <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                            ) : (
+                              '🎁'
+                            )}
                           </div>
+                          {/* 信息 */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium truncate">{p.item_name_snapshot}</h3>
-                              {p.quantity > 1 && (
-                                <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full">x{p.quantity}</span>
-                              )}
-                              {expired && (
-                                <span className="text-xs px-2 py-0.5 bg-red-50 text-red-500 rounded-full">已过期</span>
-                              )}
+                            <h4 className="font-bold text-slate-800 text-sm">{p.item_name_snapshot}</h4>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', statusCls)}>
+                                {statusText}
+                              </span>
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
+                                x{p.quantity}
+                              </span>
                             </div>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {p.expires_at ? `有效期至 ${formatDate(p.expires_at)}` : '永久有效'} · 获得于 {formatDate(p.created_at)}
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              特权卡 · {p.expires_at ? `有效期至 ${formatDate(p.expires_at)}` : '永久有效'} · 获得于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
                             </p>
                           </div>
-                          <button
+                        </div>
+                        {/* 操作按钮 */}
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            danger
                             onClick={() => setDeletePurchaseTarget(p)}
-                            className="p-2 text-slate-400 hover:text-red-500"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <Trash2 className="w-3.5 h-3.5" /> 删除
+                          </Button>
                         </div>
                       </Card>
                     );

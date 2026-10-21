@@ -27,10 +27,9 @@ import {
   getSevereIllnessCost, updateSevereIllnessCost,
   fetchPetInventoryByFamily, updatePetInventoryQuantity, deletePetInventoryItem,
 } from '../../api/pets';
-import { fetchPurchases, deletePurchase, updatePurchaseQuantity } from '../../api/purchases';
 import type {
   PetShopItem, PetShopItemType, PetSubcategory, PetRarity, Pet,
-  PetBackground, Purchase, PetInventory,
+  PetBackground, PetInventory,
 } from '../../api/types';
 import { uploadImageToStorage, type ImageCategory } from '../../lib/storage';
 
@@ -193,7 +192,6 @@ export function PetManagePage() {
   const [activeTab, setActiveTab] = useState<PageTab>(initialTab);
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [userPets, setUserPets] = useState<Pet[]>([]);
-  const [userPurchases, setUserPurchases] = useState<Purchase[]>([]);
   const [petInventory, setPetInventory] = useState<PetInventory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -218,13 +216,11 @@ export function PetManagePage() {
     if (!family) return;
     setLoading(true);
     try {
-      const [pets, purchases, inventory] = await Promise.all([
+      const [pets, inventory] = await Promise.all([
         fetchAllPets(family.id),
-        fetchPurchases(family.id),
         fetchPetInventoryByFamily(family.id),
       ]);
       setUserPets(pets);
-      setUserPurchases(purchases);
       setPetInventory(inventory);
     } catch (e: any) {
       toast.error(e?.message ?? '加载用户数据失败');
@@ -555,7 +551,6 @@ export function PetManagePage() {
       {activeTab === 'user' && (
         <UserDataTab
           pets={userPets}
-          purchases={userPurchases}
           inventory={petInventory}
           loading={loading}
           onDeletePet={handleDeletePet}
@@ -775,7 +770,7 @@ function ItemCard({
 }
 
 // ====== 用户数据 tab ======
-// 统一的可编辑物品类型（宠物用品 pet_inventory + 特权卡 purchases）
+// 可编辑物品类型（宠物用品 pet_inventory）
 type EditableItem = {
   id: string;
   name: string;
@@ -783,16 +778,13 @@ type EditableItem = {
   image_url: string | null;
   subcategory: string;
   quantity: number;
-  status?: string;
   created_at: string;
-  source: 'inventory' | 'purchase';
 };
 
 function UserDataTab({
-  pets, purchases, inventory, loading, onDeletePet, onRefresh,
+  pets, inventory, loading, onDeletePet, onRefresh,
 }: {
   pets: Pet[];
-  purchases: Purchase[];
   inventory: PetInventory[];
   loading: boolean;
   onDeletePet: (id: string, name: string, memberName: string) => void;
@@ -822,51 +814,19 @@ function UserDataTab({
   const filteredInventory = selectedChildId
     ? inventory.filter(i => i.member_id === selectedChildId)
     : inventory;
-  const filteredPurchases = selectedChildId
-    ? purchases.filter(p => p.member_id === selectedChildId)
-    : purchases;
 
-  // 合并宠物用品 + 特权卡为统一列表；特权卡按 item_id 同类合并显示数量
+  // 仅展示萌宠星球相关物品（特权卡已迁移至「特权管理-用户特权卡」板块）
   const allItems: EditableItem[] = useMemo(() => {
-    const list: EditableItem[] = [];
-    for (const i of filteredInventory) {
-      list.push({
-        id: i.id,
-        name: i.item_name_snapshot,
-        emoji: i.item_emoji,
-        image_url: i.item_image_url,
-        subcategory: i.subcategory,
-        quantity: i.quantity,
-        created_at: i.created_at,
-        source: 'inventory',
-      });
-    }
-    // 特权卡按 item_id 合并：同一卡片多笔记录合并为一条，数量累加
-    const purchaseMap = new Map<string, EditableItem>();
-    for (const p of filteredPurchases) {
-      const key = p.item_id;
-      if (purchaseMap.has(key)) {
-        const existing = purchaseMap.get(key)!;
-        purchaseMap.set(key, {
-          ...existing,
-          quantity: existing.quantity + p.quantity,
-        });
-      } else {
-        purchaseMap.set(key, {
-          id: p.id,
-          name: p.item_name_snapshot,
-          emoji: null,
-          image_url: p.items?.image_url ?? null,
-          subcategory: p.items?.category || 'privilege',
-          quantity: p.quantity,
-          status: p.status,
-          created_at: p.created_at,
-          source: 'purchase',
-        });
-      }
-    }
-    return list.concat(Array.from(purchaseMap.values()));
-  }, [filteredInventory, filteredPurchases]);
+    return filteredInventory.map(i => ({
+      id: i.id,
+      name: i.item_name_snapshot,
+      emoji: i.item_emoji,
+      image_url: i.item_image_url,
+      subcategory: i.subcategory,
+      quantity: i.quantity,
+      created_at: i.created_at,
+    }));
+  }, [filteredInventory]);
 
   // 按子分类分组
   const itemGroups = useMemo(() => {
@@ -882,11 +842,7 @@ function UserDataTab({
     if (!editTarget) return;
     setEditSaving(true);
     try {
-      if (editTarget.source === 'inventory') {
-        await updatePetInventoryQuantity(editTarget.id, editQty);
-      } else {
-        await updatePurchaseQuantity(editTarget.id, editQty);
-      }
+      await updatePetInventoryQuantity(editTarget.id, editQty);
       toast.success(`已修改「${editTarget.name}」数量为 ${editQty}`);
       setEditTarget(null);
       onRefresh();
@@ -900,11 +856,7 @@ function UserDataTab({
   const handleDeleteItem = async () => {
     if (!deleteTarget) return;
     try {
-      if (deleteTarget.source === 'inventory') {
-        await deletePetInventoryItem(deleteTarget.id);
-      } else {
-        await deletePurchase(deleteTarget.id);
-      }
+      await deletePetInventoryItem(deleteTarget.id);
       toast.success(`已删除「${deleteTarget.name}」`);
       setDeleteTarget(null);
       onRefresh();
@@ -987,7 +939,7 @@ function UserDataTab({
         )}
       </div>
 
-      {/* 用户物品（食物、清洁、玩具、特权卡等） */}
+      {/* 用户物品（食物、清洁、玩具等萌宠道具） */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <ShoppingBag className="w-4 h-4 text-purple-500" />
@@ -1006,7 +958,7 @@ function UserDataTab({
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {list.map(item => (
-                    <Card key={`${item.source}-${item.id}`} className="p-3">
+                    <Card key={item.id} className="p-3">
                       <div className="flex items-start gap-3">
                         {/* 图标 */}
                         <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
@@ -1020,23 +972,12 @@ function UserDataTab({
                         <div className="flex-1 min-w-0">
                           <h4 className="font-bold text-slate-800 text-sm">{item.name}</h4>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            {item.source === 'purchase' && item.status && (
-                              <span className={cn(
-                                'text-xs px-1.5 py-0.5 rounded font-medium',
-                                item.status === 'pending' ? 'bg-emerald-50 text-emerald-600'
-                                  : item.status === 'redeemed' ? 'bg-slate-100 text-slate-400'
-                                  : item.status === 'sold' ? 'bg-amber-50 text-amber-500'
-                                  : 'bg-slate-100 text-slate-400'
-                              )}>
-                                {item.status === 'pending' ? '可用' : item.status === 'redeemed' ? '已使用' : item.status === 'sold' ? '已出售' : item.status === 'expired' ? '已过期' : item.status === 'cancelled' ? '已取消' : item.status}
-                              </span>
-                            )}
                             <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
                               x{item.quantity}
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1">
-                            {item.source === 'purchase' ? '特权卡' : '宠物用品'} · 购买于 {new Date(item.created_at).toLocaleDateString('zh-CN')}
+                            宠物用品 · 购买于 {new Date(item.created_at).toLocaleDateString('zh-CN')}
                           </p>
                         </div>
                       </div>
