@@ -6,7 +6,7 @@ import { Loading } from '../../../components/common/Loading';
 import { Modal } from '../../../components/common/Modal';
 import { useToastStore } from '../../../store/toastStore';
 import { useStudyLockStore } from '../../../store/studyLockStore';
-import { cn } from '../../../lib/utils';
+import { cn, petDailyCoin } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage, PetSubcategory } from '../../../api/types';
@@ -863,7 +863,7 @@ export function PetPage() {
                             {pet.is_studying ? (
                               <span className="text-indigo-500">⭐ {rarity === 'common' ? 10 : rarity === 'rare' ? 20 : 50}/天（进修）</span>
                             ) : (
-                              <span className="text-amber-500">💰 {pet.base_coin_per_day || 0}/天</span>
+                              <span className="text-amber-500">💰 {petDailyCoin(pet.base_coin_per_day, pet.trait_id ? traitMap[pet.trait_id]?.coin_multiplier : 1)}/天</span>
                             )}
                             <span
                               className={cn(

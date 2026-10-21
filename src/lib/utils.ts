@@ -10,6 +10,12 @@ export function formatCoins(n: number): string {
   return Math.abs(n).toLocaleString('zh-CN');
 }
 
+// 宠物实际日产金（基础产金 × 特质金币倍率），保留 1 位小数并去掉末尾 .0
+export function petDailyCoin(base: number | null | undefined, multiplier: number | null | undefined): string {
+  const v = Math.round((base ?? 0) * (multiplier ?? 1) * 10) / 10;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
 // 格式化日期
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '';

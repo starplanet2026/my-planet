@@ -3,7 +3,8 @@ import { Modal } from '../../../../components/common/Modal';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { useModeStore } from '../../../../store/modeStore';
-import { cn } from '../../../../lib/utils';
+import { cn, petDailyCoin } from '../../../../lib/utils';
+import { usePetTraits } from '../../../../hooks/usePetTraits';
 import {
   buyBoardingCard, setBoardingSelection, getBoardingStatus,
   fetchPets, checkPet, fetchPetShopItems,
@@ -19,6 +20,7 @@ export function PetBoardingModal({ onClose, onBoarded }: {
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
   const currentChildId = useModeStore(s => s.currentChildId);
   const childId = currentChildId ?? '';
+  const { traitMap } = usePetTraits();
 
   const [status, setStatus] = useState<BoardingStatus | null>(null);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -190,7 +192,7 @@ export function PetBoardingModal({ onClose, onBoarded }: {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-700 truncate">{pet.name || pet.breed}</p>
                       <p className="text-[10px] text-slate-400">
-                        {boarded ? '✅ 今日已托管' : sick ? '🤒 生病中，无法托管' : selected ? `Lv.${pet.level} · 🏠 托管中` : `Lv.${pet.level} · ${pet.base_coin_per_day || 0}💰/天`}
+                        {boarded ? '✅ 今日已托管' : sick ? '🤒 生病中，无法托管' : selected ? `Lv.${pet.level} · 🏠 托管中` : `Lv.${pet.level} · ${petDailyCoin(pet.base_coin_per_day, pet.trait_id ? traitMap[pet.trait_id]?.coin_multiplier : 1)}💰/天`}
                       </p>
                     </div>
                     <button

@@ -7,7 +7,7 @@ import { Loading } from '../../../../components/common/Loading';
 import { useToastStore } from '../../../../store/toastStore';
 import { useFamilyStore } from '../../../../store/familyStore';
 import { usePetTraits } from '../../../../hooks/usePetTraits';
-import { cn } from '../../../../lib/utils';
+import { cn, petDailyCoin } from '../../../../lib/utils';
 import { Star, Coins } from 'lucide-react';
 import {
   fetchPetShopItems,
@@ -646,7 +646,7 @@ export function PetShopModal({
                     ⭐ {item.price_star} 星光值
                   </div>
                   <div className="text-[10px] text-yellow-600 font-medium">
-                    💰 {item.base_coin_per_day}/天
+                    💰 {petDailyCoin(item.base_coin_per_day, item.trait_id ? traitMap[item.trait_id]?.coin_multiplier : 1)}/天
                   </div>
                   <div className="text-[10px] font-medium">
                     <span className={traitTagCls(!!(item.trait_id && traitMap[item.trait_id]?.name))}>
@@ -737,7 +737,7 @@ export function PetShopModal({
                   <div className="flex items-center gap-1.5">
                     <Coins className="w-4 h-4 text-yellow-600" />
                     <span className="text-xs text-slate-500">日产金</span>
-                    <span className="text-sm font-bold text-yellow-600">{detail.base_coin_per_day}</span>
+                    <span className="text-sm font-bold text-yellow-600">{petDailyCoin(detail.base_coin_per_day, detail.trait_id ? traitMap[detail.trait_id]?.coin_multiplier : 1)}</span>
                     <span className="text-[10px] text-slate-400">/天</span>
                   </div>
                   <div className="flex items-center gap-1.5">
