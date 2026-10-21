@@ -175,6 +175,8 @@ export function PetShopModal({
   dogHouseLevel = 0,
   jumpDoghouse = false,
   onJumpDone,
+  focusSub,
+  onFocusDone,
 }: {
   familyId: string;
   childId: string;
@@ -184,6 +186,9 @@ export function PetShopModal({
   dogHouseLevel?: number;
   jumpDoghouse?: boolean;
   onJumpDone?: () => void;
+  /** 从草坪「买药」进入时指定要购买的药品子分类，自动打开该药品购买弹窗 */
+  focusSub?: PetSubcategory;
+  onFocusDone?: () => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -192,8 +197,8 @@ export function PetShopModal({
   const members = useFamilyStore(s => s.members);
   const catUnlocked = members.find(m => m.id === childId)?.cat_unlocked ?? false;
 
-  const [activeMain, setActiveMain] = useState<PetShopItemType>(jumpDoghouse ? 'supply' : 'pet');
-  const [activeSub, setActiveSub] = useState<PetSubcategory>(jumpDoghouse ? 'doghouse' : 'dog');
+  const [activeMain, setActiveMain] = useState<PetShopItemType>(jumpDoghouse || focusSub ? 'supply' : 'pet');
+  const [activeSub, setActiveSub] = useState<PetSubcategory>(focusSub ?? (jumpDoghouse ? 'doghouse' : 'dog'));
   const [items, setItems] = useState<PetShopItem[]>([]);
   const [ownedPets, setOwnedPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
@@ -248,6 +253,17 @@ export function PetShopModal({
     loadItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyId, activeMain, activeSub, childId]);
+
+  // 从草坪「买药」进入：商品加载完成后自动打开对应药品的单品购买弹窗（仅消费一次）
+  const focusConsumedRef = useRef(false);
+  useEffect(() => {
+    if (!focusSub || focusConsumedRef.current || items.length === 0) return;
+    const target = items.find(i => i.subcategory === focusSub);
+    if (!target) return;
+    focusConsumedRef.current = true;
+    setDetail(target);
+    onFocusDone?.();
+  }, [focusSub, items, onFocusDone]);
 
   // 是否已领养某宠物商品
   const isOwned = (itemId: string) =>

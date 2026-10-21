@@ -9,7 +9,7 @@ import { useStudyLockStore } from '../../../store/studyLockStore';
 import { cn } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
 import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
-import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage } from '../../../api/types';
+import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage, PetSubcategory } from '../../../api/types';
 import { expNeeded } from '../../../api/types';
 import { usePetTraits } from '../../../hooks/usePetTraits';
 import { PetGrassland } from './components/PetGrassland';
@@ -66,6 +66,8 @@ export function PetPage() {
   const [showDex, setShowDex] = useState(false);
   const [showAdopt, setShowAdopt] = useState(false);
   const [shopJumpDoghouse, setShopJumpDoghouse] = useState(false);
+  // 草坪「买药」进入商店时指定的药品子分类（自动打开该药品购买弹窗）
+  const [shopFocusSub, setShopFocusSub] = useState<PetSubcategory | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showPetList, setShowPetList] = useState(false);
   const [showBoarding, setShowBoarding] = useState(false);
@@ -411,6 +413,7 @@ export function PetPage() {
         locked={lockedAll}
         onLockedClick={warnLocked}
         onPetUpdate={(updated) => setPets(prev => prev.map(p => p.id === updated.id ? { ...updated, image_url: p.image_url } : p))}
+        onBuyMedicine={(sub) => { setShopFocusSub(sub); setActiveModal('shop'); }}
         inventoryVersion={inventoryVersion}
       />
 
@@ -554,7 +557,9 @@ export function PetPage() {
           dogHouseLevel={dogHouse?.level ?? 0}
           jumpDoghouse={shopJumpDoghouse}
           onJumpDone={() => setShopJumpDoghouse(false)}
-          onClose={() => setActiveModal(null)}
+          focusSub={shopFocusSub ?? undefined}
+          onFocusDone={() => setShopFocusSub(null)}
+          onClose={() => { setActiveModal(null); setShopFocusSub(null); }}
           onBought={() => { refreshData(); refreshMembers(); setInventoryVersion(v => v + 1); }}
         />
       )}

@@ -119,6 +119,8 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
   onLockedClick?: () => void;
   /** 背包版本号：商店购买成功后自增，驱动互动面板实时刷新背包数量 */
   inventoryVersion?: number;
+  /** 买药：患病且对应药品库存为0时，点击 heal 按钮唤起商店对应药品购买弹窗 */
+  onBuyMedicine?: (sub: PetSubcategory) => void;
 }) {
   const toast = useToastStore();
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -277,6 +279,10 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
     if (!sub) return undefined;
     return inventory.find(i => i.subcategory === sub && i.quantity > 0);
   };
+
+  // 指定子分类的背包总数量（含已用完的条目）
+  const getStock = (sub: PetSubcategory): number =>
+    inventory.filter(i => i.subcategory === sub).reduce((sum, i) => sum + (i.quantity ?? 0), 0);
 
   const handleInteract = async (action: string, petId: string) => {
     const pet = petStates[petId];
@@ -553,6 +559,9 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
               <div className="mb-2 flex items-start gap-2">
                 {ACTIONS.map(action => {
                   const item = getItem(action.key, pet);
+                  // 患病且对应药品库存为0：heal 按钮切换为「买药」，点击唤起商店该药品购买弹窗
+                  const healSub = action.key === 'heal' ? getHealSubcategory(pet) : null;
+                  const needBuy = !!healSub && !!pet.is_sick && !pet.has_severe_illness && getStock(healSub) === 0;
                   // Bug1 修复：生病时禁用非 heal 按钮；重病时 heal 也禁用（需就医）
                   const disabled = !!acting
                     || (pet.is_sick && action.key !== 'heal')
@@ -574,7 +583,15 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
                       {/* 按钮 */}
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); handleInteract(action.key, pet.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (needBuy && healSub) {
+                            if (onBuyMedicine) onBuyMedicine(healSub);
+                            else toast.error('背包无对应药品，去商店购买');
+                            return;
+                          }
+                          handleInteract(action.key, pet.id);
+                        }}
                         disabled={disabled}
                         className={cn(
                           'w-full flex flex-col items-center gap-0.5 py-1 rounded-lg text-[9px] font-medium transition-colors',
@@ -582,7 +599,7 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
                         )}
                       >
                         <span className="text-sm">{action.icon}</span>
-                        {action.label}
+                        {needBuy ? '买药' : action.label}
                         <span className="text-[7px] opacity-60">
                           {item ? `x${item.quantity}` : '空'}
                         </span>
@@ -702,7 +719,14 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
                         onClick={(e) => { e.stopPropagation(); toggleChat(pet.id); }}
                         className="w-[116px] cursor-pointer relative"
                       >
-                        <div className="bg-white/95 backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] text-slate-600 leading-tight border border-slate-100 whitespace-normal break-words pet-bubble-breathe">
+                        <div className={cn(
+                          'backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] leading-tight whitespace-normal break-words pet-bubble-breathe border',
+                          pet.has_severe_illness
+                            ? 'bg-red-500 text-white border-red-600/50'
+                            : pet.is_sick
+                              ? 'bg-orange-500 text-white border-orange-600/50'
+                              : 'bg-green-500/50 text-slate-900 border-green-700/30 font-medium',
+                        )}>
                           {chatMsg}
                         </div>
                       </div>
