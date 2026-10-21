@@ -722,10 +722,10 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
                         <div className={cn(
                           'backdrop-blur-sm rounded-xl px-2 py-1 shadow-md text-[10px] leading-tight whitespace-normal break-words pet-bubble-breathe border',
                           pet.has_severe_illness
-                            ? 'bg-red-500 text-white border-red-600/50'
+                            ? 'bg-red-500/80 text-white border-red-600/50'
                             : pet.is_sick
-                              ? 'bg-orange-500 text-white border-orange-600/50'
-                              : 'bg-green-500/50 text-white border-green-700/30 font-medium',
+                              ? 'bg-orange-500/80 text-white border-orange-600/50'
+                              : 'bg-green-500/80 text-white border-green-700/30 font-medium',
                         )}>
                           {chatMsg}
                         </div>
