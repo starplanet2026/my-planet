@@ -203,6 +203,8 @@ export function PetShopModal({
   const [ownedPets, setOwnedPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<PetShopItem | null>(null);
+  // 药品快捷购买（从草坪「买药」进入）：只渲染单品购买弹窗，不渲染商店面板
+  const [quickBuy] = useState(!!focusSub);
   const [buying, setBuying] = useState(false);
   // 各用品卡片内联数量输入框：itemId -> 数量
   const [qtyMap, setQtyMap] = useState<Record<string, number>>({});
@@ -259,7 +261,14 @@ export function PetShopModal({
   useEffect(() => {
     if (!focusSub || focusConsumedRef.current || items.length === 0) return;
     const target = items.find(i => i.subcategory === focusSub);
-    if (!target) return;
+    if (!target) {
+      // 未找到对应药品：直接关闭，避免停留在空白层
+      focusConsumedRef.current = true;
+      toast.error('未找到对应药品');
+      onFocusDone?.();
+      onClose?.();
+      return;
+    }
     focusConsumedRef.current = true;
     setDetail(target);
     onFocusDone?.();
@@ -326,6 +335,8 @@ export function PetShopModal({
         toast.success('已存入背包');
         setDetail(null);
         onBought();
+        // 快捷购买模式：买完直接关闭，回到草坪
+        if (quickBuy) { onFocusDone?.(); onClose?.(); }
       }
     } catch (e: any) {
       toast.error(e?.message ?? '购买失败');
@@ -656,10 +667,20 @@ export function PetShopModal({
         </div>
       )}
 
+    </div>
+  );
+
+  // 详情弹窗与命名弹窗（药品快捷购买时单独渲染，不叠加商店面板）
+  const overlays = (
+    <>
       {/* 商品详情弹窗 */}
       <Modal
         open={!!detail}
-        onClose={() => !buying && setDetail(null)}
+        onClose={() => {
+          if (buying) return;
+          setDetail(null);
+          if (quickBuy) { onFocusDone?.(); onClose?.(); }
+        }}
         title={detail?.name ?? '商品详情'}
         size="sm"
       >
@@ -808,17 +829,30 @@ export function PetShopModal({
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 
   // 内嵌模式直接渲染；弹窗模式用 Modal 包裹
   if (isInline) {
-    return content;
+    return <>{content}{overlays}</>;
+  }
+
+  // 药品快捷购买：仅显示单品购买弹窗，不叠加商店面板
+  if (quickBuy) {
+    if (!detail) {
+      return (
+        <Modal open onClose={() => { onFocusDone?.(); onClose?.(); }} title="药品购买" size="sm">
+          <div className="py-6 text-center text-sm text-slate-400">加载中...</div>
+        </Modal>
+      );
+    }
+    return overlays;
   }
 
   return (
     <Modal open onClose={() => onClose?.()} title="萌宠商店" size="lg">
       {content}
+      {overlays}
     </Modal>
   );
 }
