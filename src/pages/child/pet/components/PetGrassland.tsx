@@ -108,7 +108,7 @@ function getHealSubcategory(pet: Pet): PetSubcategory | null {
 // 宠物默认出现位置：底部菜单栏上方居中（仅新宠首次出现时使用）
 const DEFAULT_PET_POSITION = { x: 50, y: 55 };
 
-export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, locked, onLockedClick, inventoryVersion }: {
+export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, locked, onLockedClick, inventoryVersion, onBuyMedicine }: {
   pets: Pet[];
   onPetClick?: (pet: Pet) => void;
   bgImage?: string;
