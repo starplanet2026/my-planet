@@ -430,7 +430,7 @@ export function AdoptPetModal({
                 onChange={e => setNamingPet({ ...namingPet, name: e.target.value })}
                 className="w-full px-3 py-2 rounded-xl border border-green-300 text-sm text-center"
                 placeholder="给它取个名字"
-                maxLength={10}
+                maxLength={20}
                 autoFocus
               />
               <Button onClick={handleSaveName} disabled={savingName || !namingPet.name.trim()} className="w-full">

@@ -362,7 +362,7 @@ export function DestinyPetFlow({ onClose, onAdopted }: { onClose: () => void; on
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder="给它取个名字"
-                      maxLength={10}
+                      maxLength={20}
                       autoFocus
                       className="w-full px-3 py-2 rounded-xl border border-green-300 text-sm text-center"
                     />

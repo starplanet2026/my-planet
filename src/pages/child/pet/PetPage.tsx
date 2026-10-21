@@ -824,7 +824,7 @@ export function PetPage() {
                             onChange={e => setNewName(e.target.value)}
                             className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-green-300 text-sm"
                             placeholder="新名字"
-                            maxLength={10}
+                            maxLength={20}
                           />
                           <button
                             onClick={async () => {

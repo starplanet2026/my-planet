@@ -804,7 +804,7 @@ export function PetShopModal({
               label="名字"
               placeholder="例如：小白、糖糖"
               value={naming.name}
-              maxLength={12}
+              maxLength={20}
               onChange={e =>
                 setNaming(n => (n ? { ...n, name: e.target.value } : n))
               }
