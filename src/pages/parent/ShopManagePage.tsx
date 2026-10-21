@@ -29,6 +29,9 @@ interface ItemFormData {
   image_url: string | null;
 }
 
+// 特权卡分类（与特权表单分类保持一致）
+const PRIVILEGE_CATEGORIES = ['美食', '放松', '玩乐', '稀有'];
+
 // 压缩图片为 Blob（限制 400px 宽度），用于上传到 Storage
 async function compressImageToBlob(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -83,6 +86,7 @@ export function ShopManagePage() {
   const children = members.filter(m => m.role === 'child');
   const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [userPurchases, setUserPurchases] = useState<Purchase[]>([]);
+  const [userCategory, setUserCategory] = useState<string>('all');
   const [purchasesLoading, setPurchasesLoading] = useState(false);
   const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<Purchase | null>(null);
   const [grantOpen, setGrantOpen] = useState(false);
@@ -183,6 +187,7 @@ export function ShopManagePage() {
 
   // 加载选中孩子的特权卡
   useEffect(() => {
+    setUserCategory('all');
     if (!selectedChildId || !family) {
       setUserPurchases([]);
       return;
@@ -232,6 +237,10 @@ export function ShopManagePage() {
   };
 
   const validItems = items.filter(i => i.status !== 'deleted');
+  // 按分类筛选用户特权卡
+  const filteredUserPurchases = userCategory === 'all'
+    ? userPurchases
+    : userPurchases.filter(p => (p.items?.category ?? '') === userCategory);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -378,68 +387,92 @@ export function ShopManagePage() {
             </div>
 
             {selectedChildId && (
-              purchasesLoading ? (
-                <EmptyState icon="🎴" title="加载中..." />
-              ) : userPurchases.length === 0 ? (
-                <EmptyState icon="🎴" title="该用户暂无特权卡" />
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {userPurchases.map(p => {
-                    const expired = p.expires_at ? isExpired(p.expires_at) : false;
-                    const statusText = expired
-                      ? '已过期'
-                      : p.status === 'pending' ? '可用'
-                      : p.status === 'redeemed' ? '已使用'
-                      : p.status === 'sold' ? '已出售'
-                      : p.status === 'cancelled' ? '已取消'
-                      : '可用';
-                    const statusCls = expired || p.status === 'redeemed' || p.status === 'cancelled'
-                      ? 'bg-slate-100 text-slate-400'
-                      : p.status === 'sold' ? 'bg-amber-50 text-amber-500'
-                      : 'bg-emerald-50 text-emerald-600';
-                    return (
-                      <Card key={p.id} className="p-3">
-                        <div className="flex items-start gap-3">
-                          {/* 图标 */}
-                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-2xl flex-shrink-0">
-                            {p.items?.image_url ? (
-                              <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
-                            ) : (
-                              '🎁'
-                            )}
-                          </div>
-                          {/* 信息 */}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-slate-800 text-sm">{p.item_name_snapshot}</h4>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', statusCls)}>
-                                {statusText}
-                              </span>
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
-                                x{p.quantity}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              特权卡 · {p.expires_at ? `有效期至 ${formatDate(p.expires_at)}` : '永久有效'} · 获得于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
-                            </p>
-                          </div>
-                        </div>
-                        {/* 操作按钮 */}
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            danger
-                            onClick={() => setDeletePurchaseTarget(p)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> 删除
-                          </Button>
-                        </div>
-                      </Card>
-                    );
-                  })}
+              <>
+                {/* 分类筛选 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[{ id: 'all', label: '全部' }, ...PRIVILEGE_CATEGORIES.map(c => ({ id: c, label: c }))].map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setUserCategory(cat.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                        userCategory === cat.id
+                          ? 'bg-star-400 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      )}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
                 </div>
-              )
+
+                {purchasesLoading ? (
+                  <EmptyState icon="🎴" title="加载中..." />
+                ) : filteredUserPurchases.length === 0 ? (
+                  <EmptyState
+                    icon="🎴"
+                    title={userPurchases.length === 0 ? '该用户暂无特权卡' : '该分类下暂无特权卡'}
+                  />
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {filteredUserPurchases.map(p => {
+                      const expired = p.expires_at ? isExpired(p.expires_at) : false;
+                      const statusText = expired
+                        ? '已过期'
+                        : p.status === 'pending' ? '可用'
+                        : p.status === 'redeemed' ? '已使用'
+                        : p.status === 'sold' ? '已出售'
+                        : p.status === 'cancelled' ? '已取消'
+                        : '可用';
+                      const statusCls = expired || p.status === 'redeemed' || p.status === 'cancelled'
+                        ? 'bg-slate-100 text-slate-400'
+                        : p.status === 'sold' ? 'bg-amber-50 text-amber-500'
+                        : 'bg-emerald-50 text-emerald-600';
+                      return (
+                        <Card key={p.id} className="p-2.5">
+                          <div className="flex items-start gap-2">
+                            {/* 图标 */}
+                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center text-lg flex-shrink-0">
+                              {p.items?.image_url ? (
+                                <img src={p.items.image_url} alt={p.item_name_snapshot} className="w-full h-full object-cover" />
+                              ) : (
+                                '🎁'
+                              )}
+                            </div>
+                            {/* 信息 */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-slate-800 text-xs truncate" title={p.item_name_snapshot}>
+                                {p.item_name_snapshot}
+                              </h4>
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                <span className={cn('text-[10px] px-1 py-0.5 rounded font-medium', statusCls)}>
+                                  {statusText}
+                                </span>
+                                <span className="text-[10px] px-1 py-0.5 rounded bg-purple-50 text-purple-500 font-bold">
+                                  x{p.quantity}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                                {p.items?.category || '未分类'} · {p.expires_at ? `有效期至 ${formatDate(p.expires_at)}` : '永久有效'}
+                              </p>
+                            </div>
+                          </div>
+                          {/* 操作 */}
+                          <div className="flex justify-end mt-1">
+                            <button
+                              onClick={() => setDeletePurchaseTarget(p)}
+                              className="p-1 text-slate-400 hover:text-red-500"
+                              title="删除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
