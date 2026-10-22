@@ -55,10 +55,11 @@ export function StudyReviewPage() {
     setApproving(r.id);
     try {
       const result = await approveStudyRecord(r.id, reviewerId);
+      // 无论成功还是已被处理，本条记录立即从列表移除，杜绝重复点击
+      setReviews(prev => prev.filter(x => x.id !== r.id));
       if (result.success) {
         toast.success(result.message);
         await refreshMembers();
-        await loadReviews();
       } else {
         toast.error(result.message ?? '审核失败');
       }
@@ -71,13 +72,19 @@ export function StudyReviewPage() {
 
   const handleReject = async () => {
     if (!rejectTarget || !reviewerId) return;
+    const targetId = rejectTarget.id;
     setRejecting(true);
     try {
-      await rejectStudyRecord(rejectTarget.id, reviewerId, rejectNote.trim() || undefined);
-      toast.success('已驳回');
+      const result = await rejectStudyRecord(targetId, reviewerId, rejectNote.trim() || undefined);
+      // 操作成功立即移除条目，不等列表刷新
+      setReviews(prev => prev.filter(x => x.id !== targetId));
+      if (result.success) {
+        toast.success('已驳回');
+      } else {
+        toast.error(result.message ?? '操作失败');
+      }
       setRejectTarget(null);
       setRejectNote('');
-      await loadReviews();
     } catch (e: any) {
       toast.error(e?.message ?? '操作失败');
     } finally {
@@ -90,9 +97,10 @@ export function StudyReviewPage() {
     setIgnoring(r.id);
     try {
       const result = await ignoreStudyRecord(r.id, reviewerId);
+      // 无论成功还是已被处理，本条记录立即从列表移除
+      setReviews(prev => prev.filter(x => x.id !== r.id));
       if (result.success) {
         toast.success(result.message ?? '已忽略');
-        await loadReviews();
       } else {
         toast.error(result.message ?? '操作失败');
       }

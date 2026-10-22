@@ -19,6 +19,17 @@ import type { StudyRecord } from '../../../../api/pets';
 // 心情恢复 = 分钟数（1分钟=1心情值）
 const calcHappinessGain = (minutes: number) => minutes;
 
+// 生成提交幂等令牌（同一令牌后端只允许生成一条待审核记录）
+function newSubmissionToken(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 interface StudyTask {
   id: string;
   text: string;
@@ -76,6 +87,9 @@ export function StudyCompanionModal({
   const [records, setRecords] = useState<StudyRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 提交同步锁 + 本次学习会话的幂等令牌（同步 ref，快速连点只发一次）
+  const submitLockRef = useRef(false);
+  const submitTokenRef = useRef<string | null>(null);
 
   // 从全局 store 恢复学习状态（切换 tab 回来后续上）
   const persistedStep = usePetUiStore(s => s.studyStep);
@@ -311,6 +325,9 @@ export function StudyCompanionModal({
     setMinimized(false);
     setStudyEnded(false);
     setRewardClaimed(false);
+    // 新的学习会话：重置提交锁与令牌（驳回后重学会生成新的待审核记录）
+    submitLockRef.current = false;
+    submitTokenRef.current = null;
     setEndsAt(Date.now() + totalSec * 1000);
     setStudying(true);
     setPaused(false);
@@ -343,6 +360,11 @@ export function StudyCompanionModal({
       handleClose();
       return;
     }
+    // 同步锁：快速连点只允许发起一次提交
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    // 同一学习会话复用同一令牌，网络重试也不会生成重复记录
+    const submissionToken = submitTokenRef.current ?? (submitTokenRef.current = newSubmissionToken());
     try {
       const tasksForRecord = taskList.map(t => ({ text: t.text, reward: t.reward, done: t.done }));
       const { data, error } = await supabase.rpc('study_reward', {
@@ -352,6 +374,7 @@ export function StudyCompanionModal({
         p_pet_id: selectedPet?.id ?? null,
         p_tasks: tasksForRecord,
         p_star_earned: pendingStar,
+        p_submission_token: submissionToken,
       });
       if (error) throw error;
       // 即时标记今日已完成任务（重开弹窗时还会从学习记录再同步一次）
@@ -370,6 +393,7 @@ export function StudyCompanionModal({
         onCompleted();
       }
     } catch (e: any) {
+      submitLockRef.current = false;
       toast.error(e?.message ?? '提交审核失败');
     }
     setStep('done');
@@ -378,6 +402,10 @@ export function StudyCompanionModal({
   // 倒计时归零后：点击小狗提交家长审核（记录一次学习，不直接发放奖励）
   const handleClaimReward = async () => {
     if (rewardClaimed || submittedForReview || !studyEnded) return;
+    // 同步锁：快速连点只允许发起一次提交
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    const submissionToken = submitTokenRef.current ?? (submitTokenRef.current = newSubmissionToken());
     try {
       const tasksForRecord = taskList.map(t => ({ text: t.text, reward: t.reward, done: t.done }));
       const { data, error } = await supabase.rpc('study_reward', {
@@ -387,6 +415,7 @@ export function StudyCompanionModal({
         p_pet_id: selectedPet?.id ?? null,
         p_tasks: tasksForRecord,
         p_star_earned: pendingStar,
+        p_submission_token: submissionToken,
       });
       if (error) throw error;
       // 即时标记今日已完成任务（重开弹窗时还会从学习记录再同步一次）
@@ -404,6 +433,7 @@ export function StudyCompanionModal({
       onCompleted();
       toast.success(`已提交家长审核，通过后将发放心情 +${gain}，星光 +${pendingStar}`);
     } catch (e: any) {
+      submitLockRef.current = false;
       toast.error(e?.message ?? '提交审核失败');
     }
   };
