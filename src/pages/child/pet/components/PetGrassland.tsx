@@ -404,19 +404,35 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
   const handleClaim = async (petId: string) => {
     const pet = petStates[petId];
     if (!pet || pet.coin_balance < 1) return;
+    const claimedAmount = Math.floor(pet.coin_balance);
     setActing('claim');
+    // 乐观更新：立即把本地 coin_balance 清零，icon 立刻消失，无需等待后端 RPC
+    setPetStates(prev => ({
+      ...prev,
+      [petId]: { ...prev[petId], coin_balance: 0 },
+    }));
     try {
       const result = await claimPetCoins(childId, pet.id);
       if (result.success) {
         playCoin(); // 金币音效
         toast.success(result.message);
         refreshMembers();
+        // 后端已清零，checkPet 拉回来的 coin_balance 应为 0，覆盖乐观值也无副作用
         const updated = await checkPet(pet.id);
         setPetStates(prev => ({ ...prev, [pet.id]: mergeShopMeta(updated, prev[pet.id]) }));
       } else {
+        // 领取失败，回滚乐观更新
+        setPetStates(prev => ({
+          ...prev,
+          [petId]: { ...prev[petId], coin_balance: claimedAmount },
+        }));
         toast.error(result.message);
       }
     } catch (e: any) {
+      setPetStates(prev => ({
+        ...prev,
+        [petId]: { ...prev[petId], coin_balance: claimedAmount },
+      }));
       toast.error(e?.message ?? '领取失败');
     } finally {
       setActing(null);
