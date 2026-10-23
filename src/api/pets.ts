@@ -769,9 +769,31 @@ export async function interactWithPet(memberId: string, petId: string, action: s
   return row as Pet;
 }
 
+export interface PetInteractionDaily {
+  log_date: string;
+  pet_id: string;
+  pet_name: string;
+  pet_image_url: string | null;
+  pet_emoji: string | null;
+  hunger_delta: number;
+  clean_delta: number;
+  happiness_delta: number;
+  health_delta: number;
+  action_count: number;
+}
+
+// 近 N 天每只宠物每天的互动属性增量（默认 7 天）
+export async function fetchPetInteractionWeekly(memberId: string, days = 7): Promise<PetInteractionDaily[]> {
+  const { data, error } = await supabase.rpc('get_pet_interaction_weekly', {
+    p_member_id: memberId,
+    p_days: days,
+  });
+  if (error) throw error;
+  return (data ?? []) as PetInteractionDaily[];
+}
+
 export async function checkPet(petId: string): Promise<Pet> {
   const { data, error } = await supabase.rpc('check_pet', { p_pet_id: petId });
-  if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return row as Pet;
 }

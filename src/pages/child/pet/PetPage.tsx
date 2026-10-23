@@ -8,7 +8,8 @@ import { useToastStore } from '../../../store/toastStore';
 import { useStudyLockStore } from '../../../store/studyLockStore';
 import { cn, petDailyCoin } from '../../../lib/utils';
 import { ShoppingBag, Backpack, Gamepad2, Store, Calendar, BookOpen, ImageIcon, PawPrint, HelpCircle, MessageCircle } from 'lucide-react';
-import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead } from '../../../api/pets';
+import { fetchPets, checkPet, getDogHouse, fetchBackgrounds, updatePetInfo, evolvePet, sendPetToStudy, getStudyPets, claimStudyStarlight, fetchPetMessages, clearPetMessages, markPetMessagesRead, fetchPetInteractionWeekly } from '../../../api/pets';
+import type { PetInteractionDaily } from '../../../api/pets';
 import type { Pet, DogHouse, PetBackground, PetRarity, StudyPet, PetMessage, PetSubcategory } from '../../../api/types';
 import { expNeeded } from '../../../api/types';
 import { usePetTraits } from '../../../hooks/usePetTraits';
@@ -72,6 +73,10 @@ export function PetPage() {
   const [showPetList, setShowPetList] = useState(false);
   const [showBoarding, setShowBoarding] = useState(false);
   const [showPetMessages, setShowPetMessages] = useState(false);
+  // 互动记录（近7天每天每只宠物的属性增量）
+  const [showInteractions, setShowInteractions] = useState(false);
+  const [interactionRows, setInteractionRows] = useState<PetInteractionDaily[]>([]);
+  const [interactionLoading, setInteractionLoading] = useState(false);
   const [petMessages, setPetMessages] = useState<PetMessage[]>([]);
   const [petMessagesLoading, setPetMessagesLoading] = useState(false);
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
@@ -134,6 +139,20 @@ export function PetPage() {
       localStorage.setItem(hiddenIdsKey, JSON.stringify([]));
       return next;
     });
+  };
+
+  // 打开互动记录：拉取近 7 天每天每只宠物的属性增量
+  const openInteractions = async () => {
+    if (!child?.id) { toast.error('无法获取孩子身份'); return; }
+    setShowInteractions(true);
+    setInteractionLoading(true);
+    try {
+      setInteractionRows(await fetchPetInteractionWeekly(child.id, 7));
+    } catch (e: any) {
+      toast.error(e?.message ?? '加载互动记录失败');
+    } finally {
+      setInteractionLoading(false);
+    }
   };
 
   // 进化宠物
@@ -787,6 +806,12 @@ export function PetPage() {
                 >
                   🏠 一键回家
                 </button>
+                <button
+                  onClick={openInteractions}
+                  className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-600 text-xs font-medium hover:bg-blue-200 active:scale-95 transition whitespace-nowrap"
+                >
+                  📋 互动记录
+                </button>
               </div>
               {sortedPets.map(pet => {
                 const hidden = hiddenPetIds.has(pet.id);
@@ -935,6 +960,72 @@ export function PetPage() {
                         </button>
                       </div>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* 互动记录：近7天每天每只宠物四项属性的增加量 */}
+      {showInteractions && (
+        <Modal open onClose={() => setShowInteractions(false)} title="互动记录" size="md">
+          <p className="text-xs text-slate-400 text-center mb-3">近 7 天每只宠物每天的血条增加量</p>
+          {interactionLoading ? (
+            <Loading />
+          ) : interactionRows.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-4xl mb-2">📋</div>
+              <p className="text-sm text-slate-500">近 7 天还没有互动记录</p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {Array.from(
+                interactionRows.reduce((map, row) => {
+                  if (!map.has(row.log_date)) map.set(row.log_date, []);
+                  map.get(row.log_date)!.push(row);
+                  return map;
+                }, new Map<string, PetInteractionDaily[]>())
+              ).map(([date, rows]) => {
+                const [y, m, d] = date.split('-').map(Number);
+                const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(y, m - 1, d).getDay()];
+                const isToday = date === new Date().toLocaleDateString('sv-SE');
+                return (
+                  <div key={date}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-bold text-slate-500">{m}月{d}日</span>
+                      <span className="text-[10px] text-slate-400">{weekday}</span>
+                      {isToday && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">今天</span>}
+                    </div>
+                    <div className="space-y-1.5">
+                      {rows.map(row => (
+                        <div key={row.pet_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50">
+                          <div className="w-8 h-10 rounded-md overflow-hidden bg-amber-50 flex items-center justify-center shrink-0">
+                            {row.pet_image_url ? (
+                              <img src={row.pet_image_url} alt={row.pet_name} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-lg">{row.pet_emoji || '🐾'}</span>
+                            )}
+                          </div>
+                          <span className="text-xs font-medium text-slate-700 truncate max-w-[5.5rem] shrink-0">{row.pet_name}</span>
+                          <div className="flex flex-wrap gap-1 text-[10px]">
+                            {row.hunger_delta > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">🍖 饥饿 +{row.hunger_delta}</span>
+                            )}
+                            {row.clean_delta > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-sky-100 text-sky-600">🧼 清洁 +{row.clean_delta}</span>
+                            )}
+                            {row.happiness_delta > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600">💚 心情 +{row.happiness_delta}</span>
+                            )}
+                            {row.health_delta > 0 && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-600">❤️ 健康 +{row.health_delta}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })}

@@ -137,6 +137,13 @@ export function DictationPlayPage() {
     });
   };
 
+  const allCorrect = words.length > 0 && correct.size === words.length;
+  // 一键全选/取消全选（批改模式）
+  const toggleAllCorrect = () => {
+    if (allCorrect) setCorrect(new Set());
+    else setCorrect(new Set(words.map(w => w.id)));
+  };
+
   // 点击「去批改」：需先申请家长授权查看答案
   const requestGradingAccess = async () => {
     if (!task) return;
@@ -260,6 +267,9 @@ export function DictationPlayPage() {
               已选 <span className="text-emerald-600 font-bold">{correctCount}</span>/{words.length} 正确
               <span className="ml-2">预计 <span className="text-amber-500 font-bold">{totalStar}</span> 星光</span>
             </div>
+            <Button variant="ghost" size="lg" onClick={toggleAllCorrect} className="border border-emerald-200 text-emerald-600 hover:bg-emerald-50 whitespace-nowrap">
+              {allCorrect ? '取消全选' : '一键全选'}
+            </Button>
             <Button onClick={submit} disabled={submitting} size="lg">
               {submitting ? '提交中...' : '提交批改'}
             </Button>
