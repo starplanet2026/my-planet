@@ -21,6 +21,22 @@ export const TASK_CATEGORIES: Record<string, { label: string; subtitle: string; 
 
 export const TASK_CATEGORY_LIST = Object.entries(TASK_CATEGORIES) as [TaskCategory, typeof TASK_CATEGORIES[string]][];
 
+// 成就卡「类别」标签（与成就清单 Excel 的「类别」列对应，可自由填写）
+export const TASK_SUBCATEGORY_OPTIONS = ['好习惯', '好健康', '好成绩', '好努力'];
+
+// 类别标签配色（孩子端卡片左上角 tag）
+export const TASK_SUBCATEGORY_COLORS: Record<string, string> = {
+  好习惯: '#3b82f6',
+  好健康: '#10b981',
+  好成绩: '#f59e0b',
+  好努力: '#a855f7',
+};
+
+export function getSubcategoryColor(name?: string | null): string {
+  if (!name) return '#94a3b8';
+  return TASK_SUBCATEGORY_COLORS[name] ?? '#6366f1';
+}
+
 // 根据数据库分类列表 + 默认配置，解析某分类的展示名称
 export function getCategoryLabel(key: TaskCategory, categories: TaskCategoryItem[] = []): string {
   const dbCat = categories.find(c => c.key === key);

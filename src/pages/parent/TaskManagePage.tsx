@@ -10,7 +10,7 @@ import { Input, Textarea, Select } from '../../components/common/Input';
 import { EmptyState } from '../../components/common/EmptyState';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { useToastStore } from '../../store/toastStore';
-import { TASK_ICONS, STAR_PERSON_DEFAULT_ICON, getTaskIconUrl, getCategoryMeta, ROUTES } from '../../lib/constants';
+import { TASK_ICONS, STAR_PERSON_DEFAULT_ICON, getTaskIconUrl, getCategoryMeta, TASK_SUBCATEGORY_OPTIONS, ROUTES } from '../../lib/constants';
 import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square, Pencil, Copy } from 'lucide-react';
@@ -35,6 +35,7 @@ interface TaskFormData {
   title: string;
   description: string;
   category: TaskCategory;
+  subcategory: string;     // 成就类别标签，如 好习惯 / 好健康 / 好成绩 / 好努力
   reward_coins: number;
   deadline: string;        // YYYY-MM-DD 格式
   icon: string;
@@ -76,6 +77,7 @@ export function TaskManagePage() {
     title: '',
     description: '',
     category: 'daily',
+    subcategory: '',
     reward_coins: 1,
     deadline: '',
     icon: STAR_PERSON_DEFAULT_ICON,
@@ -99,7 +101,7 @@ export function TaskManagePage() {
   const openCreate = () => {
     setEditingTask(null);
     setForm({
-      title: '', description: '', category: 'daily', reward_coins: 1,
+      title: '', description: '', category: 'daily', subcategory: '', reward_coins: 1,
       deadline: '', icon: STAR_PERSON_DEFAULT_ICON, repeat_days: [], priority: 0,
     });
     setShowForm(true);
@@ -113,6 +115,7 @@ export function TaskManagePage() {
       title: task.title,
       description: task.description ?? '',
       category: task.category,
+      subcategory: task.subcategory ?? '',
       reward_coins: task.reward_coins,
       deadline: deadlineDate,
       icon: task.icon ?? STAR_PERSON_DEFAULT_ICON,
@@ -146,6 +149,7 @@ export function TaskManagePage() {
         title: form.title.trim(),
         description: form.description.trim() || null,
         category: form.category,
+        subcategory: form.subcategory.trim() || null,
         reward_coins: Number(form.reward_coins),
         deadline: deadlineIso,
         created_by: parentMember.id,
@@ -409,13 +413,22 @@ export function TaskManagePage() {
     try {
       const rows = parseAchievementExcel(await file.arrayBuffer());
       if (rows.length === 0) { toast.error('未解析到有效成就，请使用标准成就清单模板'); return; }
-      const existing = new Set(
-        tasks.filter(t => t.status !== 'deleted').map(t => t.title.trim().toLowerCase()),
+      const existing = new Map(
+        tasks.filter(t => t.status !== 'deleted').map(t => [t.title.trim().toLowerCase(), t] as const),
       );
-      let success = 0, skip = 0, failed = 0;
+      let success = 0, skip = 0, failed = 0, filled = 0;
       for (const row of rows) {
         const key = row.title.trim().toLowerCase();
-        if (existing.has(key)) { skip++; continue; }
+        const dup = existing.get(key);
+        if (dup) {
+          // 已存在的成就：类别为空时用 Excel 里的类别补全（旧数据升级）
+          if (!dup.subcategory && row.subcategory) {
+            try { await updateTask(dup.id, { subcategory: row.subcategory }); filled++; } catch { failed++; }
+          } else {
+            skip++;
+          }
+          continue;
+        }
         try {
           await createTask({
             family_id: family.id,
@@ -423,13 +436,13 @@ export function TaskManagePage() {
             title: row.title,
             description: row.description,
             category: row.category,
+            subcategory: row.subcategory,
             reward_coins: row.reward_coins,
             deadline: null,
             created_by: parentMember.id,
             icon: null,
             repeat_days: row.repeat_days,
           });
-          existing.add(key);
           success++;
         } catch {
           failed++;
@@ -437,6 +450,7 @@ export function TaskManagePage() {
       }
       await refresh();
       const parts = [`新增 ${success}`];
+      if (filled) parts.push(`补全类别 ${filled}`);
       if (skip) parts.push(`重复跳过 ${skip}`);
       if (failed) parts.push(`失败 ${failed}`);
       toast.success(`导入完成：${parts.join('，')}`);
@@ -781,6 +795,17 @@ export function TaskManagePage() {
               <option key={c.key} value={c.key}>{getCategoryMeta(c.key, categories).emoji} {c.name}</option>
             ))}
           </Select>
+          <Input
+            label="类别（可选）"
+            list="achievement-subcategory-options"
+            placeholder="如：好习惯 / 好健康 / 好成绩 / 好努力"
+            value={form.subcategory}
+            onChange={e => update('subcategory', e.target.value)}
+          />
+          <datalist id="achievement-subcategory-options">
+            {TASK_SUBCATEGORY_OPTIONS.map(s => <option key={s} value={s} />)}
+          </datalist>
+          <p className="text-xs text-slate-400 -mt-3">类别会在孩子端成就卡片左上角显示为标签</p>
           <div className="grid grid-cols-3 gap-3">
             <Input
               label="奖励星光值"

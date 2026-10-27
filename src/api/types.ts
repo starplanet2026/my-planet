@@ -53,6 +53,7 @@ export interface Task {
   title: string;
   description: string | null;
   category: TaskCategory;
+  subcategory: string | null;
   reward_coins: number;
   deadline: string | null;
   status: TaskStatus;

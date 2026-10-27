@@ -7,7 +7,7 @@ import { EmptyState } from '../common/EmptyState';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useToastStore } from '../../store/toastStore';
 import { useAppContextStore } from '../../store/appContextStore';
-import { TASK_ICONS, getTaskIconUrl, getCategoryMeta } from '../../lib/constants';
+import { TASK_ICONS, getTaskIconUrl, getCategoryMeta, TASK_SUBCATEGORY_OPTIONS, getSubcategoryColor } from '../../lib/constants';
 import { createTask } from '../../api/tasks';
 import { createItem } from '../../api/items';
 import { uploadImageToStorage } from '../../lib/storage';
@@ -58,7 +58,7 @@ export function AchievementTemplateModal({
   const excelRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
-    title: '', description: '', category: 'daily', reward_coins: '1', icon: '', priority: '0',
+    title: '', description: '', category: 'daily', subcategory: '', reward_coins: '1', icon: '', priority: '0',
   });
 
   const reload = () => {
@@ -74,7 +74,7 @@ export function AchievementTemplateModal({
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', description: '', category: 'daily', reward_coins: '1', icon: '', priority: '0' });
+    setForm({ title: '', description: '', category: 'daily', subcategory: '', reward_coins: '1', icon: '', priority: '0' });
     setShowForm(true);
   };
 
@@ -84,6 +84,7 @@ export function AchievementTemplateModal({
       title: t.title,
       description: t.description ?? '',
       category: t.category,
+      subcategory: t.subcategory ?? '',
       reward_coins: String(t.reward_coins),
       icon: t.icon ?? '',
       priority: String(t.priority ?? 0),
@@ -99,6 +100,7 @@ export function AchievementTemplateModal({
         title: form.title.trim(),
         description: form.description.trim() || null,
         category: form.category,
+        subcategory: form.subcategory.trim() || null,
         reward_coins: Number(form.reward_coins) || 0,
         icon: form.icon.trim() || null,
         priority: Number(form.priority) || 0,
@@ -125,21 +127,30 @@ export function AchievementTemplateModal({
     try {
       const rows = parseAchievementExcel(await file.arrayBuffer());
       if (rows.length === 0) { toast.error('未解析到有效成就，请使用标准成就清单模板'); return; }
-      const existing = new Set(templates.map(t => t.title.trim().toLowerCase()));
-      let success = 0, skip = 0, failed = 0;
+      const existing = new Map(templates.map(t => [t.title.trim().toLowerCase(), t] as const));
+      let success = 0, skip = 0, failed = 0, filled = 0;
       for (const row of rows) {
         const key = row.title.trim().toLowerCase();
-        if (existing.has(key)) { skip++; continue; }
+        const dup = existing.get(key);
+        if (dup) {
+          // 已存在的模板：类别为空时用 Excel 里的类别补全
+          if (!dup.subcategory && row.subcategory) {
+            try { await updateAchievementTemplate(dup.id, { subcategory: row.subcategory }); filled++; } catch { failed++; }
+          } else {
+            skip++;
+          }
+          continue;
+        }
         try {
           await createAchievementTemplate({
             title: row.title,
             description: row.description,
             category: row.category,
+            subcategory: row.subcategory,
             reward_coins: row.reward_coins,
             icon: null,
             repeat_days: row.repeat_days,
           });
-          existing.add(key);
           success++;
         } catch {
           failed++;
@@ -147,6 +158,7 @@ export function AchievementTemplateModal({
       }
       reload();
       const parts = [`新增 ${success}`];
+      if (filled) parts.push(`补全类别 ${filled}`);
       if (skip) parts.push(`重复跳过 ${skip}`);
       if (failed) parts.push(`失败 ${failed}`);
       toast.success(`导入完成：${parts.join('，')}`);
@@ -183,6 +195,7 @@ export function AchievementTemplateModal({
         title: t.title,
         description: t.description,
         category,
+        subcategory: t.subcategory ?? null,
         reward_coins: t.reward_coins,
         deadline: null,
         created_by: createdBy,
@@ -250,6 +263,12 @@ export function AchievementTemplateModal({
                       {t.description && <p className="text-xs text-slate-400 line-clamp-2">{t.description}</p>}
                       <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
                         <span>{getCategoryMeta(t.category as TaskCategory, categories).label}</span>
+                        {t.subcategory && (
+                          <span className="px-1.5 py-0.5 rounded-full text-white text-[9px] font-bold"
+                            style={{ background: getSubcategoryColor(t.subcategory) }}>
+                            {t.subcategory}
+                          </span>
+                        )}
                         <span className="font-bold text-emerald-500">{t.reward_coins >= 0 ? '+' : ''}{t.reward_coins} ⭐</span>
                       </div>
                     </div>
@@ -350,6 +369,12 @@ export function AchievementTemplateModal({
             <Input label="优先级" type="number" value={form.priority}
               onChange={e => setForm(p => ({ ...p, priority: e.target.value }))} />
           </div>
+          <Input label="类别（可选）" list="template-subcategory-options"
+            placeholder="如：好习惯 / 好健康 / 好成绩 / 好努力"
+            value={form.subcategory} onChange={e => setForm(p => ({ ...p, subcategory: e.target.value }))} />
+          <datalist id="template-subcategory-options">
+            {TASK_SUBCATEGORY_OPTIONS.map(s => <option key={s} value={s} />)}
+          </datalist>
 
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" fullWidth onClick={() => setShowForm(false)} disabled={saving}>取消</Button>

@@ -5,6 +5,7 @@ import type { TaskCategory } from '../api/types';
 // 列顺序：模块 | 类别 | 成就名称 | 成就描述 | 奖励星光值 | 循环
 export interface ParsedAchievement {
   category: TaskCategory;
+  subcategory: string | null;
   title: string;
   description: string | null;
   reward_coins: number;
@@ -57,6 +58,7 @@ export function parseAchievementExcel(buffer: ArrayBuffer): ParsedAchievement[] 
   const header = rows[headerIdx].map(cellText);
   const col = (name: string) => header.indexOf(name);
   const iModule = col('模块');
+  const iSubcategory = col('类别');
   const iTitle = col('成就名称');
   const iDesc = col('成就描述');
   const iReward = col('奖励星光值');
@@ -81,6 +83,7 @@ export function parseAchievementExcel(buffer: ArrayBuffer): ParsedAchievement[] 
 
     result.push({
       category,
+      subcategory: iSubcategory >= 0 ? (cellText(row[iSubcategory]) || null) : null,
       title,
       description: iDesc >= 0 ? (cellText(row[iDesc]) || null) : null,
       reward_coins: Number.isFinite(reward) ? Math.trunc(reward) : 0,

@@ -7,6 +7,7 @@ export interface AchievementTemplate {
   title: string;
   description: string | null;
   category: string;
+  subcategory: string | null;
   reward_coins: number;
   icon: string | null;
   repeat_days: number[] | null;
@@ -22,6 +23,7 @@ export interface AchievementTemplateInput {
   title: string;
   description?: string | null;
   category: string;
+  subcategory?: string | null;
   reward_coins: number;
   icon?: string | null;
   repeat_days?: number[] | null;

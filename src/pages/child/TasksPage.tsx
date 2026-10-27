@@ -6,7 +6,7 @@ import { Card } from '../../components/common/Card';
 import { Loading } from '../../components/common/Loading';
 import { Modal } from '../../components/common/Modal';
 import { useToastStore } from '../../store/toastStore';
-import { getTaskIconUrl, getCategoryMeta } from '../../lib/constants';
+import { getTaskIconUrl, getCategoryMeta, getSubcategoryColor } from '../../lib/constants';
 import { formatSignedCoins, formatDate, isExpired, isToday } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import type { Task, TaskCategory } from '../../api/types';
@@ -234,9 +234,18 @@ export function TasksPage() {
                         )}
                       >
                       <Card
-                        className={cn('p-2 sm:p-3 flex flex-col items-center text-center cursor-pointer hover:shadow-md transition-shadow', isDone && 'opacity-70')}
+                        className={cn('p-2 sm:p-3 flex flex-col items-center text-center cursor-pointer hover:shadow-md transition-shadow relative', isDone && 'opacity-70')}
                         onClick={() => setDetailTask(task)}
                       >
+                        {/* 类别标签（左上角） */}
+                        {task.subcategory && (
+                          <span
+                            className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-white text-[9px] font-bold shadow z-10"
+                            style={{ background: getSubcategoryColor(task.subcategory) }}
+                          >
+                            {task.subcategory}
+                          </span>
+                        )}
                         <div className={cn(
                           'w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 mb-1.5',
                           isPending ? 'bg-amber-50' : isDone ? 'bg-slate-50' : 'bg-star-50'

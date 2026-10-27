@@ -94,6 +94,7 @@ export async function createTask(task: {
   title: string;
   description: string | null;
   category: TaskCategory;
+  subcategory?: string | null;
   reward_coins: number;
   deadline: string | null;
   created_by: string;
