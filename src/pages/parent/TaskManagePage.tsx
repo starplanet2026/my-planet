@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
@@ -15,9 +15,10 @@ import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square, Pencil, Copy } from 'lucide-react';
 import type { Task, TaskCategory, TaskCategoryItem } from '../../api/types';
-import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks, updateTaskPriority } from '../../api/tasks';
+import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks, updateTaskPriority, createTask } from '../../api/tasks';
 import { useAppContextStore } from '../../store/appContextStore';
 import { AchievementTemplateModal } from '../../components/template-library/PublicTemplateLibrary';
+import { parseAchievementExcel } from '../../lib/achievementExcel';
 
 // 周几标签（0=周日, 1=周一...6=周六）
 const WEEKDAY_LABELS: { value: number; label: string }[] = [
@@ -384,9 +385,13 @@ export function TaskManagePage() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
     try {
-      await deleteTasks(ids);
+      const deleted = await deleteTasks(ids);
       await refresh();
-      toast.success(`已删除 ${ids.length} 个任务`);
+      if (deleted < ids.length) {
+        toast.warning(`已删除 ${deleted} 项，${ids.length - deleted} 项删除失败`);
+      } else {
+        toast.success(`已删除 ${deleted} 个任务`);
+      }
       setSelectedIds(new Set());
     } catch (e: any) {
       toast.error(e?.message ?? '批量删除失败');
@@ -394,6 +399,54 @@ export function TaskManagePage() {
   };
 
   const [seeding, setSeeding] = useState(false);
+
+  // Excel 批量导入（与公共模板库共用同一套成就清单模板）
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [excelImporting, setExcelImporting] = useState(false);
+  const handleImportExcel = async (file: File) => {
+    if (!family?.id || !parentMember?.id) { toast.error('家庭信息缺失'); return; }
+    setExcelImporting(true);
+    try {
+      const rows = parseAchievementExcel(await file.arrayBuffer());
+      if (rows.length === 0) { toast.error('未解析到有效成就，请使用标准成就清单模板'); return; }
+      const existing = new Set(
+        tasks.filter(t => t.status !== 'deleted').map(t => t.title.trim().toLowerCase()),
+      );
+      let success = 0, skip = 0, failed = 0;
+      for (const row of rows) {
+        const key = row.title.trim().toLowerCase();
+        if (existing.has(key)) { skip++; continue; }
+        try {
+          await createTask({
+            family_id: family.id,
+            member_id: effectiveChildId,
+            title: row.title,
+            description: row.description,
+            category: row.category,
+            reward_coins: row.reward_coins,
+            deadline: null,
+            created_by: parentMember.id,
+            icon: null,
+            repeat_days: row.repeat_days,
+          });
+          existing.add(key);
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+      await refresh();
+      const parts = [`新增 ${success}`];
+      if (skip) parts.push(`重复跳过 ${skip}`);
+      if (failed) parts.push(`失败 ${failed}`);
+      toast.success(`导入完成：${parts.join('，')}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Excel 解析失败');
+    } finally {
+      setExcelImporting(false);
+      if (importFileRef.current) importFileRef.current.value = '';
+    }
+  };
 
   const handleSeedDefaults = async () => {
     if (!family?.id || !parentMember?.id) {
@@ -439,6 +492,16 @@ export function TaskManagePage() {
           </Button>
           <Button size="sm" variant="ghost" onClick={handleSeedDefaults} disabled={seeding}>
             <Upload className="w-4 h-4" /> 导入成就清单
+          </Button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportExcel(f); }}
+          />
+          <Button size="sm" variant="ghost" loading={excelImporting} onClick={() => importFileRef.current?.click()}>
+            <Upload className="w-4 h-4" /> Excel 批量导入
           </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="w-4 h-4" /> 新建

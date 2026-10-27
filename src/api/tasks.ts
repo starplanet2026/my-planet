@@ -114,10 +114,10 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<Task
   return data as Task;
 }
 
-// 删除任务（软删除）— 默认任务不可删除
+// 删除任务（软删除）
 export async function deleteTask(id: string): Promise<void> {
   const { error } = await supabase
-    .from('tasks').update({ status: 'deleted' }).eq('id', id).eq('is_default', false);
+    .from('tasks').update({ status: 'deleted' }).eq('id', id);
   if (error) throw error;
 }
 
@@ -135,11 +135,12 @@ export async function offlineTasks(ids: string[]): Promise<void> {
   if (error) throw error;
 }
 
-// 批量删除任务（默认任务除外）
-export async function deleteTasks(ids: string[]): Promise<void> {
-  const { error } = await supabase
-    .from('tasks').update({ status: 'deleted' }).neq('is_default', true).in('id', ids);
+// 批量删除任务（软删除，返回实际删除条数）
+export async function deleteTasks(ids: string[]): Promise<number> {
+  const { data, error } = await supabase
+    .from('tasks').update({ status: 'deleted' }).in('id', ids).select('id');
   if (error) throw error;
+  return (data ?? []).length;
 }
 
 // 导入默认成就清单任务

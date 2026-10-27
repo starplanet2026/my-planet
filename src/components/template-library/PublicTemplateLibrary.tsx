@@ -11,6 +11,7 @@ import { TASK_ICONS, getTaskIconUrl, getCategoryMeta } from '../../lib/constants
 import { createTask } from '../../api/tasks';
 import { createItem } from '../../api/items';
 import { uploadImageToStorage } from '../../lib/storage';
+import { parseAchievementExcel } from '../../lib/achievementExcel';
 import {
   listAchievementTemplates, createAchievementTemplate, updateAchievementTemplate,
   deleteAchievementTemplate, type AchievementTemplate,
@@ -53,6 +54,8 @@ export function AchievementTemplateModal({
   const [deleteTarget, setDeleteTarget] = useState<AchievementTemplate | null>(null);
   const [saving, setSaving] = useState(false);
   const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [excelImporting, setExcelImporting] = useState(false);
+  const excelRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     title: '', description: '', category: 'daily', reward_coins: '1', icon: '', priority: '0',
@@ -116,6 +119,45 @@ export function AchievementTemplateModal({
     }
   };
 
+  // Excel 批量上传（与个人成就库共用同一套成就清单模板）
+  const handleImportExcel = async (file: File) => {
+    setExcelImporting(true);
+    try {
+      const rows = parseAchievementExcel(await file.arrayBuffer());
+      if (rows.length === 0) { toast.error('未解析到有效成就，请使用标准成就清单模板'); return; }
+      const existing = new Set(templates.map(t => t.title.trim().toLowerCase()));
+      let success = 0, skip = 0, failed = 0;
+      for (const row of rows) {
+        const key = row.title.trim().toLowerCase();
+        if (existing.has(key)) { skip++; continue; }
+        try {
+          await createAchievementTemplate({
+            title: row.title,
+            description: row.description,
+            category: row.category,
+            reward_coins: row.reward_coins,
+            icon: null,
+            repeat_days: row.repeat_days,
+          });
+          existing.add(key);
+          success++;
+        } catch {
+          failed++;
+        }
+      }
+      reload();
+      const parts = [`新增 ${success}`];
+      if (skip) parts.push(`重复跳过 ${skip}`);
+      if (failed) parts.push(`失败 ${failed}`);
+      toast.success(`导入完成：${parts.join('，')}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Excel 解析失败');
+    } finally {
+      setExcelImporting(false);
+      if (excelRef.current) excelRef.current.value = '';
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -165,9 +207,22 @@ export function AchievementTemplateModal({
               调取后会复制一份到你的成就库，可自由编辑，不会改动公共模板
             </p>
             {isSuperAdmin && (
-              <Button size="sm" onClick={openCreate}>
-                <Plus className="w-4 h-4" /> 新增模板
-              </Button>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={excelRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImportExcel(f); }}
+                />
+                <Button size="sm" variant="secondary" loading={excelImporting}
+                  onClick={() => excelRef.current?.click()}>
+                  <Upload className="w-4 h-4" /> Excel 批量导入
+                </Button>
+                <Button size="sm" onClick={openCreate}>
+                  <Plus className="w-4 h-4" /> 新增模板
+                </Button>
+              </div>
             )}
           </div>
 
