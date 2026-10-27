@@ -13,9 +13,11 @@ import { useToastStore } from '../../store/toastStore';
 import { TASK_ICONS, STAR_PERSON_DEFAULT_ICON, getTaskIconUrl, getCategoryMeta, ROUTES } from '../../lib/constants';
 import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
-import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square, Pencil } from 'lucide-react';
+import { Plus, Edit2, Trash2, Send, Power, Calendar, ArrowLeft, Upload, GripVertical, CheckSquare, Square, Pencil, Copy } from 'lucide-react';
 import type { Task, TaskCategory, TaskCategoryItem } from '../../api/types';
 import { updateTaskOrder, publishTasks, offlineTasks, deleteTasks, seedDefaultTasks, updateTaskPriority } from '../../api/tasks';
+import { useAppContextStore } from '../../store/appContextStore';
+import { AchievementTemplateModal } from '../../components/template-library/PublicTemplateLibrary';
 
 // 周几标签（0=周日, 1=周一...6=周六）
 const WEEKDAY_LABELS: { value: number; label: string }[] = [
@@ -65,6 +67,9 @@ export function TaskManagePage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [catActionLoading, setCatActionLoading] = useState(false);
+  // 公共模板库（新模块：默认仅超级管理员可见，管理员应用全局后普通用户才可见）
+  const canUseTemplateLibrary = useAppContextStore(s => s.isSuperAdmin || s.features.template_library === true);
+  const [showTemplateLib, setShowTemplateLib] = useState(false);
 
   const [form, setForm] = useState<TaskFormData>({
     title: '',
@@ -424,6 +429,11 @@ export function TaskManagePage() {
           <h1 className="text-xl font-bold">任务管理</h1>
         </div>
         <div className="flex items-center gap-2">
+          {canUseTemplateLibrary && (
+            <Button size="sm" variant="ghost" onClick={() => setShowTemplateLib(true)}>
+              <Copy className="w-4 h-4" /> 公共模板库
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => setShowCategoryManage(true)}>
             <Pencil className="w-4 h-4" /> 分类管理
           </Button>
@@ -859,6 +869,19 @@ export function TaskManagePage() {
           </div>
         </div>
       </Modal>
+
+      {/* 公共模板库（成就卡） */}
+      {canUseTemplateLibrary && family?.id && parentMember?.id && (
+        <AchievementTemplateModal
+          open={showTemplateLib}
+          onClose={() => setShowTemplateLib(false)}
+          familyId={family.id}
+          createdBy={parentMember.id}
+          targetMemberId={effectiveChildId}
+          categories={categories}
+          onCopied={() => refresh()}
+        />
+      )}
 
     </div>
   );

@@ -19,7 +19,9 @@ import { fetchPendingStudyReviews } from '../../api/pets';
 import { fetchQuestionReports } from '../../api/challenges';
 import { listPendingDictationSubmissions } from '../../api/dictation';
 import { supabase } from '../../api/client';
-import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint, LogOut } from 'lucide-react';
+import { useAppContextStore } from '../../store/appContextStore';
+import { listFeatureFlags, setFeatureGlobal, type FeatureFlag } from '../../api/appContext';
+import { Coins, Settings, Lock, Trash2, Plus, Minus, KeyRound, CheckCircle, Trophy, Gift, BookOpen, PawPrint, LogOut, Globe } from 'lucide-react';
 
 // 板块 ID
 type SectionId = 'quick' | 'achievement' | 'privilege' | 'battle' | 'pet';
@@ -125,6 +127,38 @@ export function ParentDashboardPage() {
   // 退出登录
   const [showLogout, setShowLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // 应用全局（仅超级管理员）：按功能/模块单独控制灰度下发
+  const isSuperAdmin = useAppContextStore(s => s.isSuperAdmin);
+  const loadAppContext = useAppContextStore(s => s.load);
+  const [showGlobalFlags, setShowGlobalFlags] = useState(false);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([]);
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  const openGlobalFlags = () => {
+    setShowGlobalFlags(true);
+    setFlagsLoading(true);
+    listFeatureFlags()
+      .then(setFeatureFlags)
+      .catch((e: any) => toast.error(e?.message ?? '加载失败'))
+      .finally(() => setFlagsLoading(false));
+  };
+
+  const handleToggleGlobal = async (flag: FeatureFlag) => {
+    setTogglingKey(flag.key);
+    try {
+      await setFeatureGlobal(flag.key, !flag.is_global);
+      setFeatureFlags(prev => prev.map(f => f.key === flag.key ? { ...f, is_global: !f.is_global } : f));
+      loadAppContext();
+      toast.success(!flag.is_global ? `「${flag.name}」已应用全局` : `「${flag.name}」已回到仅管理员可见`);
+    } catch (e: any) {
+      toast.error(e?.message ?? '操作失败');
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
 
   const handleManualAdjust = async () => {
     if (!family || !parentMember || !currentChild) return;
@@ -380,13 +414,24 @@ export function ParentDashboardPage() {
       {/* 顶部：左上角「家长管理后台」与设置按钮对齐 */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">家长管理后台</h1>
-        <button
-          onClick={() => setShowSettings(true)}
-          className="flex items-center gap-1 px-3 py-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <Settings className="w-4 h-4 text-slate-500" />
-          <span className="text-sm">设置</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <button
+              onClick={openGlobalFlags}
+              className="flex items-center gap-1 px-3 py-2 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
+            >
+              <Globe className="w-4 h-4 text-amber-600" />
+              <span className="text-sm text-amber-700">应用全局</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1 px-3 py-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
+          >
+            <Settings className="w-4 h-4 text-slate-500" />
+            <span className="text-sm">设置</span>
+          </button>
+        </div>
       </div>
 
       {/* 第1行：手动加减分 | 快速验证 */}
@@ -748,6 +793,46 @@ export function ParentDashboardPage() {
         onConfirm={handleLogout}
         onClose={() => { if (!loggingOut) setShowLogout(false); }}
       />
+      {/* 应用全局：按单条新功能/模块控制灰度下发 */}
+      <Modal open={showGlobalFlags} onClose={() => setShowGlobalFlags(false)} title="应用全局" size="lg">
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">
+            新增功能默认仅超级管理员可见。点击「应用全局」后，该功能对全部普通用户开放；各功能独立控制、互不影响。
+          </p>
+          {flagsLoading ? (
+            <p className="text-sm text-slate-400 py-6 text-center">加载中...</p>
+          ) : featureFlags.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">暂无可配置的新功能</p>
+          ) : (
+            <div className="space-y-2">
+              {featureFlags.map(flag => (
+                <div key={flag.key} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{flag.name}</span>
+                      <span className={cn(
+                        'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                        flag.is_global ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                      )}>
+                        {flag.is_global ? '已应用全局' : '仅管理员可见'}
+                      </span>
+                    </div>
+                    {flag.description && <p className="text-xs text-slate-400 mt-0.5">{flag.description}</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={flag.is_global ? 'secondary' : undefined}
+                    loading={togglingKey === flag.key}
+                    onClick={() => handleToggleGlobal(flag)}
+                  >
+                    {flag.is_global ? '回退为仅管理员' : '应用全局'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

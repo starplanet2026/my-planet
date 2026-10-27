@@ -4,6 +4,7 @@ import { AppRoutes } from './routes';
 import { ToastContainer } from './components/common/Toast';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useFamilyStore } from './store/familyStore';
+import { useAppContextStore } from './store/appContextStore';
 import { supabase } from './api/client';
 import { Loading } from './components/common/Loading';
 
@@ -11,6 +12,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const load = useFamilyStore(s => s.load);
+  const loadAppContext = useAppContextStore(s => s.load);
   const family = useFamilyStore(s => s.family);
   const loading = useFamilyStore(s => s.loading);
   const [checking, setChecking] = useState(true);
@@ -28,6 +30,7 @@ export default function App() {
       }
       // 已登录 → 加载家庭数据
       loadedUserIdRef.current = session.user?.id ?? null;
+      loadAppContext();
       load().then(() => setChecking(false));
     });
   }, []);
@@ -48,6 +51,7 @@ export default function App() {
           return;
         }
         loadedUserIdRef.current = userId;
+        loadAppContext();
         load().then(() => {
           if (!useFamilyStore.getState().family) {
             navigate('/setup');

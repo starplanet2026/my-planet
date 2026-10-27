@@ -11,8 +11,10 @@ import { useToastStore } from '../../store/toastStore';
 import { formatCoins, formatDate, isExpired } from '../../lib/utils';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ROUTES } from '../../lib/constants';
-import { Plus, Edit2, Trash2, Coins, ArrowLeft, Upload, X, Dices, Users, Gift } from 'lucide-react';
+import { Plus, Edit2, Trash2, Coins, ArrowLeft, Upload, X, Dices, Users, Gift, Copy } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAppContextStore } from '../../store/appContextStore';
+import { PrivilegeTemplateModal } from '../../components/template-library/PublicTemplateLibrary';
 import type { Item, Purchase } from '../../api/types';
 import { uploadImageToStorage } from '../../lib/storage';
 import { LuckyWheelConfigModal } from '../../components/lucky-wheel/LuckyWheelConfigModal';
@@ -93,6 +95,9 @@ export function ShopManagePage() {
   const [grantItemId, setGrantItemId] = useState<string>('');
   const [grantQty, setGrantQty] = useState(1);
   const [granting, setGranting] = useState(false);
+  // 公共模板库（新模块：默认仅超级管理员可见，管理员应用全局后普通用户才可见）
+  const canUseTemplateLibrary = useAppContextStore(s => s.isSuperAdmin || s.features.template_library === true);
+  const [showTemplateLib, setShowTemplateLib] = useState(false);
 
   const [form, setForm] = useState<ItemFormData>({
     name: '', description: '', price: '', expires_at: '',
@@ -255,6 +260,11 @@ export function ShopManagePage() {
           <h1 className="text-xl font-bold">特权管理</h1>
         </div>
         <div className="flex items-center gap-2">
+          {canUseTemplateLibrary && (
+            <Button size="sm" variant="secondary" onClick={() => setShowTemplateLib(true)}>
+              <Copy className="w-4 h-4" /> 公共模板库
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={() => setWheelConfigOpen(true)}>
             <Dices className="w-4 h-4" /> 转盘权重
           </Button>
@@ -659,6 +669,16 @@ export function ShopManagePage() {
           </div>
         </div>
       </Modal>
+      {/* 公共模板库（特权卡） */}
+      {canUseTemplateLibrary && family?.id && parentMember?.id && (
+        <PrivilegeTemplateModal
+          open={showTemplateLib}
+          onClose={() => setShowTemplateLib(false)}
+          familyId={family.id}
+          createdBy={parentMember.id}
+          onCopied={() => {}}
+        />
+      )}
     </div>
   );
 }
