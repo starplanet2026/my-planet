@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Input, Textarea } from '../common/Input';
@@ -7,7 +7,7 @@ import { EmptyState } from '../common/EmptyState';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useToastStore } from '../../store/toastStore';
 import { useAppContextStore } from '../../store/appContextStore';
-import { TASK_ICONS, getTaskIconUrl, getCategoryMeta, TASK_SUBCATEGORY_OPTIONS, getSubcategoryColor } from '../../lib/constants';
+import { TASK_ICONS, getTaskIconUrl, getCategoryMeta, TASK_SUBCATEGORY_OPTIONS, TASK_CATEGORY_LIST, getSubcategoryColor } from '../../lib/constants';
 import { createTask } from '../../api/tasks';
 import { createItem } from '../../api/items';
 import { uploadImageToStorage } from '../../lib/storage';
@@ -20,7 +20,7 @@ import {
   listPrivilegeTemplates, createPrivilegeTemplate, updatePrivilegeTemplate,
   deletePrivilegeTemplate, type PrivilegeTemplate,
 } from '../../api/templates';
-import { Plus, Edit2, Trash2, Copy, Upload, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Copy, Upload, X, CheckSquare, Square } from 'lucide-react';
 import type { TaskCategory, TaskCategoryItem } from '../../api/types';
 
 // 公共模板库只对「超级管理员」或「已应用全局」的用户开放，入口处已做判断，此处再加一层兜底
@@ -57,6 +57,12 @@ export function AchievementTemplateModal({
   const [excelImporting, setExcelImporting] = useState(false);
   const excelRef = useRef<HTMLInputElement>(null);
 
+  // 筛选：模块（分类）+ 类别，两组各单选，组合为 AND
+  const [filterModule, setFilterModule] = useState<string | null>(null);
+  const [filterSub, setFilterSub] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchCopying, setBatchCopying] = useState(false);
+
   const [form, setForm] = useState({
     title: '', description: '', category: 'daily', subcategory: '', reward_coins: '1', icon: '', priority: '0',
   });
@@ -70,7 +76,46 @@ export function AchievementTemplateModal({
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (open) reload(); }, [open, canUse]);
+  useEffect(() => {
+    if (!open) return;
+    reload();
+    // 弹窗打开时筛选为空；关闭不清状态，下次打开统一重置
+    setFilterModule(null);
+    setFilterSub(null);
+    setSelectedIds(new Set());
+  }, [open, canUse]);
+
+  // 筛选结果（模块 + 类别 AND）
+  const filteredTemplates = useMemo(
+    () => templates.filter(t =>
+      (!filterModule || t.category === filterModule)
+      && (!filterSub || (t.subcategory ?? '') === filterSub)),
+    [templates, filterModule, filterSub],
+  );
+  const allFilteredSelected =
+    filteredTemplates.length > 0 && filteredTemplates.every(t => selectedIds.has(t.id));
+
+  // 切换筛选条件时清空勾选，避免误调取被隐藏的卡片
+  const changeFilter = (module: string | null, sub: string | null) => {
+    setFilterModule(module);
+    setFilterSub(sub);
+    setSelectedIds(new Set());
+  };
+  const resetFilter = () => changeFilter(null, null);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    // 仅作用于当前筛选结果，被过滤隐藏的卡片不会被选中
+    setSelectedIds(allFilteredSelected ? new Set() : new Set(filteredTemplates.map(t => t.id)));
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -183,31 +228,60 @@ export function AchievementTemplateModal({
   };
 
   // 调取 = 复制一份到自己的成就库（独立副本，后续编辑不影响模板）
+  const copyTemplateToLibrary = async (t: AchievementTemplate) => {
+    const validKeys = new Set<string>(['daily', 'stage', 'super', 'black', ...categories.map(c => c.key)]);
+    const category = (validKeys.has(t.category) ? t.category : 'daily') as TaskCategory;
+    await createTask({
+      family_id: familyId,
+      member_id: targetMemberId,
+      title: t.title,
+      description: t.description,
+      category,
+      subcategory: t.subcategory ?? null,
+      reward_coins: t.reward_coins,
+      deadline: null,
+      created_by: createdBy,
+      icon: t.icon ?? null,
+      repeat_days: t.repeat_days ?? [],
+    });
+  };
+
   const handleCopy = async (t: AchievementTemplate) => {
     if (!familyId) return;
     setCopyingId(t.id);
     try {
-      const validKeys = new Set<string>(['daily', 'stage', 'super', 'black', ...categories.map(c => c.key)]);
-      const category = (validKeys.has(t.category) ? t.category : 'daily') as TaskCategory;
-      await createTask({
-        family_id: familyId,
-        member_id: targetMemberId,
-        title: t.title,
-        description: t.description,
-        category,
-        subcategory: t.subcategory ?? null,
-        reward_coins: t.reward_coins,
-        deadline: null,
-        created_by: createdBy,
-        icon: t.icon ?? null,
-        repeat_days: t.repeat_days ?? [],
-      });
+      await copyTemplateToLibrary(t);
       toast.success(`已复制「${t.title}」到我的成就库`);
       onCopied();
     } catch (e: any) {
       toast.error(e?.message ?? '调取失败');
     } finally {
       setCopyingId(null);
+    }
+  };
+
+  // 一键调取：仅批量复制已勾选（即当前筛选结果内）的卡片
+  const handleBatchCopy = async () => {
+    if (!familyId) return;
+    const targets = filteredTemplates.filter(t => selectedIds.has(t.id));
+    if (targets.length === 0) return;
+    setBatchCopying(true);
+    let success = 0, failed = 0;
+    for (const t of targets) {
+      try {
+        await copyTemplateToLibrary(t);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    setBatchCopying(false);
+    setSelectedIds(new Set());
+    onCopied();
+    if (success > 0) {
+      toast.success(`已调取 ${success} 张成就卡到我的成就库${failed ? `，${failed} 张失败` : ''}`);
+    } else {
+      toast.error('调取失败，请稍后重试');
     }
   };
 
@@ -239,6 +313,75 @@ export function AchievementTemplateModal({
             )}
           </div>
 
+          {/* 筛选栏：模块一组 + 类别一组 + 全部重置 */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-1">
+            <button
+              onClick={resetFilter}
+              className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                !filterModule && !filterSub
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              全部
+            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {TASK_CATEGORY_LIST.map(([key]) => {
+                const meta = getCategoryMeta(key, categories);
+                const active = filterModule === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => changeFilter(active ? null : key, filterSub)}
+                    className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                      active
+                        ? 'bg-star-500 text-white border-star-500'
+                        : 'bg-white text-slate-500 border-slate-200 hover:border-star-300'
+                    }`}
+                  >
+                    {meta.emoji} {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pl-3 border-l border-slate-200">
+              {TASK_SUBCATEGORY_OPTIONS.map(sub => {
+                const active = filterSub === sub;
+                return (
+                  <button
+                    key={sub}
+                    onClick={() => changeFilter(filterModule, active ? null : sub)}
+                    className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                      active ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'
+                    }`}
+                    style={active ? { background: getSubcategoryColor(sub) } : undefined}
+                  >
+                    {sub}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 勾选操作条 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={toggleSelectAll} disabled={filteredTemplates.length === 0}>
+                {allFilteredSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                {allFilteredSelected ? '取消全选' : '全选'}
+              </Button>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-xs text-slate-400">已选 {selectedIds.size} 张</span>
+                  <Button size="sm" loading={batchCopying} onClick={handleBatchCopy}>
+                    <Copy className="w-3.5 h-3.5" /> 一键调取
+                  </Button>
+                </>
+              )}
+            </div>
+            <span className="text-xs text-slate-400">共 {filteredTemplates.length} 张</span>
+          </div>
+
           {loading && templates.length === 0 ? (
             <EmptyState icon="⏳" title="加载中..." />
           ) : templates.length === 0 ? (
@@ -247,11 +390,18 @@ export function AchievementTemplateModal({
               title="模板库暂无内容"
               description={isSuperAdmin ? '新增成就模板后所有用户都能调取' : '管理员还没有发布模板'}
             />
+          ) : filteredTemplates.length === 0 ? (
+            <EmptyState icon="🔍" title="没有找到符合条件的成就卡" />
           ) : (
             <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
-              {templates.map(t => (
+              {filteredTemplates.map(t => (
                 <Card key={t.id} className="p-3">
                   <div className="flex items-start gap-3">
+                    <button onClick={() => toggleSelect(t.id)} className="mt-0.5 flex-shrink-0">
+                      {selectedIds.has(t.id)
+                        ? <CheckSquare className="w-4 h-4 text-star-500" />
+                        : <Square className="w-4 h-4 text-slate-300" />}
+                    </button>
                     {getTaskIconUrl(t.icon) ? (
                       <img src={getTaskIconUrl(t.icon)!} alt={t.title}
                         className="w-10 h-10 object-contain rounded-xl bg-star-50 flex-shrink-0" />
