@@ -67,13 +67,43 @@ export interface WordInput {
   answer: string;
 }
 
+// 词条库答案归一化判重：同 family + subject + 去空格小写答案视为同一条
+export async function findWordByAnswer(
+  familyId: string,
+  subject: DictationSubject,
+  answer: string,
+): Promise<DictationWord | null> {
+  const trimmed = answer.trim();
+  const escaped = trimmed.replace(/[%_\\]/g, m => `\\${m}`);
+  const { data, error } = await supabase
+    .from('dictation_words')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('subject', subject)
+    .ilike('answer', escaped)
+    .limit(20);
+  if (error) throw error;
+  const norm = trimmed.toLowerCase();
+  return ((data ?? []) as DictationWord[]).find(r => r.answer.trim().toLowerCase() === norm) ?? null;
+}
+
 export async function createWord(familyId: string, input: WordInput): Promise<DictationWord> {
+  // 同词条已存在则直接复用，避免词条库出现重复
+  const existing = await findWordByAnswer(familyId, input.subject, input.answer);
+  if (existing) return existing;
   const { data, error } = await supabase
     .from('dictation_words')
     .insert({ family_id: familyId, ...input })
     .select('*')
     .single();
-  if (error) throw error;
+  if (error) {
+    // 并发写入撞上唯一索引：回查已有记录返回
+    if ((error as { code?: string }).code === '23505') {
+      const again = await findWordByAnswer(familyId, input.subject, input.answer);
+      if (again) return again;
+    }
+    throw error;
+  }
   return data as DictationWord;
 }
 
@@ -102,17 +132,9 @@ export async function importWords(
   let success = 0, duplicate = 0, failed = 0;
   for (const row of rows) {
     try {
-      // 重复校验
-      const { data: existing } = await supabase
-        .from('dictation_words')
-        .select('id')
-        .eq('family_id', familyId)
-        .eq('subject', subject)
-        .eq('textbook_name', row.textbook_name)
-        .eq('unit_no', row.unit_no)
-        .eq('answer', row.answer)
-        .limit(1);
-      if (existing && existing.length > 0) {
+      // 重复校验：同 family + subject + 归一化答案
+      const existing = await findWordByAnswer(familyId, subject, row.answer);
+      if (existing) {
         duplicate++;
         continue;
       }

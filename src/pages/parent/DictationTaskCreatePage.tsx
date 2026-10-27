@@ -14,7 +14,7 @@ import { useSessionState } from '../../hooks/useSessionState';
 import { ArrowLeft, Plus, Trash2, CheckSquare, Square, Sparkles, Upload, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
-  listWords, listWordTextbooks, listWordUnits, createWord,
+  listWords, listWordTextbooks, listWordUnits, createWord, findWordByAnswer,
   listDueErrorWords, createTask, addTaskWords, deleteTask,
 } from '../../api/dictation';
 import { supabase } from '../../api/client';
@@ -221,16 +221,8 @@ export function DictationTaskCreatePage({ embedded = false }: { embedded?: boole
       }
       // 同时存入词条库（去重）
       try {
-        const { data: existing } = await supabase
-          .from('dictation_words')
-          .select('id')
-          .eq('family_id', family.id)
-          .eq('subject', subject)
-          .eq('textbook_name', w.textbook_name)
-          .eq('unit_no', w.unit_no)
-          .eq('answer', w.answer)
-          .limit(1);
-        if (existing && existing.length > 0) {
+        const existing = await findWordByAnswer(family.id, subject, w.answer);
+        if (existing) {
           libSkip++;
         } else {
           await createWord(family.id, {
