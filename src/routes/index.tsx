@@ -12,6 +12,7 @@ import { DictationPlayPage } from '../pages/child/DictationPlayPage';
 import { DictationGradePage } from '../pages/child/DictationGradePage';
 import { ParentDashboardPage } from '../pages/parent/ParentDashboardPage';
 import { TaskManagePage } from '../pages/parent/TaskManagePage';
+import { MedalManagePage } from '../pages/parent/MedalManagePage';
 import { VerificationPage } from '../pages/parent/VerificationPage';
 import { ShopManagePage } from '../pages/parent/ShopManagePage';
 import { WordChallengeManagePage } from '../pages/parent/WordChallengeManagePage';
@@ -78,6 +79,7 @@ function ParentKeepAliveRoutes() {
     <RequireParentMode>
       <KeepAlive when={exact(ROUTES.PARENT_DASHBOARD)}><ParentDashboardPage /></KeepAlive>
       <KeepAlive when={exact(ROUTES.PARENT_TASKS)}><TaskManagePage /></KeepAlive>
+      <KeepAlive when={exact(ROUTES.PARENT_MEDALS)}><MedalManagePage /></KeepAlive>
       <KeepAlive when={exact(ROUTES.PARENT_VERIFICATION)}><VerificationPage /></KeepAlive>
       <KeepAlive when={exact(ROUTES.PARENT_SHOP)}><ShopManagePage /></KeepAlive>
       <LazyKeepAlive when={exact(ROUTES.PARENT_CHALLENGES)}><ChallengeManagePage /></LazyKeepAlive>

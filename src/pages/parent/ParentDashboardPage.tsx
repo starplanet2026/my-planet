@@ -293,7 +293,7 @@ export function ParentDashboardPage() {
     '学习完成': { onClick: () => go(ROUTES.PARENT_STUDY_REVIEW), badge: pendingStudyCount },
     '家默审核': { onClick: () => go(ROUTES.PARENT_DICTATION_REVIEW), badge: pendingDictationCount },
     '成就库': { onClick: () => go(ROUTES.PARENT_TASKS), badge: 0 },
-    '勋章库': { onClick: () => handlePlaceholder('勋章库'), badge: 0 },
+    '勋章库': { onClick: () => go(ROUTES.PARENT_MEDALS), badge: 0 },
     '成功日记': { onClick: () => handlePlaceholder('成功日记'), badge: 0 },
     '特权库': { onClick: () => go(ROUTES.PARENT_SHOP), badge: 0 },
     '用户特权卡': { onClick: () => go(ROUTES.PARENT_SHOP, 'tab=users'), badge: 0 },

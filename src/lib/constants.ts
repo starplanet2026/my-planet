@@ -90,6 +90,8 @@ export const ROUTES = {
   PARENT: '/parent',
   PARENT_DASHBOARD: '/parent/dashboard',
   PARENT_TASKS: '/parent/tasks',
+  // 勋章管理（个人勋章库 + 公共勋章模板库）
+  PARENT_MEDALS: '/parent/medals',
   PARENT_VERIFICATION: '/parent/verification',
   PARENT_SHOP: '/parent/shop',
   PARENT_REDEEM: '/parent/redeem',

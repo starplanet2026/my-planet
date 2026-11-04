@@ -21,6 +21,10 @@ import { MessageSquare, Pencil, CornerDownRight, Upload, Trash2, ListChecks } fr
 import { CHILD_EMOJIS, PURCHASE_STATUS_LABELS, COIN_ICON_SM, STAR_ICON_SM } from '../../lib/constants';
 import { cn } from '../../lib/utils';
 import type { CoinRecord, Purchase } from '../../api/types';
+import {
+  listFamilyMedals, listMemberMedals, MEDAL_SERIES_LABELS,
+  type Medal, type MemberMedal,
+} from '../../api/medals';
 
 // 幸运大转盘券：仅能在大转盘内使用，背包点击「使用」跳转至大转盘而非直接核销
 const isWheelTicket = (p: Purchase) => p.items?.name === '幸运大转盘';
@@ -37,6 +41,7 @@ function CardStar({ className }: { className?: string }) {
 
 export function ProfilePage() {
   const members = useFamilyStore(s => s.members);
+  const familyId = useFamilyStore(s => s.family?.id);
   const currentChildId = useModeStore(s => s.currentChildId);
   const patchMember = useFamilyStore(s => s.patchMember);
   const refreshMembers = useFamilyStore(s => s.refreshMembers);
@@ -137,6 +142,30 @@ export function ProfilePage() {
   const [weeklyUsage, setWeeklyUsage] = useState<Record<string, number>>({});
   // 卡片介绍弹窗
   const [detailTarget, setDetailTarget] = useState<Purchase | null>(null);
+
+  // 背包 - 我的勋章（仅展示已获得）
+  const [earnedMedals, setEarnedMedals] = useState<{ medal: Medal; hold: MemberMedal }[]>([]);
+  const [medalLoading, setMedalLoading] = useState(false);
+  const [medalDetail, setMedalDetail] = useState<Medal | null>(null);
+
+  useEffect(() => {
+    if (!familyId || !child) { setEarnedMedals([]); return; }
+    let cancelled = false;
+    setMedalLoading(true);
+    Promise.all([listFamilyMedals(familyId), listMemberMedals(child.id)])
+      .then(([medals, holds]) => {
+        if (cancelled) return;
+        const map = new Map(holds.map(h => [h.medal_id, h]));
+        setEarnedMedals(
+          medals
+            .filter(m => m.is_active && map.has(m.id))
+            .map(m => ({ medal: m, hold: map.get(m.id)! }))
+        );
+      })
+      .catch(() => { if (!cancelled) setEarnedMedals([]); })
+      .finally(() => { if (!cancelled) setMedalLoading(false); });
+    return () => { cancelled = true; };
+  }, [familyId, child?.id]);
 
   const startEdit = () => {
     setEditName(child?.name ?? '');
@@ -343,10 +372,47 @@ export function ProfilePage() {
         </div>
       </Card>
 
+      {/* 背包：我的勋章（仅已获得） */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h3 className="text-sm font-medium text-slate-500">🏅 我的勋章</h3>
+          <span className="text-xs text-slate-400">共 {earnedMedals.length} 枚</span>
+        </div>
+        {medalLoading ? (
+          <Loading />
+        ) : earnedMedals.length === 0 ? (
+          <EmptyState icon="🏅" title="还没有获得勋章" description="达成成就条件后会自动获得勋章哦！" />
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
+            {earnedMedals.map(({ medal, hold }) => (
+              <button
+                key={medal.id}
+                onClick={() => setMedalDetail(medal)}
+                className="relative flex flex-col items-center p-2 rounded-2xl border-2 bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 hover:shadow-md transition-all"
+              >
+                {hold.count > 1 && (
+                  <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    ×{hold.count}
+                  </span>
+                )}
+                {medal.icon ? (
+                  <img src={medal.icon} alt="" className="w-12 h-12 rounded-full object-cover" />
+                ) : (
+                  <span className="text-3xl leading-none">🏅</span>
+                )}
+                <span className="mt-1.5 text-[11px] font-bold text-amber-700 text-center leading-tight line-clamp-2">
+                  {medal.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 背包：特权卡展示 */}
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="text-sm font-medium text-slate-500">🎒 我的背包</h3>
+          <h3 className="text-sm font-medium text-slate-500">🎒 我的特权卡</h3>
           {usedPurchases.length > 0 && (
             <button
               onClick={() => setShowUsageHistory(true)}
@@ -923,6 +989,44 @@ export function ProfilePage() {
                 {isWheelTicket(detailTarget) ? '去大转盘使用' : '立即使用'}
               </Button>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 我的勋章详情弹窗 */}
+      <Modal open={!!medalDetail} onClose={() => setMedalDetail(null)} title="勋章详情">
+        {medalDetail && (
+          <div className="flex flex-col items-center text-center space-y-2">
+            {medalDetail.icon ? (
+              <img src={medalDetail.icon} alt="" className="w-20 h-20 rounded-full object-cover" />
+            ) : (
+              <span className="text-5xl">🏅</span>
+            )}
+            <h3 className="text-lg font-bold text-slate-800">{medalDetail.name}</h3>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                {MEDAL_SERIES_LABELS[medalDetail.series]}
+              </span>
+              {medalDetail.tier && <span>{medalDetail.tier}</span>}
+              {(() => {
+                const hold = earnedMedals.find(e => e.medal.id === medalDetail.id)?.hold;
+                return hold ? <span className="text-amber-600 font-medium">已拥有 ×{hold.count}</span> : null;
+              })()}
+            </div>
+            {medalDetail.description && (
+              <p className="text-sm text-slate-600 leading-relaxed">{medalDetail.description}</p>
+            )}
+            {medalDetail.condition_text && (
+              <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2 w-full">
+                获取条件：{medalDetail.condition_text}
+              </p>
+            )}
+            {medalDetail.reward_card_name && (
+              <p className="text-xs text-emerald-600">
+                奖励：{medalDetail.reward_card_name}
+                {medalDetail.reward_card_count > 1 ? ` ×${medalDetail.reward_card_count}` : ''}
+              </p>
+            )}
           </div>
         )}
       </Modal>

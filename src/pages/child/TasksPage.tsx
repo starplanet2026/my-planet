@@ -11,6 +11,8 @@ import { formatSignedCoins, formatDate, isExpired, isToday } from '../../lib/uti
 import { cn } from '../../lib/utils';
 import type { Task, TaskCategory } from '../../api/types';
 import { updateTaskOrder, resubmitRepeatingTask } from '../../api/tasks';
+import { MedalGalleryModal } from '../../components/medal/MedalGalleryModal';
+import { listFamilyMedals, fetchTaskCheckinStats, type Medal, type TaskCheckinStats } from '../../api/medals';
 
 // 判断 pending_approval 的重复任务是否跨天，需要让孩子可重新提交
 // 满足条件：状态为 pending_approval、repeat_days 非空、completed_at 不是今天
@@ -25,6 +27,41 @@ function isRecurringTaskResubmittable(task: Task): boolean {
 function getEffectiveStatus(task: Task): Task['status'] {
   if (isRecurringTaskResubmittable(task)) return 'active';
   return task.status;
+}
+
+// 是否周一到周日每天都循环（只有这类任务参与连续打卡统计）
+const FULL_WEEK = [0, 1, 2, 3, 4, 5, 6];
+function isFullWeekTask(task: Task): boolean {
+  const days = task.repeat_days ?? [];
+  return FULL_WEEK.every(d => days.includes(d));
+}
+
+// 北京时间今天
+function cstToday(): Date {
+  const now = new Date();
+  return new Date(now.getTime() + (now.getTimezoneOffset() + 480) * 60000);
+}
+
+function fmtDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+// 近 3 周（周一到周日）的日历网格，未来日期标记为 future
+function build3WeekGrid(): { date: string; future: boolean }[] {
+  const today = cstToday();
+  const todayStr = fmtDay(today);
+  const dow = today.getUTCDay(); // 0=周日
+  const mondayOffset = dow === 0 ? 6 : dow - 1;
+  const thisMonday = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - mondayOffset));
+  const start = new Date(thisMonday.getTime() - 14 * 86400000);
+  const cells: { date: string; future: boolean }[] = [];
+  for (let i = 0; i < 21; i++) {
+    const s = fmtDay(new Date(start.getTime() + i * 86400000));
+    cells.push({ date: s, future: s > todayStr });
+  }
+  return cells;
 }
 
 // 五角星奖励徽章（参考星星人主题）
@@ -66,6 +103,11 @@ export function TasksPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const [showMedals, setShowMedals] = useState(false);
+  const [checkinStats, setCheckinStats] = useState<TaskCheckinStats | null>(null);
+  const [streakMedals, setStreakMedals] = useState<Medal[]>([]);
+
+  const family = useFamilyStore(s => s.family);
 
   const members = useFamilyStore(s => s.members);
   const currentChildId = useModeStore(s => s.currentChildId);
@@ -78,11 +120,45 @@ export function TasksPage() {
 
   useEffect(() => { setLocalTasks(tasks); }, [tasks]);
 
+  // 连续打卡系列勋章（用于详情弹窗「距下一档」提示）
+  useEffect(() => {
+    if (!family?.id) { setStreakMedals([]); return; }
+    let cancelled = false;
+    listFamilyMedals(family.id)
+      .then(list => {
+        if (cancelled) return;
+        setStreakMedals(list.filter(m => m.is_active && m.series === 'streak'));
+      })
+      .catch(() => { if (!cancelled) setStreakMedals([]); });
+    return () => { cancelled = true; };
+  }, [family?.id]);
+
+  // 详情弹窗：7 天全循环任务才展示打卡日历与连续进度
+  useEffect(() => {
+    if (!detailTask || !child || !isFullWeekTask(detailTask)) { setCheckinStats(null); return; }
+    let cancelled = false;
+    fetchTaskCheckinStats(detailTask.id, child.id, 21)
+      .then(s => { if (!cancelled) setCheckinStats(s); })
+      .catch(() => { if (!cancelled) setCheckinStats(null); });
+    return () => { cancelled = true; };
+  }, [detailTask, child]);
+
   // 分类选项（内置4 + 自定义），用于分类标签与列表渲染
   const categoryTabs = useMemo(() =>
     categories.map(c => ({ key: c.key as TaskCategory, name: c.name, meta: getCategoryMeta(c.key, categories) })),
     [categories]
   );
+
+  // 近 3 周打卡日历网格
+  const checkinGrid = useMemo(() => build3WeekGrid(), []);
+
+  // 下一个尚未达成的连续打卡勋章档位
+  const nextStreakMedal = useMemo(() => {
+    if (!checkinStats) return null;
+    return [...streakMedals]
+      .sort((a, b) => a.threshold - b.threshold)
+      .find(m => m.threshold > checkinStats.current_streak) ?? null;
+  }, [streakMedals, checkinStats]);
 
   const getCategoryTasks = useMemo(() => {
     return (cat: TaskCategory) => {
@@ -169,6 +245,17 @@ export function TasksPage() {
         <>
           {/* 顶部快速定位菜单 - sticky 固定在 TopBar 下方 */}
           <div className="sticky top-16 z-20 bg-white/80 backdrop-blur-sm border-b border-star-100 shadow-sm mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 pb-2">
+            {/* 我的勋章入口 */}
+            <div className="flex justify-center pt-1 pb-1.5">
+              <button
+                onClick={() => setShowMedals(true)}
+                disabled={!family?.id || !child}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 text-white text-sm font-bold shadow-sm hover:from-amber-500 hover:to-yellow-500 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <span className="text-base leading-none">🏅</span>
+                我的勋章
+              </button>
+            </div>
             <div className="grid grid-cols-4 gap-1">
               {categoryTabs.map(({ key: cat, name, meta }) => {
                 const iconUrl = getTaskIconUrl(meta.iconKey);
@@ -330,6 +417,53 @@ export function TasksPage() {
               </div>
             )}
 
+            {/* 打卡日历（仅周一到周日全循环任务） */}
+            {isFullWeekTask(detailTask) && (
+              <div className="bg-star-50 rounded-cute p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-slate-400">近 3 周打卡</p>
+                  {checkinStats && (
+                    <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 天</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-7 gap-1 mb-1">
+                  {WEEK_LABELS.map(w => (
+                    <div key={w} className="text-center text-[10px] text-slate-300">{w}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {checkinGrid.map(cell => {
+                    const checked = !!checkinStats?.dates?.includes(cell.date);
+                    return (
+                      <div
+                        key={cell.date}
+                        className={cn(
+                          'aspect-square rounded-md flex items-center justify-center text-[10px]',
+                          cell.future
+                            ? 'bg-transparent'
+                            : checked
+                              ? 'bg-amber-400 text-white font-bold'
+                              : 'bg-white text-slate-300'
+                        )}
+                      >
+                        {cell.future ? '' : checked ? '✓' : Number(cell.date.slice(8))}
+                      </div>
+                    );
+                  })}
+                </div>
+                {checkinStats && checkinStats.best_streak > 0 && (
+                  <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 天</p>
+                )}
+                {nextStreakMedal ? (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    距离「{nextStreakMedal.name}」还差 {nextStreakMedal.threshold - (checkinStats?.current_streak ?? 0)} 天
+                  </p>
+                ) : (checkinStats && streakMedals.length > 0) ? (
+                  <p className="text-[11px] text-emerald-600 mt-1">已达成全部连续打卡勋章</p>
+                ) : null}
+              </div>
+            )}
+
             {/* 截止时间 */}
             {detailTask.deadline && (
               <div className="flex items-center justify-between text-sm">
@@ -357,6 +491,16 @@ export function TasksPage() {
           </div>
         )}
       </Modal>
+
+      {/* 我的勋章展馆 */}
+      {family?.id && child && (
+        <MedalGalleryModal
+          open={showMedals}
+          onClose={() => setShowMedals(false)}
+          familyId={family.id}
+          memberId={child.id}
+        />
+      )}
     </div>
   );
 }
