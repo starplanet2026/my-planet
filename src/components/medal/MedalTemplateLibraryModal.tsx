@@ -28,7 +28,7 @@ const SERIES_OPTIONS: MedalSeries[] = ['streak', 'collect', 'daily'];
 const SUBCATEGORY_OPTIONS = ['好习惯', '好健康', '好努力', '好成绩'];
 
 const emptyForm = {
-  code: '', name: '', series: 'streak' as MedalSeries, threshold: '7', subcategory: '好习惯',
+  code: '', name: '', series: 'streak' as MedalSeries, threshold: '1', subcategory: '好习惯',
   tier: '', condition_text: '', description: '', icon: '',
   reward_stars: '0', reward_card_name: '', reward_card_count: '1', is_active: true, priority: '0',
 };
@@ -227,7 +227,7 @@ export function MedalTemplateLibraryModal({ open, onClose, familyId, createdBy, 
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
                       {MEDAL_SERIES_LABELS[t.series]} · {t.series === 'collect' ? `${t.subcategory ?? ''} ` : ''}
-                      {t.series === 'daily' ? `单日≥${t.threshold}条` : `阈值 ${t.threshold}`}
+                      {t.series === 'daily' ? `单日≥${t.threshold}条` : t.series === 'streak' ? `连续 ${t.threshold} 个周期` : `阈值 ${t.threshold}`}
                       {t.tier ? ` · ${t.tier}` : ''}
                     </div>
                     {t.condition_text && <p className="text-xs text-slate-500 mt-0.5">{t.condition_text}</p>}
@@ -282,13 +282,13 @@ export function MedalTemplateLibraryModal({ open, onClose, familyId, createdBy, 
             ) : (
               <div />
             )}
-            <Input label={form.series === 'daily' ? '阈值（当日条数）' : form.series === 'collect' ? '阈值（数量）' : '阈值（连续天数）'}
+            <Input label={form.series === 'daily' ? '阈值（当日条数）' : form.series === 'collect' ? '阈值（数量）' : '阈值（连续周期数）'}
               type="number" value={form.threshold}
               onChange={e => setForm(p => ({ ...p, threshold: e.target.value }))} />
-            <Input label="档位文案" placeholder="如 一周（7天）/ 20枚" value={form.tier}
+            <Input label="档位文案" placeholder="如 一周（1个周期）/ 20枚" value={form.tier}
               onChange={e => setForm(p => ({ ...p, tier: e.target.value }))} />
           </div>
-          <Input label="达成条件" placeholder="如 任意一条单项成就连续每日达成7天" value={form.condition_text}
+          <Input label="达成条件" placeholder="如 按任务配置的打卡周期，1个完整周期内应打卡日全部完成" value={form.condition_text}
             onChange={e => setForm(p => ({ ...p, condition_text: e.target.value }))} />
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700">勋章简介</label>

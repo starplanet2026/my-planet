@@ -29,11 +29,9 @@ function getEffectiveStatus(task: Task): Task['status'] {
   return task.status;
 }
 
-// 是否周一到周日每天都循环（只有这类任务参与连续打卡统计）
-const FULL_WEEK = [0, 1, 2, 3, 4, 5, 6];
-function isFullWeekTask(task: Task): boolean {
-  const days = task.repeat_days ?? [];
-  return FULL_WEEK.every(d => days.includes(d));
+// 是否配置了打卡星期（任意循环任务都参与周期坚持统计）
+function hasCycleDays(task: Task): boolean {
+  return (task.repeat_days?.length ?? 0) > 0;
 }
 
 // 北京时间今天
@@ -133,7 +131,7 @@ export function TasksPage() {
     return () => { cancelled = true; };
   }, [family?.id]);
 
-  // 详情弹窗：加载打卡日历；连续进度仅在 7 天全循环时统计
+  // 详情弹窗：加载打卡日历与「连续成功周期数」
   useEffect(() => {
     if (!detailTask || !child) { setCheckinStats(null); return; }
     let cancelled = false;
@@ -152,7 +150,7 @@ export function TasksPage() {
   // 近 3 周打卡日历网格
   const checkinGrid = useMemo(() => build3WeekGrid(), []);
 
-  // 下一个尚未达成的连续打卡勋章档位
+  // 下一个尚未达成的周期坚持勋章档位（threshold = 连续周期数）
   const nextStreakMedal = useMemo(() => {
     if (!checkinStats) return null;
     return [...streakMedals]
@@ -421,8 +419,8 @@ export function TasksPage() {
             <div className="bg-star-50 rounded-cute p-3">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-slate-400">近 3 周打卡</p>
-                  {isFullWeekTask(detailTask) && checkinStats && (
-                    <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 天</p>
+                  {hasCycleDays(detailTask) && checkinStats && (
+                    <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 个周期</p>
                   )}
                 </div>
                 <div className="grid grid-cols-7 gap-1 mb-1">
@@ -433,6 +431,9 @@ export function TasksPage() {
                 <div className="grid grid-cols-7 gap-1">
                   {checkinGrid.map(cell => {
                     const checked = !!checkinStats?.dates?.includes(cell.date);
+                    // 按任务配置的打卡星期：非打卡日置灰，不参与缺卡校验
+                    const dow = new Date(cell.date + 'T00:00:00Z').getUTCDay();
+                    const required = detailTask.repeat_days?.includes(dow) ?? false;
                     return (
                       <div
                         key={cell.date}
@@ -440,25 +441,28 @@ export function TasksPage() {
                           'aspect-square rounded-md flex items-center justify-center text-[10px]',
                           cell.future
                             ? 'bg-transparent'
-                            : checked
-                              ? 'bg-amber-400 text-white font-bold'
-                              : 'bg-white text-slate-300'
+                            : !required
+                              ? 'bg-slate-200/70 text-slate-400'
+                              : checked
+                                ? 'bg-amber-400 text-white font-bold'
+                                : 'bg-white text-slate-300'
                         )}
+                        title={cell.future ? '' : required ? '应打卡日' : '非打卡日'}
                       >
                         {cell.future ? '' : checked ? '✓' : Number(cell.date.slice(8))}
                       </div>
                     );
                   })}
                 </div>
-                {isFullWeekTask(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
-                  <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 天</p>
+                {hasCycleDays(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
+                  <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 个周期</p>
                 )}
-                {isFullWeekTask(detailTask) && nextStreakMedal ? (
+                {hasCycleDays(detailTask) && nextStreakMedal ? (
                   <p className="text-[11px] text-amber-600 mt-1">
-                    距离「{nextStreakMedal.name}」还差 {nextStreakMedal.threshold - (checkinStats?.current_streak ?? 0)} 天
+                    距离「{nextStreakMedal.name}」还差 {nextStreakMedal.threshold - (checkinStats?.current_streak ?? 0)} 个周期
                   </p>
-                ) : (isFullWeekTask(detailTask) && checkinStats && streakMedals.length > 0) ? (
-                  <p className="text-[11px] text-emerald-600 mt-1">已达成全部连续打卡勋章</p>
+                ) : (hasCycleDays(detailTask) && checkinStats && streakMedals.length > 0) ? (
+                  <p className="text-[11px] text-emerald-600 mt-1">已达成全部周期坚持勋章</p>
                 ) : null}
             </div>
 
