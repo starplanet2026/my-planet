@@ -109,6 +109,11 @@ function AppShellContent() {
     return <Navigate to={ROUTES.PET} replace />;
   }
 
+  // /parent 统一回落到家长工作台，避免各管理页返回后出现空白页
+  if (pathname === '/parent' || pathname === '/parent/') {
+    return <Navigate to={ROUTES.PARENT_DASHBOARD} replace />;
+  }
+
   // 动态参数页面：不缓存，按需渲染
   const isDictationPlay = pathname.startsWith('/challenge/dictation/') && !pathname.endsWith('/grade');
   const isDictationGrade = pathname.startsWith('/challenge/dictation/') && pathname.endsWith('/grade');

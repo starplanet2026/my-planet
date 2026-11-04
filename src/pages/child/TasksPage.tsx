@@ -133,9 +133,9 @@ export function TasksPage() {
     return () => { cancelled = true; };
   }, [family?.id]);
 
-  // 详情弹窗：7 天全循环任务才展示打卡日历与连续进度
+  // 详情弹窗：加载打卡日历；连续进度仅在 7 天全循环时统计
   useEffect(() => {
-    if (!detailTask || !child || !isFullWeekTask(detailTask)) { setCheckinStats(null); return; }
+    if (!detailTask || !child) { setCheckinStats(null); return; }
     let cancelled = false;
     fetchTaskCheckinStats(detailTask.id, child.id, 21)
       .then(s => { if (!cancelled) setCheckinStats(s); })
@@ -417,12 +417,11 @@ export function TasksPage() {
               </div>
             )}
 
-            {/* 打卡日历（仅周一到周日全循环任务） */}
-            {isFullWeekTask(detailTask) && (
-              <div className="bg-star-50 rounded-cute p-3">
+            {/* 打卡日历 */}
+            <div className="bg-star-50 rounded-cute p-3">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-slate-400">近 3 周打卡</p>
-                  {checkinStats && (
+                  {isFullWeekTask(detailTask) && checkinStats && (
                     <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 天</p>
                   )}
                 </div>
@@ -451,18 +450,17 @@ export function TasksPage() {
                     );
                   })}
                 </div>
-                {checkinStats && checkinStats.best_streak > 0 && (
+                {isFullWeekTask(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
                   <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 天</p>
                 )}
-                {nextStreakMedal ? (
+                {isFullWeekTask(detailTask) && nextStreakMedal ? (
                   <p className="text-[11px] text-amber-600 mt-1">
                     距离「{nextStreakMedal.name}」还差 {nextStreakMedal.threshold - (checkinStats?.current_streak ?? 0)} 天
                   </p>
-                ) : (checkinStats && streakMedals.length > 0) ? (
+                ) : (isFullWeekTask(detailTask) && checkinStats && streakMedals.length > 0) ? (
                   <p className="text-[11px] text-emerald-600 mt-1">已达成全部连续打卡勋章</p>
                 ) : null}
-              </div>
-            )}
+            </div>
 
             {/* 截止时间 */}
             {detailTask.deadline && (

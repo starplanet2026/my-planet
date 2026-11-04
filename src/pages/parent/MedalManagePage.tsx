@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Edit2, Trash2, Upload, Download, Award, Library } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Trash2, Upload, Download, Award, Library, ArrowLeft } from 'lucide-react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input, Select } from '../../components/common/Input';
@@ -8,6 +9,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loading } from '../../components/common/Loading';
 import { MedalTemplateLibraryModal } from '../../components/medal/MedalTemplateLibraryModal';
 import { useFamilyStore } from '../../store/familyStore';
+import { ROUTES } from '../../lib/constants';
 import { supabase } from '../../api/client';
 import { useAppContextStore } from '../../store/appContextStore';
 import { useToastStore } from '../../store/toastStore';
@@ -28,6 +30,7 @@ const emptyForm = {
 };
 
 export function MedalManagePage() {
+  const navigate = useNavigate();
   const family = useFamilyStore(s => s.family);
   const members = useFamilyStore(s => s.members);
   const toast = useToastStore();
@@ -201,11 +204,20 @@ export function MedalManagePage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Award className="w-5 h-5 text-amber-500" /> 我的勋章库
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">勋章满足条件自动发放给孩子；停用后不再发放，已获得的保留</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(ROUTES.PARENT_DASHBOARD)}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            title="返回家长工作台"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <Award className="w-5 h-5 text-amber-500" /> 我的勋章库
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">勋章满足条件自动发放给孩子；停用后不再发放，已获得的保留</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
