@@ -131,9 +131,9 @@ export function TasksPage() {
     return () => { cancelled = true; };
   }, [family?.id]);
 
-  // 详情弹窗：加载打卡日历与「连续成功周期数」
+  // 详情弹窗：仅「今日达成」板块展示打卡日历与连续周期
   useEffect(() => {
-    if (!detailTask || !child) { setCheckinStats(null); return; }
+    if (!detailTask || !child || detailTask.category !== 'daily') { setCheckinStats(null); return; }
     let cancelled = false;
     fetchTaskCheckinStats(detailTask.id, child.id, 21)
       .then(s => { if (!cancelled) setCheckinStats(s); })
@@ -157,6 +157,29 @@ export function TasksPage() {
       .sort((a, b) => a.threshold - b.threshold)
       .find(m => m.threshold > checkinStats.current_streak) ?? null;
   }, [streakMedals, checkinStats]);
+
+  // 距离下一档还需完成的应打卡天数（非打卡日不计算）
+  const nextStreakGapDays = useMemo(() => {
+    if (!detailTask || !checkinStats || !nextStreakMedal) return null;
+    const repeatDays = detailTask.repeat_days ?? [];
+    const perWeek = repeatDays.length;
+    if (perWeek === 0) return null;
+
+    const today = cstToday();
+    const dow = today.getUTCDay();
+    const mondayOffset = dow === 0 ? 6 : dow - 1;
+    const weekStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - mondayOffset));
+    const requiredDates = repeatDays.map(w =>
+      fmtDay(new Date(weekStart.getTime() + ((w + 6) % 7) * 86400000))
+    );
+    const doneThisWeek = requiredDates.filter(d => checkinStats.dates.includes(d)).length;
+    const leftThisWeek = perWeek - doneThisWeek;
+    const remainingWeeks = nextStreakMedal.threshold - checkinStats.current_streak;
+
+    // 当前周已完成：从下一周开始按整周计算；未完成：先补完本周剩余天数
+    if (leftThisWeek === 0) return Math.max(remainingWeeks, 0) * perWeek;
+    return leftThisWeek + Math.max(remainingWeeks - 1, 0) * perWeek;
+  }, [detailTask, checkinStats, nextStreakMedal]);
 
   const getCategoryTasks = useMemo(() => {
     return (cat: TaskCategory) => {
@@ -415,7 +438,8 @@ export function TasksPage() {
               </div>
             )}
 
-            {/* 打卡日历 */}
+            {/* 打卡日历：仅「今日达成」板块展示 */}
+            {detailTask.category === 'daily' && (
             <div className="bg-star-50 rounded-cute p-3">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-slate-400">近 3 周打卡</p>
@@ -459,12 +483,13 @@ export function TasksPage() {
                 )}
                 {hasCycleDays(detailTask) && nextStreakMedal ? (
                   <p className="text-[11px] text-amber-600 mt-1">
-                    距离「{nextStreakMedal.name}」还差 {nextStreakMedal.threshold - (checkinStats?.current_streak ?? 0)} 个周期
+                    距离「{nextStreakMedal.name}」还差 {nextStreakGapDays ?? 0} 天
                   </p>
                 ) : (hasCycleDays(detailTask) && checkinStats && streakMedals.length > 0) ? (
                   <p className="text-[11px] text-emerald-600 mt-1">已达成全部周期坚持勋章</p>
                 ) : null}
             </div>
+            )}
 
             {/* 截止时间 */}
             {detailTask.deadline && (
