@@ -199,3 +199,48 @@ export async function fetchTaskCheckinStats(
     best_streak: row?.best_streak ?? 0,
   };
 }
+
+// 补打卡：为指定应打卡日期补一条打卡记录（仅限过去日期 + 应打卡日 + 不重复）
+export async function makeupTaskCheckin(taskId: string, memberId: string, date: string): Promise<void> {
+  const { error } = await supabase.rpc('makeup_task_checkin', {
+    p_task_id: taskId,
+    p_member_id: memberId,
+    p_date: date,
+  });
+  if (error) throw error;
+}
+
+// 勋章进度（陈列馆展示用）
+export interface MedalProgressTask {
+  task_id: string;
+  title: string;
+  current_weeks: number;
+  done_this_week: number;
+  per_week: number;
+  gap_days: number;
+}
+
+export interface MedalProgress {
+  medal_id: string;
+  series: MedalSeries;
+  current_value: number;
+  target_value: number;
+  detail: { tasks?: MedalProgressTask[] } | MedalProgressTask[] | null;
+}
+
+export async function listMedalProgress(memberId: string): Promise<Record<string, MedalProgress>> {
+  const { data, error } = await supabase.rpc('get_medal_progress', { p_member_id: memberId });
+  if (error) throw error;
+  const map: Record<string, MedalProgress> = {};
+  for (const row of (data ?? []) as MedalProgress[]) {
+    map[row.medal_id] = row;
+  }
+  return map;
+}
+
+// 解析 streak 进度里的任务明细（jsonb 数组）
+export function progressTasks(p: MedalProgress | undefined): MedalProgressTask[] {
+  if (!p?.detail) return [];
+  if (Array.isArray(p.detail)) return p.detail;
+  return p.detail.tasks ?? [];
+}

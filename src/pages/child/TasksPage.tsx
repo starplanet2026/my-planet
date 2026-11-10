@@ -12,7 +12,7 @@ import { cn } from '../../lib/utils';
 import type { Task, TaskCategory } from '../../api/types';
 import { updateTaskOrder, resubmitRepeatingTask } from '../../api/tasks';
 import { MedalGalleryModal } from '../../components/medal/MedalGalleryModal';
-import { listFamilyMedals, fetchTaskCheckinStats, type Medal, type TaskCheckinStats } from '../../api/medals';
+import { listFamilyMedals, fetchTaskCheckinStats, makeupTaskCheckin, type Medal, type TaskCheckinStats } from '../../api/medals';
 
 // 判断 pending_approval 的重复任务是否跨天，需要让孩子可重新提交
 // 满足条件：状态为 pending_approval、repeat_days 非空、completed_at 不是今天
@@ -104,6 +104,7 @@ export function TasksPage() {
   const [showMedals, setShowMedals] = useState(false);
   const [checkinStats, setCheckinStats] = useState<TaskCheckinStats | null>(null);
   const [streakMedals, setStreakMedals] = useState<Medal[]>([]);
+  const [makeupDate, setMakeupDate] = useState<string | null>(null);
 
   const family = useFamilyStore(s => s.family);
 
@@ -149,6 +150,7 @@ export function TasksPage() {
 
   // 近 3 周打卡日历网格
   const checkinGrid = useMemo(() => build3WeekGrid(), []);
+  const todayStr = useMemo(() => fmtDay(cstToday()), []);
 
   // 下一个尚未达成的周期坚持勋章档位（threshold = 连续周期数）
   const nextStreakMedal = useMemo(() => {
@@ -258,6 +260,24 @@ export function TasksPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // 补打卡：点击日历中过去漏打的应打卡日
+  const handleMakeup = async (date: string) => {
+    if (!detailTask || !child || makeupDate) return;
+    if (!window.confirm(`确定为 ${date} 补打卡「${detailTask.title}」吗？`)) return;
+    setMakeupDate(date);
+    try {
+      await makeupTaskCheckin(detailTask.id, child.id, date);
+      toast.success('补打卡成功');
+      const s = await fetchTaskCheckinStats(detailTask.id, child.id, 21);
+      setCheckinStats(s);
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message ?? '补打卡失败');
+    } finally {
+      setMakeupDate(null);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto -mt-6">
       {loading ? (
@@ -266,37 +286,47 @@ export function TasksPage() {
         <>
           {/* 顶部快速定位菜单 - sticky 固定在 TopBar 下方 */}
           <div className="sticky top-16 z-20 bg-white/80 backdrop-blur-sm border-b border-star-100 shadow-sm mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 pb-2">
-            {/* 我的勋章入口 */}
-            <div className="flex justify-center pt-1 pb-1.5">
-              <button
-                onClick={() => setShowMedals(true)}
-                disabled={!family?.id || !child}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 text-white text-sm font-bold shadow-sm hover:from-amber-500 hover:to-yellow-500 active:scale-95 transition-all disabled:opacity-50"
-              >
-                <span className="text-base leading-none">🏅</span>
-                我的勋章
-              </button>
-            </div>
-            <div className="grid grid-cols-4 gap-1">
-              {categoryTabs.map(({ key: cat, name, meta }) => {
-                const iconUrl = getTaskIconUrl(meta.iconKey);
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => scrollToSection(cat)}
-                    className="flex flex-col items-center gap-0 pt-0 pb-1 rounded-xl hover:bg-star-100 transition-colors"
-                  >
-                    {iconUrl && (
-                      <img
-                        src={iconUrl}
-                        alt={name}
-                        className="w-14 h-14 sm:w-16 sm:h-16 object-contain -mt-1"
-                      />
-                    )}
-                    <span className="text-[11px] font-medium text-slate-600">{name}</span>
-                  </button>
-                );
-              })}
+            <div className="flex items-start">
+              {(() => {
+                // 分类按钮 + 居中圆形「我的勋章」一排展示
+                const items: ({ type: 'cat'; key: TaskCategory; name: string; iconKey: string } | { type: 'medal' })[] =
+                  categoryTabs.map(({ key, name, meta }) => ({ type: 'cat' as const, key, name, iconKey: meta.iconKey }));
+                items.splice(Math.ceil(items.length / 2), 0, { type: 'medal' });
+                return items.map(item => {
+                  if (item.type === 'medal') {
+                    return (
+                      <button
+                        key="__medal"
+                        onClick={() => setShowMedals(true)}
+                        disabled={!family?.id || !child}
+                        className="flex-1 flex flex-col items-center gap-0 pt-0 pb-1 rounded-xl hover:bg-star-100 transition-colors disabled:opacity-50"
+                      >
+                        <span className="w-14 h-14 sm:w-16 sm:h-16 -mt-1 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 shadow-md flex items-center justify-center text-2xl sm:text-3xl ring-2 ring-amber-200">
+                          🏅
+                        </span>
+                        <span className="text-[11px] font-medium text-amber-600">我的勋章</span>
+                      </button>
+                    );
+                  }
+                  const iconUrl = getTaskIconUrl(item.iconKey);
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => scrollToSection(item.key)}
+                      className="flex-1 flex flex-col items-center gap-0 pt-0 pb-1 rounded-xl hover:bg-star-100 transition-colors"
+                    >
+                      {iconUrl && (
+                        <img
+                          src={iconUrl}
+                          alt={item.name}
+                          className="w-14 h-14 sm:w-16 sm:h-16 object-contain -mt-1"
+                        />
+                      )}
+                      <span className="text-[11px] font-medium text-slate-600">{item.name}</span>
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -458,26 +488,37 @@ export function TasksPage() {
                     // 按任务配置的打卡星期：非打卡日置灰，不参与缺卡校验
                     const dow = new Date(cell.date + 'T00:00:00Z').getUTCDay();
                     const required = detailTask.repeat_days?.includes(dow) ?? false;
-                    return (
-                      <div
-                        key={cell.date}
-                        className={cn(
-                          'aspect-square rounded-md flex items-center justify-center text-[10px]',
-                          cell.future
-                            ? 'bg-transparent'
-                            : !required
-                              ? 'bg-slate-200/70 text-slate-400'
-                              : checked
-                                ? 'bg-amber-400 text-white font-bold'
-                                : 'bg-white text-slate-300'
-                        )}
-                        title={cell.future ? '' : required ? '应打卡日' : '非打卡日'}
-                      >
-                        {cell.future ? '' : checked ? '✓' : Number(cell.date.slice(8))}
+                    // 过去漏打的应打卡日可点击补打卡
+                    const canMakeup = !cell.future && required && !checked && cell.date < todayStr;
+                    const loading = makeupDate === cell.date;
+                    const cls = cn(
+                      'aspect-square rounded-md flex items-center justify-center text-[10px] w-full',
+                      cell.future
+                        ? 'bg-transparent'
+                        : !required
+                          ? 'bg-slate-200/70 text-slate-400'
+                          : checked
+                            ? 'bg-amber-400 text-white font-bold'
+                            : canMakeup
+                              ? 'bg-white text-amber-600 border border-dashed border-amber-400 hover:bg-amber-50 active:scale-95 transition-all'
+                              : 'bg-white text-slate-300'
+                    );
+                    const label = loading ? '…' : cell.future ? '' : checked ? '✓' : Number(cell.date.slice(8));
+                    const tip = cell.future ? '' : !required ? '非打卡日' : checked ? '已打卡' : canMakeup ? '点击补打卡' : '今日请直接完成';
+                    return canMakeup ? (
+                      <button key={cell.date} type="button" disabled={loading} onClick={() => handleMakeup(cell.date)} className={cls} title={tip}>
+                        {label}
+                      </button>
+                    ) : (
+                      <div key={cell.date} className={cls} title={tip}>
+                        {label}
                       </div>
                     );
                   })}
                 </div>
+                {hasCycleDays(detailTask) && (
+                  <p className="text-[10px] text-slate-400 mt-1.5">虚线框为漏打卡日期，点击可补打卡</p>
+                )}
                 {hasCycleDays(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
                   <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 个周期</p>
                 )}
