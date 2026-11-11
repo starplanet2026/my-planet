@@ -12,7 +12,7 @@ import { cn } from '../../lib/utils';
 import type { Task, TaskCategory } from '../../api/types';
 import { updateTaskOrder, resubmitRepeatingTask } from '../../api/tasks';
 import { MedalGalleryModal } from '../../components/medal/MedalGalleryModal';
-import { listFamilyMedals, fetchTaskCheckinStats, makeupTaskCheckin, type Medal, type TaskCheckinStats } from '../../api/medals';
+import { listFamilyMedals, fetchTaskCheckinStats, requestMakeupCheckin, listPendingMakeupDates, type Medal, type TaskCheckinStats } from '../../api/medals';
 
 // 判断 pending_approval 的重复任务是否跨天，需要让孩子可重新提交
 // 满足条件：状态为 pending_approval、repeat_days 非空、completed_at 不是今天
@@ -105,6 +105,8 @@ export function TasksPage() {
   const [checkinStats, setCheckinStats] = useState<TaskCheckinStats | null>(null);
   const [streakMedals, setStreakMedals] = useState<Medal[]>([]);
   const [makeupDate, setMakeupDate] = useState<string | null>(null);
+  const [makeupTarget, setMakeupTarget] = useState<string | null>(null); // 待确认提交的补打卡日期
+  const [pendingMakeupDates, setPendingMakeupDates] = useState<string[]>([]);
 
   const family = useFamilyStore(s => s.family);
 
@@ -134,11 +136,14 @@ export function TasksPage() {
 
   // 详情弹窗：仅「今日达成」板块展示打卡日历与连续周期
   useEffect(() => {
-    if (!detailTask || !child || detailTask.category !== 'daily') { setCheckinStats(null); return; }
+    if (!detailTask || !child || detailTask.category !== 'daily') { setCheckinStats(null); setPendingMakeupDates([]); return; }
     let cancelled = false;
     fetchTaskCheckinStats(detailTask.id, child.id, 21)
       .then(s => { if (!cancelled) setCheckinStats(s); })
       .catch(() => { if (!cancelled) setCheckinStats(null); });
+    listPendingMakeupDates(detailTask.id, child.id)
+      .then(ds => { if (!cancelled) setPendingMakeupDates(ds); })
+      .catch(() => { if (!cancelled) setPendingMakeupDates([]); });
     return () => { cancelled = true; };
   }, [detailTask, child]);
 
@@ -260,19 +265,17 @@ export function TasksPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // 补打卡：点击日历中过去漏打的应打卡日
-  const handleMakeup = async (date: string) => {
-    if (!detailTask || !child || makeupDate) return;
-    if (!window.confirm(`确定为 ${date} 补打卡「${detailTask.title}」吗？`)) return;
-    setMakeupDate(date);
+  // 提交补打卡申请（需家长审核，通过后补发星光）
+  const handleMakeup = async () => {
+    if (!detailTask || !child || !makeupTarget || makeupDate) return;
+    setMakeupDate(makeupTarget);
     try {
-      await makeupTaskCheckin(detailTask.id, child.id, date);
-      toast.success('补打卡成功');
-      const s = await fetchTaskCheckinStats(detailTask.id, child.id, 21);
-      setCheckinStats(s);
-      refresh();
+      await requestMakeupCheckin(detailTask.id, child.id, makeupTarget);
+      toast.success('已提交补打卡申请，等待家长审核');
+      setPendingMakeupDates(prev => [...prev, makeupTarget]);
+      setMakeupTarget(null);
     } catch (e: any) {
-      toast.error(e?.message ?? '补打卡失败');
+      toast.error(e?.message ?? '提交失败');
     } finally {
       setMakeupDate(null);
     }
@@ -285,8 +288,8 @@ export function TasksPage() {
       ) : (
         <>
           {/* 顶部快速定位菜单 - sticky 固定在 TopBar 下方 */}
-          <div className="sticky top-16 z-20 bg-white/80 backdrop-blur-sm border-b border-star-100 shadow-sm mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 pb-2">
-            <div className="flex items-start">
+          <div className="sticky top-16 z-20 bg-white/80 backdrop-blur-sm border-b border-star-100 shadow-sm mb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-2 pb-2">
+            <div className="flex items-center justify-between gap-1">
               {(() => {
                 // 分类按钮 + 居中圆形「我的勋章」一排展示
                 const items: ({ type: 'cat'; key: TaskCategory; name: string; iconKey: string } | { type: 'medal' })[] =
@@ -299,12 +302,12 @@ export function TasksPage() {
                         key="__medal"
                         onClick={() => setShowMedals(true)}
                         disabled={!family?.id || !child}
-                        className="flex-1 flex flex-col items-center gap-0 pt-0 pb-1 rounded-xl hover:bg-star-100 transition-colors disabled:opacity-50"
+                        className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0 py-1 rounded-xl hover:bg-star-100 transition-colors disabled:opacity-50"
                       >
-                        <span className="w-14 h-14 sm:w-16 sm:h-16 -mt-1 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 shadow-md flex items-center justify-center text-2xl sm:text-3xl ring-2 ring-amber-200">
+                        <span className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 shadow flex items-center justify-center text-base sm:text-lg ring-2 ring-amber-200">
                           🏅
                         </span>
-                        <span className="text-[11px] font-medium text-amber-600">我的勋章</span>
+                        <span className="text-[10px] font-medium text-amber-600 mt-0.5 whitespace-nowrap">我的勋章</span>
                       </button>
                     );
                   }
@@ -313,16 +316,16 @@ export function TasksPage() {
                     <button
                       key={item.key}
                       onClick={() => scrollToSection(item.key)}
-                      className="flex-1 flex flex-col items-center gap-0 pt-0 pb-1 rounded-xl hover:bg-star-100 transition-colors"
+                      className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0 py-1 rounded-xl hover:bg-star-100 transition-colors"
                     >
                       {iconUrl && (
                         <img
                           src={iconUrl}
                           alt={item.name}
-                          className="w-14 h-14 sm:w-16 sm:h-16 object-contain -mt-1"
+                          className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
                         />
                       )}
-                      <span className="text-[11px] font-medium text-slate-600">{item.name}</span>
+                      <span className="text-[10px] font-medium text-slate-600 mt-0.5 whitespace-nowrap">{item.name}</span>
                     </button>
                   );
                 });
@@ -488,36 +491,46 @@ export function TasksPage() {
                     // 按任务配置的打卡星期：非打卡日置灰，不参与缺卡校验
                     const dow = new Date(cell.date + 'T00:00:00Z').getUTCDay();
                     const required = detailTask.repeat_days?.includes(dow) ?? false;
-                    // 过去漏打的应打卡日可点击补打卡
-                    const canMakeup = !cell.future && required && !checked && cell.date < todayStr;
-                    const loading = makeupDate === cell.date;
+                    const pending = pendingMakeupDates.includes(cell.date);
+                    // 过去漏打的应打卡日可点击申请补打卡
+                    const canMakeup = !cell.future && required && !checked && !pending && cell.date < todayStr;
                     const cls = cn(
-                      'aspect-square rounded-md flex items-center justify-center text-[10px] w-full',
+                      'aspect-square rounded-md flex flex-col items-center justify-center w-full leading-none',
                       cell.future
                         ? 'bg-transparent'
                         : !required
                           ? 'bg-slate-200/70 text-slate-400'
                           : checked
                             ? 'bg-amber-400 text-white font-bold'
-                            : canMakeup
-                              ? 'bg-white text-amber-600 border border-dashed border-amber-400 hover:bg-amber-50 active:scale-95 transition-all'
-                              : 'bg-white text-slate-300'
+                            : pending
+                              ? 'bg-amber-100 text-amber-500 border border-amber-200'
+                              : canMakeup
+                                ? 'bg-white text-amber-600 border border-dashed border-amber-400 hover:bg-amber-50 active:scale-95 transition-all'
+                                : 'bg-white text-slate-300'
                     );
-                    const label = loading ? '…' : cell.future ? '' : checked ? '✓' : Number(cell.date.slice(8));
-                    const tip = cell.future ? '' : !required ? '非打卡日' : checked ? '已打卡' : canMakeup ? '点击补打卡' : '今日请直接完成';
+                    const content = cell.future ? null : checked ? (
+                      <span className="text-[10px]">✓</span>
+                    ) : (
+                      <>
+                        <span className="text-[10px]">{Number(cell.date.slice(8))}</span>
+                        {canMakeup && <span className="text-[7px] text-amber-500 mt-0.5 scale-90">补打卡</span>}
+                        {pending && <span className="text-[7px] scale-90">审核中</span>}
+                      </>
+                    );
+                    const tip = cell.future ? '' : !required ? '非打卡日' : checked ? '已打卡' : pending ? '补打卡审核中' : canMakeup ? '点击申请补打卡' : '今日请直接完成';
                     return canMakeup ? (
-                      <button key={cell.date} type="button" disabled={loading} onClick={() => handleMakeup(cell.date)} className={cls} title={tip}>
-                        {label}
+                      <button key={cell.date} type="button" onClick={() => setMakeupTarget(cell.date)} className={cls} title={tip}>
+                        {content}
                       </button>
                     ) : (
                       <div key={cell.date} className={cls} title={tip}>
-                        {label}
+                        {content}
                       </div>
                     );
                   })}
                 </div>
                 {hasCycleDays(detailTask) && (
-                  <p className="text-[10px] text-slate-400 mt-1.5">虚线框为漏打卡日期，点击可补打卡</p>
+                  <p className="text-[10px] text-slate-400 mt-1.5">虚线框为漏打卡日期，点击可申请补打卡（需家长审核）</p>
                 )}
                 {hasCycleDays(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
                   <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 个周期</p>
@@ -568,6 +581,46 @@ export function TasksPage() {
           familyId={family.id}
           memberId={child.id}
         />
+      )}
+
+      {/* 补打卡确认弹框（正方形） */}
+      {makeupTarget && detailTask && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+          onClick={() => !makeupDate && setMakeupTarget(null)}
+        >
+          <div
+            className="w-64 h-64 bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-between p-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <span className="text-4xl">📅</span>
+            <div className="text-center space-y-1">
+              <p className="font-bold text-slate-800">申请补打卡</p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {makeupTarget}<br />
+                「{detailTask.title}」<br />
+                +{detailTask.reward_coins} 星光
+              </p>
+              <p className="text-[10px] text-slate-400">提交后需家长审核，通过后补发星光</p>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => setMakeupTarget(null)}
+                disabled={!!makeupDate}
+                className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-500 text-sm font-medium disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleMakeup}
+                disabled={!!makeupDate}
+                className="flex-1 py-2 rounded-xl bg-amber-500 text-white text-sm font-bold disabled:opacity-50"
+              >
+                {makeupDate ? '提交中…' : '提交'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

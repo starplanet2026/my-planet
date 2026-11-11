@@ -200,12 +200,59 @@ export async function fetchTaskCheckinStats(
   };
 }
 
-// 补打卡：为指定应打卡日期补一条打卡记录（仅限过去日期 + 应打卡日 + 不重复）
-export async function makeupTaskCheckin(taskId: string, memberId: string, date: string): Promise<void> {
-  const { error } = await supabase.rpc('makeup_task_checkin', {
+// 补打卡申请：提交后需家长在「成就达成」页审核，通过后补发星光
+export interface MakeupRequest {
+  id: string;
+  family_id: string;
+  member_id: string;
+  task_id: string;
+  checkin_date: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reject_reason: string | null;
+  created_at: string;
+  tasks?: { title: string; reward_coins: number; icon: string | null } | null;
+  members?: { name: string; avatar_emoji: string | null } | null;
+}
+
+export async function requestMakeupCheckin(taskId: string, memberId: string, date: string): Promise<void> {
+  const { error } = await supabase.rpc('request_makeup_checkin', {
     p_task_id: taskId,
     p_member_id: memberId,
     p_date: date,
+  });
+  if (error) throw error;
+}
+
+// 孩子端：某任务待审核的补打卡日期（用于日历上显示「审核中」）
+export async function listPendingMakeupDates(taskId: string, memberId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('makeup_requests')
+    .select('checkin_date')
+    .eq('task_id', taskId)
+    .eq('member_id', memberId)
+    .eq('status', 'pending');
+  if (error) throw error;
+  return (data ?? []).map((r: any) => r.checkin_date as string);
+}
+
+// 家长端：待审核的补打卡申请列表
+export async function listPendingMakeupRequests(familyId: string): Promise<MakeupRequest[]> {
+  const { data, error } = await supabase
+    .from('makeup_requests')
+    .select('*, tasks(title, reward_coins, icon), members(name, avatar_emoji)')
+    .eq('family_id', familyId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as MakeupRequest[];
+}
+
+// 家长端：审核补打卡申请
+export async function reviewMakeupRequest(id: string, approve: boolean, reason?: string): Promise<void> {
+  const { error } = await supabase.rpc('review_makeup_request', {
+    p_request_id: id,
+    p_approve: approve,
+    p_reason: reason ?? null,
   });
   if (error) throw error;
 }

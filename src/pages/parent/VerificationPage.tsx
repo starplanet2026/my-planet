@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useTasks } from '../../hooks/useTasks';
@@ -14,6 +14,7 @@ import { formatSignedCoins, formatDate } from '../../lib/utils';
 import { cn } from '../../lib/utils';
 import { Check, X, ArrowLeft } from 'lucide-react';
 import type { Task } from '../../api/types';
+import { listPendingMakeupRequests, reviewMakeupRequest, type MakeupRequest } from '../../api/medals';
 
 export function VerificationPage() {
   const navigate = useNavigate();
@@ -30,7 +31,24 @@ export function VerificationPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
 
+  // 补打卡申请
+  const [makeupRequests, setMakeupRequests] = useState<MakeupRequest[]>([]);
+  const [makeupActing, setMakeupActing] = useState<string | null>(null);
+  const [makeupRejectTarget, setMakeupRejectTarget] = useState<MakeupRequest | null>(null);
+  const [makeupRejectReason, setMakeupRejectReason] = useState('');
+
   const pendingTasks = tasks.filter(t => t.status === 'pending_approval');
+
+  const loadMakeupRequests = useCallback(async () => {
+    if (!family?.id) { setMakeupRequests([]); return; }
+    try {
+      setMakeupRequests(await listPendingMakeupRequests(family.id));
+    } catch {
+      setMakeupRequests([]);
+    }
+  }, [family?.id]);
+
+  useEffect(() => { loadMakeupRequests(); }, [loadMakeupRequests]);
 
   const handleApprove = async (id: string) => {
     setApproving(id);
@@ -62,6 +80,37 @@ export function VerificationPage() {
     }
   };
 
+  // 补打卡：通过与退回
+  const handleMakeupApprove = async (req: MakeupRequest) => {
+    setMakeupActing(req.id);
+    try {
+      await reviewMakeupRequest(req.id, true);
+      toast.success(`已通过，补发 ${req.tasks?.reward_coins ?? 0} 星光值`);
+      await loadMakeupRequests();
+      await refreshMembers();
+    } catch (e: any) {
+      toast.error(e?.message ?? '操作失败');
+    } finally {
+      setMakeupActing(null);
+    }
+  };
+
+  const handleMakeupReject = async () => {
+    if (!makeupRejectTarget) return;
+    setMakeupActing(makeupRejectTarget.id);
+    try {
+      await reviewMakeupRequest(makeupRejectTarget.id, false, makeupRejectReason.trim() || undefined);
+      toast.success('已退回补打卡申请');
+      setMakeupRejectTarget(null);
+      setMakeupRejectReason('');
+      await loadMakeupRequests();
+    } catch (e: any) {
+      toast.error(e?.message ?? '操作失败');
+    } finally {
+      setMakeupActing(null);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
@@ -74,9 +123,9 @@ export function VerificationPage() {
         <h1 className="text-xl font-bold">验证申请</h1>
       </div>
 
-      {loading && pendingTasks.length === 0 ? (
+      {loading && pendingTasks.length === 0 && makeupRequests.length === 0 ? (
         <EmptyState icon="⏳" title="加载中..." />
-      ) : pendingTasks.length === 0 ? (
+      ) : pendingTasks.length === 0 && makeupRequests.length === 0 ? (
         <EmptyState
           icon="✅"
           title="没有待验证的任务"
@@ -84,9 +133,11 @@ export function VerificationPage() {
         />
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-slate-400 px-1">
-            {pendingTasks.length} 个任务待确认
-          </p>
+          {pendingTasks.length > 0 && (
+            <p className="text-sm text-slate-400 px-1">
+              {pendingTasks.length} 个任务待确认
+            </p>
+          )}
           {pendingTasks.map(task => {
             const iconUrl = getTaskIconUrl(task.icon);
             const child = childMembers.find(m => m.id === task.member_id);
@@ -144,6 +195,70 @@ export function VerificationPage() {
               </Card>
             );
           })}
+
+          {/* 补打卡申请 */}
+          {makeupRequests.length > 0 && (
+            <p className="text-sm text-slate-400 px-1 pt-3">
+              {makeupRequests.length} 个补打卡申请待审核
+            </p>
+          )}
+          {makeupRequests.map(req => {
+            const iconUrl = getTaskIconUrl(req.tasks?.icon ?? null);
+            const child = childMembers.find(m => m.id === req.member_id);
+            const memberName = child?.name ?? req.members?.name ?? '';
+            const childEmoji = child?.avatar_emoji ?? req.members?.avatar_emoji ?? null;
+            return (
+              <Card key={req.id} className="p-4 border-sky-200 bg-sky-50/30">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {iconUrl ? (
+                      <img src={iconUrl} alt={req.tasks?.title ?? ''} className="w-12 h-12 object-contain rounded-xl bg-star-50 flex-shrink-0" />
+                    ) : (
+                      <span className="text-2xl flex-shrink-0">📅</span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium truncate">
+                        补打卡 · {req.tasks?.title ?? '任务'}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
+                        {memberName && (
+                          <span className="flex items-center gap-1">
+                            <Avatar emoji={childEmoji} size="sm" />
+                            {memberName}
+                          </span>
+                        )}
+                        <span>· 补 {req.checkin_date}</span>
+                        <span>· 提交于 {formatDate(req.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className="font-bold tabular-nums text-emerald-500">
+                      +{req.tasks?.reward_coins ?? 0}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleMakeupApprove(req)}
+                        disabled={makeupActing === req.id}
+                        className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg disabled:opacity-50"
+                        title="确认补打卡"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { setMakeupRejectTarget(req); setMakeupRejectReason(''); }}
+                        disabled={makeupActing === req.id}
+                        className="p-2 text-red-400 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                        title="退回"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -168,6 +283,34 @@ export function VerificationPage() {
               取消
             </Button>
             <Button fullWidth loading={rejecting} onClick={handleReject}>
+              确认退回
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 补打卡退回弹窗 */}
+      <Modal
+        open={!!makeupRejectTarget}
+        onClose={() => !makeupActing && setMakeupRejectTarget(null)}
+        title="退回补打卡申请"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            退回「<span className="font-medium">{makeupRejectTarget?.tasks?.title}</span>」
+            {makeupRejectTarget?.checkin_date} 的补打卡申请
+          </p>
+          <Textarea
+            label="退回原因（可选）"
+            placeholder="如：当天没有完成这项任务哦"
+            value={makeupRejectReason}
+            onChange={e => setMakeupRejectReason(e.target.value)}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" fullWidth onClick={() => setMakeupRejectTarget(null)} disabled={!!makeupActing}>
+              取消
+            </Button>
+            <Button fullWidth loading={!!makeupActing} onClick={handleMakeupReject}>
               确认退回
             </Button>
           </div>
