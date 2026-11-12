@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useFamilyStore } from '../../store/familyStore';
 import { useModeStore } from '../../store/modeStore';
 import { useTasks, useTaskCategories } from '../../hooks/useTasks';
@@ -584,13 +585,13 @@ export function TasksPage() {
       )}
 
       {/* 补打卡确认弹框（正方形） */}
-      {makeupTarget && detailTask && (
+      {makeupTarget && detailTask && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6"
           onClick={() => !makeupDate && setMakeupTarget(null)}
         >
           <div
-            className="w-64 h-64 bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-between p-5"
+            className="w-64 h-64 bg-white rounded-3xl shadow-2xl flex flex-col items-center justify-between p-5 animate-slide-up"
             onClick={e => e.stopPropagation()}
           >
             <span className="text-4xl">📅</span>
@@ -620,7 +621,8 @@ export function TasksPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
