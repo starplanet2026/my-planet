@@ -158,7 +158,7 @@ export function TasksPage() {
   const checkinGrid = useMemo(() => build3WeekGrid(), []);
   const todayStr = useMemo(() => fmtDay(cstToday()), []);
 
-  // 下一个尚未达成的周期坚持勋章档位（threshold = 连续周期数）
+  // 下一个尚未达成的坚持勋章档位（threshold = 连续应打卡天数）
   const nextStreakMedal = useMemo(() => {
     if (!checkinStats) return null;
     return [...streakMedals]
@@ -168,26 +168,9 @@ export function TasksPage() {
 
   // 距离下一档还需完成的应打卡天数（非打卡日不计算）
   const nextStreakGapDays = useMemo(() => {
-    if (!detailTask || !checkinStats || !nextStreakMedal) return null;
-    const repeatDays = detailTask.repeat_days ?? [];
-    const perWeek = repeatDays.length;
-    if (perWeek === 0) return null;
-
-    const today = cstToday();
-    const dow = today.getUTCDay();
-    const mondayOffset = dow === 0 ? 6 : dow - 1;
-    const weekStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - mondayOffset));
-    const requiredDates = repeatDays.map(w =>
-      fmtDay(new Date(weekStart.getTime() + ((w + 6) % 7) * 86400000))
-    );
-    const doneThisWeek = requiredDates.filter(d => checkinStats.dates.includes(d)).length;
-    const leftThisWeek = perWeek - doneThisWeek;
-    const remainingWeeks = nextStreakMedal.threshold - checkinStats.current_streak;
-
-    // 当前周已完成：从下一周开始按整周计算；未完成：先补完本周剩余天数
-    if (leftThisWeek === 0) return Math.max(remainingWeeks, 0) * perWeek;
-    return leftThisWeek + Math.max(remainingWeeks - 1, 0) * perWeek;
-  }, [detailTask, checkinStats, nextStreakMedal]);
+    if (!checkinStats || !nextStreakMedal) return null;
+    return Math.max(nextStreakMedal.threshold - checkinStats.current_streak, 0);
+  }, [checkinStats, nextStreakMedal]);
 
   const getCategoryTasks = useMemo(() => {
     return (cat: TaskCategory) => {
@@ -478,7 +461,7 @@ export function TasksPage() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-slate-400">近 3 周打卡</p>
                   {hasCycleDays(detailTask) && checkinStats && (
-                    <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 个周期</p>
+                    <p className="text-xs font-medium text-amber-600">连续 {checkinStats.current_streak} 天</p>
                   )}
                 </div>
                 <div className="grid grid-cols-7 gap-1 mb-1">
@@ -534,14 +517,14 @@ export function TasksPage() {
                   <p className="text-[10px] text-slate-400 mt-1.5">虚线框为漏打卡日期，点击可申请补打卡（需家长审核）</p>
                 )}
                 {hasCycleDays(detailTask) && checkinStats && checkinStats.best_streak > 0 && (
-                  <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 个周期</p>
+                  <p className="text-[11px] text-slate-400 mt-2">历史最佳连续 {checkinStats.best_streak} 天</p>
                 )}
                 {hasCycleDays(detailTask) && nextStreakMedal ? (
                   <p className="text-[11px] text-amber-600 mt-1">
                     距离「{nextStreakMedal.name}」还差 {nextStreakGapDays ?? 0} 天
                   </p>
                 ) : (hasCycleDays(detailTask) && checkinStats && streakMedals.length > 0) ? (
-                  <p className="text-[11px] text-emerald-600 mt-1">已达成全部周期坚持勋章</p>
+                  <p className="text-[11px] text-emerald-600 mt-1">已达成全部坚持勋章</p>
                 ) : null}
             </div>
             )}

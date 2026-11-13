@@ -87,7 +87,7 @@ export function parseMedalExcel(buffer: ArrayBuffer): MedalParseResult {
     const tier = iTier >= 0 ? cellText(row[iTier]) : '';
     const threshold = parseThreshold(tier);
     if (!threshold) {
-      errors.push(`第 ${rowNumber} 行：档位「${tier || '空'}」无法解析出阈值周期数/数量`);
+      errors.push(`第 ${rowNumber} 行：档位「${tier || '空'}」无法解析出阈值天数/数量`);
       continue;
     }
     const code = iCode >= 0 ? cellText(row[iCode]) : '';

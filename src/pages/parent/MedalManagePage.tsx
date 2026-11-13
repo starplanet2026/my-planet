@@ -261,7 +261,7 @@ export function MedalManagePage() {
                     {MEDAL_SERIES_LABELS[m.series]}
                     {m.series === 'collect' && m.subcategory ? ` · ${m.subcategory}` : ''}
                     {' · '}
-                    {m.series === 'daily' ? `单日≥${m.threshold}条` : m.series === 'streak' ? `连续 ${m.threshold} 个周期` : `阈值 ${m.threshold}`}
+                    {m.series === 'daily' ? `单日≥${m.threshold}条` : m.series === 'streak' ? `连续 ${m.threshold} 天` : `阈值 ${m.threshold}`}
                   </div>
                   {(m.reward_card_name || m.reward_stars > 0) && (
                     <div className="text-xs text-emerald-500 mt-0.5">
@@ -309,13 +309,13 @@ export function MedalManagePage() {
                 {SUBCATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
               </Select>
             ) : <div />}
-            <Input label={form.series === 'daily' ? '阈值（当日条数）' : form.series === 'collect' ? '阈值（数量）' : '阈值（连续周期数）'}
+            <Input label={form.series === 'daily' ? '阈值（当日条数）' : form.series === 'collect' ? '阈值（数量）' : '阈值（连续应打卡天数）'}
               type="number" value={form.threshold}
               onChange={e => setForm(p => ({ ...p, threshold: e.target.value }))} />
             <Input label="档位文案" value={form.tier}
               onChange={e => setForm(p => ({ ...p, tier: e.target.value }))} />
           </div>
-          <Input label="达成条件" placeholder="如 按任务配置的打卡周期，1个完整周期内应打卡日全部完成" value={form.condition_text}
+          <Input label="达成条件" placeholder="如 连续7天完成所有应打卡日（未配置的星期自动跳过）" value={form.condition_text}
             onChange={e => setForm(p => ({ ...p, condition_text: e.target.value }))} />
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700">勋章简介</label>

@@ -159,7 +159,7 @@ export function MedalGalleryModal({ open, onClose, familyId, memberId }: Props) 
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400">
-                          本周 {t.done_this_week}/{t.per_week} 天 · 已连续 {t.current_weeks} 个周期
+                          已连续 {t.current_days} 天 · 历史最佳 {t.best_days} 天
                         </p>
                       </div>
                     ))

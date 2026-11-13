@@ -261,9 +261,8 @@ export async function reviewMakeupRequest(id: string, approve: boolean, reason?:
 export interface MedalProgressTask {
   task_id: string;
   title: string;
-  current_weeks: number;
-  done_this_week: number;
-  per_week: number;
+  current_days: number;
+  best_days: number;
   gap_days: number;
 }
 
