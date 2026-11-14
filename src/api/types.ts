@@ -104,6 +104,7 @@ export interface Item {
   status: ItemStatus;
   stock: number | null;
   category: string | null;
+  star_reward: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -130,6 +131,7 @@ export interface Purchase {
     description: string | null;
     category: string | null;
     name: string | null;
+    star_reward?: number;
   } | null;
 }
 

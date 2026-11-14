@@ -28,6 +28,7 @@ interface ItemFormData {
   weekly_limit: string;
   stock: string;
   category: string;
+  star_reward: string;
   image_url: string | null;
 }
 
@@ -101,14 +102,14 @@ export function ShopManagePage() {
 
   const [form, setForm] = useState<ItemFormData>({
     name: '', description: '', price: '', expires_at: '',
-    weekly_limit: '', stock: '', category: '', image_url: null,
+    weekly_limit: '', stock: '', category: '', star_reward: '', image_url: null,
   });
 
   const update = (k: keyof ItemFormData, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const openCreate = () => {
     setEditingItem(null);
-    setForm({ name: '', description: '', price: '', expires_at: '', weekly_limit: '', stock: '', category: '', image_url: null });
+    setForm({ name: '', description: '', price: '', expires_at: '', weekly_limit: '', stock: '', category: '', star_reward: '', image_url: null });
     setShowForm(true);
   };
 
@@ -122,6 +123,7 @@ export function ShopManagePage() {
       weekly_limit: item.weekly_limit ? String(item.weekly_limit) : '',
       stock: item.stock !== null ? String(item.stock) : '',
       category: item.category ?? '',
+      star_reward: item.star_reward ? String(item.star_reward) : '',
       image_url: item.image_url,
     });
     setShowForm(true);
@@ -162,6 +164,7 @@ export function ShopManagePage() {
         weekly_limit: form.weekly_limit ? Number(form.weekly_limit) : null,
         stock: form.stock ? Number(form.stock) : null,
         category: form.category.trim() || null,
+        star_reward: form.star_reward ? Number(form.star_reward) : 0,
         created_by: parentMember.id,
       };
 
@@ -577,6 +580,13 @@ export function ShopManagePage() {
               onChange={e => update('stock', e.target.value)}
             />
           </div>
+          <Input
+            label="使用后赠送星光值（可选）"
+            type="number"
+            placeholder="如：500，留空则不赠送"
+            value={form.star_reward}
+            onChange={e => update('star_reward', e.target.value)}
+          />
           <div className="space-y-1">
             <label className="text-sm font-medium text-slate-700">分类</label>
             <select

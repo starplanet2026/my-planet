@@ -305,7 +305,8 @@ export function ProfilePage() {
     try {
       await redeemPurchase(redeemTarget.id, child.id);
       await refreshMembers();
-      toast.success('已使用');
+      const starReward = redeemTarget.items?.star_reward ?? 0;
+      toast.success(starReward > 0 ? `已使用，+${starReward} 星光值` : '已使用');
       setRedeemTarget(null);
     } catch (e: any) {
       toast.error(e?.message ?? '使用失败');

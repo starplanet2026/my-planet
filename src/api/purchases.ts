@@ -11,7 +11,7 @@ export async function fetchPurchases(
 ): Promise<Purchase[]> {
   let q = supabase
     .from('purchases')
-    .select('*, items(image_url, weekly_limit, description, category, name)')
+    .select('*, items(image_url, weekly_limit, description, category, name, star_reward)')
     .eq('family_id', familyId)
     .order('created_at', { ascending: false });
   if (memberId) q = q.eq('member_id', memberId);

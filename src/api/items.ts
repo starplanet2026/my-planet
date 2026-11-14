@@ -25,6 +25,7 @@ export async function createItem(item: {
   voucher_validity_days: number | null;
   weekly_limit: number | null;
   stock: number | null;
+  star_reward: number;
   created_by: string;
 }): Promise<Item> {
   const { data, error } = await supabase
