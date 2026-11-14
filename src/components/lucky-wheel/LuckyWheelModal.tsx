@@ -181,6 +181,8 @@ export function LuckyWheelModal({ open, onClose }: LuckyWheelModalProps) {
         } else {
           toast.info('许愿成功！本次使用转盘券，无金币退还');
         }
+      } else if (res.reward_type === 'star') {
+        toast.success(`${res.reward_name} 已放入背包，可在「我的特权卡」中使用`);
       } else {
         toast.success(`恭喜获得：${res.reward_name}`);
       }
