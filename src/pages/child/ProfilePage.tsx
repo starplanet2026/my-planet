@@ -29,6 +29,19 @@ import {
 // 幸运大转盘券：仅能在大转盘内使用，背包点击「使用」跳转至大转盘而非直接核销
 const isWheelTicket = (p: Purchase) => p.items?.name === '幸运大转盘';
 
+// 特权卡分类标签配色（与兑换页保持一致）
+const ITEM_CATEGORY_COLORS: Record<string, string> = {
+  '美食': '#f97316',
+  '放松': '#3b82f6',
+  '玩乐': '#22c55e',
+  '稀有': '#a855f7',
+};
+
+function getItemCategoryColor(category?: string | null): string {
+  if (!category) return '#f59e0b';
+  return ITEM_CATEGORY_COLORS[category] ?? '#f59e0b';
+}
+
 // 特权卡装饰星星
 function CardStar({ className }: { className?: string }) {
   return (
@@ -458,9 +471,12 @@ export function ProfilePage() {
                           <span className="text-2xl sm:text-3xl">🎴</span>
                         )}
                       </div>
-                      {/* 特权标签 */}
-                      <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full bg-star-500 text-white text-[9px] font-bold shadow">
-                        特权
+                      {/* 分类标签：美食 / 玩乐 / 放松 / 稀有 */}
+                      <div
+                        className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-white text-[9px] font-bold shadow"
+                        style={{ backgroundColor: getItemCategoryColor(p.items?.category) }}
+                      >
+                        {p.items?.category ?? '特权'}
                       </div>
                       {p.quantity > 1 && (
                         <div className="absolute top-1.5 right-1.5 px-1 py-0.5 rounded-full bg-white/80 text-star-600 text-[9px] font-bold">
