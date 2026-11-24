@@ -652,17 +652,17 @@ export function PetPage() {
                         {sp.name || '进修宠物'}
                       </p>
 
-                      {/* 中间宠物形象（放大1.3倍，透明 PNG 居中，不带白底） */}
+                      {/* 中间宠物形象（当前尺寸的80%：原1.3倍 → 1.04倍，透明 PNG 居中，不带白底） */}
                       <div className="absolute left-1/2 top-[16%] bottom-[42%] w-full -translate-x-1/2 flex items-center justify-center pointer-events-none">
                         {sp.image_url ? (
                           <img
                             src={sp.image_url}
                             alt={sp.name || ''}
-                            className="max-h-full max-w-[78%] object-contain drop-shadow-md scale-[1.3]"
+                            className="max-h-full max-w-[78%] object-contain drop-shadow-md scale-[1.04]"
                             draggable={false}
                           />
                         ) : (
-                          <span className="text-4xl drop-shadow scale-[1.3]">{sp.emoji || '🐾'}</span>
+                          <span className="text-4xl drop-shadow scale-[1.04]">{sp.emoji || '🐾'}</span>
                         )}
                       </div>
 
