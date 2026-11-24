@@ -518,7 +518,9 @@ export function PetGrassland({ pets, bgImage, onPetUpdate, onMaxLevelPetClick, l
       if (pet?.species) playPetSound(pet.species);
       else playPetClick();
       // 满级且未进修、未生病：弹出「去进化 / 去进修」选择弹框
-      if (pet && pet.level >= pet.max_level && !pet.is_studying && !pet.is_sick) {
+      // 满级按稀有度标准上限判定，避免 pets.max_level 残留旧值导致未满级宠物可进修
+      const standardMax = pet?.rarity === 'rare' ? 20 : pet?.rarity === 'epic' ? 25 : 10;
+      if (pet && pet.level >= Math.max(pet.max_level ?? 0, standardMax) && !pet.is_studying && !pet.is_sick) {
         onMaxLevelPetClick?.(pet);
       }
       setInteractingPetId(prev => prev === petId ? null : petId);

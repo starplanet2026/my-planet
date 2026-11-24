@@ -816,7 +816,9 @@ export function PetPage() {
               {sortedPets.map(pet => {
                 const hidden = hiddenPetIds.has(pet.id);
                 const rarity: PetRarity = pet.rarity ?? inferRarity(pet.max_level);
-                const isMaxLevel = pet.level >= pet.max_level;
+                // 满级以稀有度标准上限为准，避免 pets.max_level 残留旧值导致未满级宠物可进修
+                const standardMaxLevel = rarity === 'rare' ? 20 : rarity === 'epic' ? 25 : 10;
+                const isMaxLevel = pet.level >= Math.max(pet.max_level ?? 0, standardMaxLevel);
                 const canEvolve = isMaxLevel && (rarity === 'common' || rarity === 'rare');
                 const evolveCost = rarity === 'common' ? 150 : 400;
                 const evolveTarget: 'rare' | 'epic' = rarity === 'common' ? 'rare' : 'epic';
